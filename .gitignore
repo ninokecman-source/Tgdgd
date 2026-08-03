@@ -1,0 +1,5 @@
+config.json
+processed_uids.json
+*.xlsx
+__pycache__/
+*.pyc

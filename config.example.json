@@ -1,0 +1,11 @@
+{
+  "zoho_email": "tvoj_mail@primjer.com",
+  "zoho_app_password": "app-specific lozinka iz Zoho postavki",
+  "imap_host": "imap.zoho.eu",
+  "imap_folder": "INBOX",
+  "sender_filter": "prijava@emmett-hr.com",
+  "instructor_name": "Nino Kecman",
+  "locations": ["Split", "Zagreb"],
+  "excel_path": "/putanja/do/Prijave.xlsx",
+  "state_path": "processed_uids.json"
+}
