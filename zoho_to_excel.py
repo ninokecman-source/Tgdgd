@@ -161,8 +161,21 @@ def parse_application(text: str) -> dict:
     }
 
 
+def extract_location(identifier_line: str, course_code: str) -> str:
+    """Grad se nalazi između koda tečaja i datuma u retku, npr.
+    'EMMET - MODUL 1&2 - Split -05.-06.09.2026. - Nino Kecman' -> 'Split'.
+    Radi za bilo koji grad, ne samo unaprijed poznati popis."""
+    code_match = re.search(re.escape(course_code), identifier_line, re.IGNORECASE)
+    if not code_match:
+        return ""
+    date_match = DATE_RE.search(identifier_line)
+    end = code_match.end()
+    stop = date_match.start() if date_match else len(identifier_line)
+    return identifier_line[end:stop].strip(" -\t")
+
+
 def match_course_and_location(identifier_line: str, instructor_name: str,
-                               course_codes: list, locations: list):
+                               course_codes: list):
     if instructor_name.lower() not in identifier_line.lower():
         return None, None
 
@@ -172,15 +185,14 @@ def match_course_and_location(identifier_line: str, instructor_name: str,
             course_code = code
             break
 
-    location = None
-    for loc in locations:
-        if re.search(rf"\b{re.escape(loc)}\b", identifier_line, re.IGNORECASE):
-            location = loc
-            break
+    if not course_code:
+        return None, None
 
-    if course_code and location:
-        return course_code, location
-    return None, None
+    location = extract_location(identifier_line, course_code)
+    if not location:
+        return None, None
+
+    return course_code, location
 
 
 def extract_dates(identifier_line: str) -> str:
@@ -396,7 +408,7 @@ def main():
 
         course_code, location = match_course_and_location(
             parsed["identifier_line"], config["instructor_name"],
-            config["course_codes"], config["locations"],
+            config["course_codes"],
         )
 
         if course_code and location:

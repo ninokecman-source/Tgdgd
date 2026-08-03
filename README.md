@@ -5,10 +5,11 @@ računa i podatke polaznika upisuje u Excel tablicu, po uzoru na Emmett
 Technique Instructor Administration Sheet.
 
 Za svaku kombinaciju **kod tečaja + grad** postoji zasebna `.xlsx` datoteka
-(npr. `Modul 1&2 Split.xlsx`, `Modul 1&2 Zagreb.xlsx`). Prijava se upisuje
-samo ako je u retku s tečajem/mjestom/datumom navedeno tvoje ime kao
-instruktora, kod tečaja je jedan od poznatih kodova, a grad je Split ili
-Zagreb.
+(npr. `Modul 1&2 Split.xlsx`, `Modul 1&2 Zagreb.xlsx`, `Modul 1&2
+Makarska.xlsx`...). Grad se automatski prepoznaje iz retka s tečajem —
+nije ograničen na unaprijed zadani popis, radi za bilo koji grad. Prijava
+se upisuje samo ako je u tom retku navedeno tvoje ime kao instruktora i
+kod tečaja je jedan od poznatih kodova.
 
 Za svakog polaznika upisuje se: ime, prezime, ulica, grad, poštanski broj,
 email, mobitel (kolone iz predloška — Country se automatski postavlja na
@@ -57,7 +58,6 @@ Polja u `config.json`:
 - `sender_filter` – adresa s koje stižu prijave (`prijava@emmett-hr.com`)
 - `instructor_name` – tvoje ime točno onako kako se pojavljuje u mailu
   (npr. `Nino Kecman`)
-- `locations` – gradovi koje pratiš (npr. `["Split", "Zagreb"]`)
 - `course_codes` – popis svih kodova tečaja koje prepoznaješ (Modul 1&2,
   Modul 3, Modul 4, Modul 5, Modul 6, Ponavljanje M6, Praktičarski dan)
 - `output_dir` – folder u koji se spremaju Excel datoteke (može biti i
@@ -78,10 +78,10 @@ python zoho_to_excel.py
 
 Skripta će:
 - pronaći sve nove mailove od `sender_filter` adrese,
-- za svaki provjeriti sadrži li tvoje ime, poznati kod tečaja i jednu od
-  zadanih lokacija,
-- ako da — dodati red u odgovarajuću `.xlsx` datoteku (kreirati je ako još
-  ne postoji),
+- za svaki provjeriti sadrži li tvoje ime i poznati kod tečaja, te izvući
+  grad (bilo koji, ne samo unaprijed zadani),
+- ako da — dodati red u odgovarajuću `.xlsx` datoteku, imenovanu po kodu
+  tečaja i tom gradu (kreirati je ako još ne postoji),
 - zapamtiti koje mailove je već obradila (`processed_uids.json`), tako da
   ponovno pokretanje ne stvara duplikate.
 
