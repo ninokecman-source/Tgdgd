@@ -21,6 +21,25 @@ Excel ih sam preračunava kad otvoriš datoteku.
 Ako neka prijava premaši 19 predviđenih redova u tablici, skripta sama
 umetne dodatni red i ispravno pomakne formule ispod.
 
+## Automatska potvrda polazniku (opcionalno)
+
+Skripta može, nakon što upiše prijavu u Excel, poslati i kratku potvrdnu
+poruku direktno prijavljenom polazniku (na email koji je upisao u
+prijavnicu) — koristi istu app-lozinku, preko SMTP-a, bez ikakve dodatne
+registracije. Isključeno je po defaultu.
+
+Da uključiš, u `config.json` postavi:
+```json
+"send_replies": true
+```
+i po želji prilagodi `reply_subject` i `reply_body` (podržani su placeholderi
+`{first_name}`, `{last_name}`, `{course_code}`, `{location}`, `{dates}`,
+`{instructor_name}`).
+
+**Napomena:** poruka se šalje kao **nova** poruka polazniku (nije "reply"
+na izvornu obavijest koju ti primiš, jer polaznik nije primatelj te
+obavijesti — nema na što nastaviti nit razgovora).
+
 ## 1. Instalacija
 
 Potreban je Python 3.9+.
@@ -66,6 +85,8 @@ Polja u `config.json`:
   kod tečaja + grad
 - `state_path` – datoteka u kojoj skripta pamti koje je mailove već obradila
   (da ne bi duplicirala unose); ne treba dirati
+- `send_replies`, `smtp_host`, `smtp_port`, `reply_subject`, `reply_body` –
+  postavke za automatsku potvrdu polazniku, vidi sekciju ispod
 
 **Napomena:** `config.json` sadrži lozinku i nikad se ne smije commitati u
 git (već je dodan u `.gitignore`).

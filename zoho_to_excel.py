@@ -13,8 +13,10 @@ Postavke se čitaju iz config.json (napravi ga iz config.example.json).
 """
 
 import imaplib
+import smtplib
 import email
 from email import policy
+from email.message import EmailMessage
 import json
 import re
 import sys
@@ -202,6 +204,42 @@ def extract_dates(identifier_line: str) -> str:
 
 def sanitize_filename(name: str) -> str:
     return re.sub(r'[\\/:*?"<>|]', "", name).strip()
+
+
+# --- Automatski odgovor (SMTP) ----------------------------------------------
+
+
+def send_confirmation_email(config: dict, data: dict, course_code: str,
+                             location: str, dates: str) -> bool:
+    """Pošalje novu potvrdnu poruku prijavljenom polazniku (koristi istu
+    app-lozinku kao IMAP, preko SMTP-a). Ovo je nova poruka njemu/njoj, a
+    ne odgovor unutar niti izvorne obavijesti (ta obavijest ide samo tebi,
+    prijavljeni nije primatelj tog maila pa nema na što nastaviti thread)."""
+    to_email = (data.get("Email Address") or "").strip()
+    if not to_email:
+        return False
+
+    template_vars = {
+        "first_name": data.get("First name", ""),
+        "last_name": data.get("Last Name", ""),
+        "course_code": course_code,
+        "location": location,
+        "dates": dates,
+        "instructor_name": config["instructor_name"],
+    }
+    subject = config["reply_subject"].format(**template_vars)
+    body = config["reply_body"].format(**template_vars)
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = config["zoho_email"]
+    msg["To"] = to_email
+    msg.set_content(body)
+
+    with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
+        smtp.login(config["zoho_email"], config["zoho_app_password"])
+        smtp.send_message(msg)
+    return True
 
 
 # --- Građenje / popunjavanje Excel predloška --------------------------------
@@ -436,6 +474,19 @@ def main():
             added += 1
             print(f"Dodano ({course_code} / {location}): "
                   f"{parsed['First name']} {parsed['Last Name']}")
+
+            if config.get("send_replies"):
+                try:
+                    sent = send_confirmation_email(
+                        config, parsed, course_code, location,
+                        ws["C6"].value or dates,
+                    )
+                    if sent:
+                        print(f"  Poslana potvrda na {parsed['Email Address']}")
+                    else:
+                        print("  Potvrda nije poslana (nema email adrese)")
+                except Exception as e:
+                    print(f"  Greška pri slanju potvrde: {e}")
         else:
             print(f"Preskočeno: {parsed['identifier_line'][:80]}")
 

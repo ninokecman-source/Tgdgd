@@ -15,5 +15,11 @@
     "Praktičarski dan"
   ],
   "output_dir": "/putanja/do/foldera/gdje/zelis/Excel/datoteke",
-  "state_path": "processed_uids.json"
+  "state_path": "processed_uids.json",
+
+  "send_replies": false,
+  "smtp_host": "smtp.zoho.eu",
+  "smtp_port": 465,
+  "reply_subject": "Potvrda prijave - {course_code}",
+  "reply_body": "Poštovani/a {first_name},\n\nHvala na prijavi na tečaj {course_code} u {location} ({dates}).\n\nUskoro ćete dobiti dodatne informacije.\n\nSrdačan pozdrav,\n{instructor_name}"
 }
