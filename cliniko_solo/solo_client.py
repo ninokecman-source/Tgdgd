@@ -18,7 +18,7 @@ class SoloClient:
         self.api_token = api_token
         self.session = requests.Session()
 
-    def create_invoice(self, tip_racuna, tip_kupca, nacin_placanja, kupac_naziv,
+    def create_invoice(self, tip_racuna, tip_kupca, tip_usluge, nacin_placanja, kupac_naziv,
                         stavke, kupac_oib=None, napomene=None):
         """
         stavke: lista dictova {"opis": str, "cijena": float, "kolicina": float, "porez_stopa": int}
@@ -28,6 +28,7 @@ class SoloClient:
             "token": self.api_token,
             "tip_racuna": tip_racuna,
             "tip_kupca": tip_kupca,
+            "tip_usluge": tip_usluge,
             "nacin_placanja": nacin_placanja,
             "kupac_naziv": kupac_naziv,
         }

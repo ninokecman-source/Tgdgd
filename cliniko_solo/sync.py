@@ -83,6 +83,7 @@ def run(backfill_days=None):
             racun = solo.create_invoice(
                 tip_racuna=config["solo_tip_racuna"],
                 tip_kupca=config["solo_tip_kupca"],
+                tip_usluge=config["solo_tip_usluge"],
                 nacin_placanja=config["solo_nacin_placanja"],
                 kupac_naziv=patient_name or "Kupac",
                 stavke=[{

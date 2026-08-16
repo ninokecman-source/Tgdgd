@@ -46,9 +46,14 @@ Popuni u `config.json`:
 - `solo_api_token` – Solo API token (korak 3)
 - `solo_tip_racuna`, `solo_tip_kupca`, `solo_nacin_placanja`,
   `solo_default_tax_rate` – **provjeri s knjigovođom** prije prvog pravog
-  slanja; zadane vrijednosti (B2C, kartice, 25% PDV) odgovaraju dogovoru za
+  slanja; zadane vrijednosti (`tip_kupca=1` znači B2C/fizička osoba,
+  `nacin_placanja=3` znači kartice, 25% PDV) odgovaraju dogovoru za
   Stripe/Apple Pay/Google Pay naplate, ali svakako testiraj jedan račun
   ručno prije puštanja u pogon
+- `solo_tip_usluge` – ID usluge iz tvog Solo računa. Prijavi se u Solo ->
+  **Usluge -> Tipovi usluga**, otvori uslugu koju koristiš za naplatu
+  (npr. "Fizioterapija") i uzmi njen ID (vidljiv u URL-u ili detaljima
+  usluge). Ako još nemaš definiranu uslugu, prvo je kreiraj tamo.
 - `send_pdf_email` + `smtp_*` – podaci za slanje PDF računa pacijentu; ako
   `send_pdf_email` postaviš na `false`, mail se ne šalje (samo fiskalizacija)
 - `state_db_path` – gdje se sprema baza obrađenih računa (ne treba dirati)
