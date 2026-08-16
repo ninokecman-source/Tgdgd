@@ -3,3 +3,6 @@ processed_uids.json
 *.xlsx
 __pycache__/
 *.pyc
+
+cliniko_solo/config.json
+cliniko_solo/*.sqlite3

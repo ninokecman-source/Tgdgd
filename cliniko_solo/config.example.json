@@ -1,0 +1,24 @@
+{
+  "cliniko_api_key": "tvoj_cliniko_api_kljuc-shard",
+  "cliniko_user_agent": "Tgdgd Cliniko-Solo integracija (tvoj_mail@primjer.com)",
+  "cliniko_business_id": null,
+  "poll_interval_seconds": 120,
+  "lookback_overlap_seconds": 180,
+
+  "solo_api_token": "tvoj_solo_api_token",
+  "solo_tip_racuna": 3,
+  "solo_tip_kupca": "B2C",
+  "solo_nacin_placanja": 3,
+  "solo_default_tax_rate": 25,
+  "solo_default_service_description": "Fizioterapija",
+
+  "send_pdf_email": true,
+  "smtp_host": "smtp.primjer.com",
+  "smtp_port": 587,
+  "smtp_username": "tvoj_mail@primjer.com",
+  "smtp_password": "app-specific lozinka",
+  "smtp_from_name": "Ime ordinacije",
+  "smtp_from_email": "tvoj_mail@primjer.com",
+
+  "state_db_path": "cliniko_solo_state.sqlite3"
+}
