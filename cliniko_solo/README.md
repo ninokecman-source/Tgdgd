@@ -86,6 +86,15 @@ python sync.py
 Ovo mora raditi na serveru/cloud instanci koja je stalno uključena (ne na
 tvom računalu) — vidi glavni README repozitorija za kontekst.
 
+## Fiskalizacija mora biti postavljena u Solo web sučelju
+
+Ako pri slanju dobiješ grešku "Odabrani način plaćanja za ovog kupca
+zahtijeva fiskalizaciju...", to znači da u Solo web sučelju, pod
+**Postavke -> Fiskalizacija**, još nisu uneseni certifikat, poslovnica i
+operater. To je jednokratno ručno podešavanje u Solo-u (nema veze s ovom
+skriptom ni s API tokenom) — bez toga Solo ne može izdati fiskalizirani
+račun za plaćanja karticom/gotovinom.
+
 ## Napomena o privatnosti
 
 Skripta iz Clinika u Solo šalje samo ono što je potrebno za račun (ime

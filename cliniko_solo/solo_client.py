@@ -24,24 +24,26 @@ class SoloClient:
         stavke: lista dictova {"opis": str, "cijena": float, "kolicina": float, "porez_stopa": int}
         Vraća parsirani 'racun' dio odgovora (id, broj_racuna, jir, zki, pdf, ...).
         """
-        payload = {
-            "token": self.api_token,
-            "tip_racuna": tip_racuna,
-            "tip_kupca": tip_kupca,
-            "tip_usluge": tip_usluge,
-            "nacin_placanja": nacin_placanja,
-            "kupac_naziv": kupac_naziv,
-        }
+        payload = [
+            ("token", self.api_token),
+            ("tip_racuna", tip_racuna),
+            ("tip_kupca", tip_kupca),
+            ("tip_usluge", tip_usluge),
+            ("nacin_placanja", nacin_placanja),
+            ("kupac_naziv", kupac_naziv),
+        ]
         if kupac_oib:
-            payload["kupac_oib"] = kupac_oib
+            payload.append(("kupac_oib", kupac_oib))
         if napomene:
-            payload["napomene"] = napomene
+            payload.append(("napomene", napomene))
 
         for i, stavka in enumerate(stavke, start=1):
-            payload[f"opis_usluge_{i}"] = stavka["opis"]
-            payload[f"cijena_{i}"] = f"{stavka['cijena']:.2f}"
-            payload[f"kolicina_{i}"] = stavka.get("kolicina", 1)
-            payload[f"porez_stopa_{i}"] = stavka["porez_stopa"]
+            payload.append(("usluga", i))
+            payload.append((f"opis_usluge_{i}", stavka["opis"]))
+            payload.append((f"cijena_{i}", f"{stavka['cijena']:.2f}".replace(".", ",")))
+            payload.append((f"popust_{i}", "0,00"))
+            payload.append((f"kolicina_{i}", stavka.get("kolicina", 1)))
+            payload.append((f"porez_stopa_{i}", stavka["porez_stopa"]))
 
         resp = self.session.post(f"{BASE_URL}/racun", data=payload, timeout=30)
         resp.raise_for_status()
