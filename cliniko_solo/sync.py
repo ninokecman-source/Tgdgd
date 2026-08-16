@@ -77,35 +77,54 @@ def run(backfill_days=None):
         patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip()
         patient_email = patient.get("email")
 
-        net_amount = invoice.get("net_amount") or invoice.get("total_amount")
+        # Cliniko total_amount je iznos koji je pacijent stvarno platio (bruto,
+        # s PDV-om). Solo traži cijenu BEZ PDV-a i sam ga dodaje, pa moramo
+        # računati unatrag da bruto_suma u Solo-u ispadne isti iznos.
+        gross_amount = float(invoice.get("total_amount"))
+        tax_rate = config["solo_default_tax_rate"]
+        net_amount = round(gross_amount / (1 + tax_rate / 100), 2)
+
+        stavke = [{
+            "opis": config["solo_default_service_description"],
+            "cijena": net_amount,
+            "kolicina": 1,
+            "porez_stopa": tax_rate,
+        }]
+        document_type = config.get("solo_document_type", "racun")
 
         try:
-            racun = solo.create_invoice(
-                tip_racuna=config["solo_tip_racuna"],
-                tip_kupca=config["solo_tip_kupca"],
-                tip_usluge=config["solo_tip_usluge"],
-                nacin_placanja=config["solo_nacin_placanja"],
-                kupac_naziv=patient_name or "Kupac",
-                stavke=[{
-                    "opis": config["solo_default_service_description"],
-                    "cijena": float(net_amount),
-                    "kolicina": 1,
-                    "porez_stopa": config["solo_default_tax_rate"],
-                }],
-            )
+            if document_type == "ponuda":
+                racun = solo.create_ponuda(
+                    tip_kupca=config["solo_tip_kupca"],
+                    tip_usluge=config["solo_tip_usluge"],
+                    nacin_placanja=config["solo_nacin_placanja"],
+                    kupac_naziv=patient_name or "Kupac",
+                    stavke=stavke,
+                )
+                broj = racun.get("broj_ponude")
+            else:
+                racun = solo.create_invoice(
+                    tip_racuna=config["solo_tip_racuna"],
+                    tip_kupca=config["solo_tip_kupca"],
+                    tip_usluge=config["solo_tip_usluge"],
+                    nacin_placanja=config["solo_nacin_placanja"],
+                    kupac_naziv=patient_name or "Kupac",
+                    stavke=stavke,
+                )
+                broj = racun.get("broj_racuna")
         except SoloAPIError as e:
             print(f"[GREŠKA] Cliniko račun {cliniko_id}: {e}", file=sys.stderr)
             continue
 
         state.mark_processed(cliniko_id, racun)
         processed_count += 1
-        print(f"Cliniko #{cliniko_id} -> Solo {racun.get('broj_racuna')} (JIR {racun.get('jir')})")
+        print(f"Cliniko #{cliniko_id} -> Solo {document_type} {broj} (JIR {racun.get('jir', '-')})")
 
         if config.get("send_pdf_email") and patient_email and racun.get("pdf"):
             try:
-                send_invoice_pdf(config, patient_email, patient_name, racun["pdf"], racun.get("broj_racuna"))
+                send_invoice_pdf(config, patient_email, patient_name, racun["pdf"], broj)
             except Exception as e:
-                print(f"[UPOZORENJE] Račun {racun.get('broj_racuna')} kreiran, ali mail nije poslan: {e}", file=sys.stderr)
+                print(f"[UPOZORENJE] {document_type.capitalize()} {broj} kreiran, ali mail nije poslan: {e}", file=sys.stderr)
 
     overlap = config.get("lookback_overlap_seconds", 180)
     new_watermark_dt = datetime.strptime(latest_updated_at, "%Y-%m-%dT%H:%M:%SZ") - timedelta(seconds=overlap)

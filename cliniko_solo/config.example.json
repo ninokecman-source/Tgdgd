@@ -6,6 +6,7 @@
   "lookback_overlap_seconds": 180,
 
   "solo_api_token": "tvoj_solo_api_token",
+  "solo_document_type": "racun",
   "solo_tip_racuna": 3,
   "solo_tip_kupca": 1,
   "solo_tip_usluge": "id_iz_solo_sucelja_Usluge->Tipovi_usluga",

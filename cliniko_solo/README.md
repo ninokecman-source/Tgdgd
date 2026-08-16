@@ -86,6 +86,16 @@ python sync.py
 Ovo mora raditi na serveru/cloud instanci koja je stalno uključena (ne na
 tvom računalu) — vidi glavni README repozitorija za kontekst.
 
+## Testiranje bez fiskalizacije (solo_document_type)
+
+Dok certifikat/poslovnica/operater nisu postavljeni u Solo-u, možeš u
+`config.json` staviti `"solo_document_type": "ponuda"` — skripta će tada
+umjesto fiskaliziranog računa kreirati Solo **ponudu** (quote) s istim
+podacima (kupac, usluga, cijena, PDV). Ponude se ne fiskaliziraju (nema
+JIR/ZKI) pa mogu poslužiti za provjeru da se podaci ispravno prenose iz
+Clinika. Kad fiskalizacija bude postavljena, promijeni na
+`"solo_document_type": "racun"` za stvarne fiskalizirane račune.
+
 ## Fiskalizacija mora biti postavljena u Solo web sučelju
 
 Ako pri slanju dobiješ grešku "Odabrani način plaćanja za ovog kupca
