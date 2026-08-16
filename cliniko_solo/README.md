@@ -55,7 +55,12 @@ Popuni u `config.json`:
   (npr. "Fizioterapija") i uzmi njen ID (vidljiv u URL-u ili detaljima
   usluge). Ako još nemaš definiranu uslugu, prvo je kreiraj tamo.
 - `send_pdf_email` + `smtp_*` – podaci za slanje PDF računa pacijentu; ako
-  `send_pdf_email` postaviš na `false`, mail se ne šalje (samo fiskalizacija)
+  `send_pdf_email` postaviš na `false`, mail se ne šalje (samo fiskalizacija).
+  Zadano je postavljeno za Zoho Mail Pro (`smtppro.zoho.com`, port 465,
+  SSL) — `smtp_username`/`smtp_password` treba app-specific lozinku, isto
+  kao za glavnu Zoho skriptu u ovom repou (vidi glavni README, korak 2).
+  Ako koristiš neki drugi mail servis, promijeni `smtp_host`/`smtp_port`
+  (465 = SSL, 587 = STARTTLS — oboje je podržano).
 - `state_db_path` – gdje se sprema baza obrađenih računa (ne treba dirati)
 
 **Napomena:** `config.json` sadrži tajne podatke i nikad se ne smije

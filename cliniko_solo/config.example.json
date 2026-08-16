@@ -15,8 +15,8 @@
   "solo_default_service_description": "Fizioterapija",
 
   "send_pdf_email": true,
-  "smtp_host": "smtp.primjer.com",
-  "smtp_port": 587,
+  "smtp_host": "smtppro.zoho.com",
+  "smtp_port": 465,
   "smtp_username": "tvoj_mail@primjer.com",
   "smtp_password": "app-specific lozinka",
   "smtp_from_name": "Ime ordinacije",

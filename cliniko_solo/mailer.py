@@ -25,7 +25,12 @@ def send_invoice_pdf(config, to_email, patient_name, pdf_url, broj_racuna):
         filename=f"{broj_racuna}.pdf",
     )
 
-    with smtplib.SMTP(config["smtp_host"], config["smtp_port"], timeout=30) as smtp:
-        smtp.starttls()
-        smtp.login(config["smtp_username"], config["smtp_password"])
-        smtp.send_message(msg)
+    if config["smtp_port"] == 465:
+        with smtplib.SMTP_SSL(config["smtp_host"], config["smtp_port"], timeout=30) as smtp:
+            smtp.login(config["smtp_username"], config["smtp_password"])
+            smtp.send_message(msg)
+    else:
+        with smtplib.SMTP(config["smtp_host"], config["smtp_port"], timeout=30) as smtp:
+            smtp.starttls()
+            smtp.login(config["smtp_username"], config["smtp_password"])
+            smtp.send_message(msg)
