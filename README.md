@@ -85,6 +85,9 @@ Polja u `config.json`:
   kod tečaja + grad
 - `state_path` – datoteka u kojoj skripta pamti koje je mailove već obradila
   (da ne bi duplicirala unose); ne treba dirati
+- `since_date` – opcionalno, npr. `"2026-01-01"`; ako je postavljeno, u
+  obzir se uzimaju samo mailovi primljeni od tog datuma nadalje (starije
+  prijave se potpuno ignoriraju, ne dohvaćaju se s Zoho servera)
 - `send_replies`, `smtp_host`, `smtp_port`, `reply_subject`, `reply_body` –
   postavke za automatsku potvrdu polazniku, vidi sekciju ispod
 

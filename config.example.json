@@ -17,6 +17,7 @@
   ],
   "output_dir": "/putanja/do/foldera/gdje/zelis/Excel/datoteke",
   "state_path": "processed_uids.json",
+  "since_date": "2026-01-01",
 
   "send_replies": false,
   "smtp_host": "smtp.zoho.eu",

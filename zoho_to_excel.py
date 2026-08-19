@@ -17,6 +17,7 @@ import smtplib
 import email
 from email import policy
 from email.message import EmailMessage
+from datetime import datetime
 import json
 import re
 import sys
@@ -227,6 +228,18 @@ def match_course_and_location(identifier_line: str, course_codes: list):
 
 def sanitize_filename(name: str) -> str:
     return re.sub(r'[\\/:*?"<>|]', "", name).strip()
+
+
+def build_search_query(config: dict) -> str:
+    """IMAP SEARCH kriterij - mailovi od sender_filter adrese, opcionalno
+    samo od since_date nadalje (npr. da se ignoriraju stare, prošlogodišnje
+    prijave)."""
+    criteria = f'FROM "{config["sender_filter"]}"'
+    since_date = config.get("since_date")
+    if since_date:
+        imap_date = datetime.strptime(since_date, "%Y-%m-%d").strftime("%d-%b-%Y")
+        criteria += f' SINCE "{imap_date}"'
+    return f"({criteria})"
 
 
 # --- Automatski odgovor (SMTP) ----------------------------------------------
@@ -442,7 +455,7 @@ def main():
     imap.login(config["zoho_email"], config["zoho_app_password"])
     imap.select(config.get("imap_folder", "INBOX"))
 
-    status, uid_data = imap.uid("search", None, f'(FROM "{config["sender_filter"]}")')
+    status, uid_data = imap.uid("search", None, build_search_query(config))
     if status != "OK":
         sys.exit(f"IMAP pretraga nije uspjela: {status}")
 
