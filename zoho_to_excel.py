@@ -457,6 +457,20 @@ def find_totals_row(ws) -> int:
     return TOTALS_ROW
 
 
+def find_duplicate_row(ws, email: str, totals_row: int) -> int:
+    """Vrati broj retka postojećeg polaznika s istom email adresom, ili
+    None ako nema. Koristi se za detekciju duplih mailova (Emmettov
+    sustav za prijave zna povremeno poslati istu prijavu dvaput)."""
+    email_norm = (email or "").strip().lower()
+    if not email_norm:
+        return None
+    for row in range(FIRST_PARTICIPANT_ROW, totals_row):
+        existing = ws.cell(row=row, column=8).value  # Email Address
+        if existing and str(existing).strip().lower() == email_norm:
+            return row
+    return None
+
+
 def next_participant_row(ws, totals_row: int) -> int:
     for row in range(FIRST_PARTICIPANT_ROW, totals_row):
         if ws.cell(row=row, column=2).value in (None, ""):
@@ -484,6 +498,9 @@ def expand_participant_table(ws, totals_row: int) -> int:
 
 
 def append_participant(ws, data: dict, totals_row: int) -> int:
+    if find_duplicate_row(ws, data.get("Email Address"), totals_row) is not None:
+        return None  # duplikat - već postoji polaznik s tom email adresom
+
     row = next_participant_row(ws, totals_row)
     if row is None:
         row = expand_participant_table(ws, totals_row)
@@ -580,25 +597,30 @@ def process_folder(imap, raw_folder: str, folder_location: str, config: dict,
 
             path, wb, ws, totals_row = workbooks[key]
             row = append_participant(ws, parsed, totals_row)
-            if row >= totals_row:
-                totals_row = find_totals_row(ws)
-                workbooks[key][3] = totals_row
-            added += 1
-            print(f"Dodano [{raw_folder}] ({course_code} / {location}): "
-                  f"{parsed['First name']} {parsed['Last Name']}")
 
-            if config.get("send_replies"):
-                try:
-                    sent = send_confirmation_email(
-                        config, parsed, course_code, location,
-                        ws["C6"].value or dates,
-                    )
-                    if sent:
-                        print(f"  Poslana potvrda na {parsed['Email Address']}")
-                    else:
-                        print("  Potvrda nije poslana (nema email adrese)")
-                except Exception as e:
-                    print(f"  Greška pri slanju potvrde: {e}")
+            if row is None:
+                print(f"Preskočeno [{raw_folder}] - duplikat (email već postoji u "
+                      f"{course_code} / {location}): {parsed['Email Address']}")
+            else:
+                if row >= totals_row:
+                    totals_row = find_totals_row(ws)
+                    workbooks[key][3] = totals_row
+                added += 1
+                print(f"Dodano [{raw_folder}] ({course_code} / {location}): "
+                      f"{parsed['First name']} {parsed['Last Name']}")
+
+                if config.get("send_replies"):
+                    try:
+                        sent = send_confirmation_email(
+                            config, parsed, course_code, location,
+                            ws["C6"].value or dates,
+                        )
+                        if sent:
+                            print(f"  Poslana potvrda na {parsed['Email Address']}")
+                        else:
+                            print("  Potvrda nije poslana (nema email adrese)")
+                    except Exception as e:
+                        print(f"  Greška pri slanju potvrde: {e}")
         else:
             print(f"Preskočeno [{raw_folder}]: {parsed['identifier_line'][:80]}")
 
