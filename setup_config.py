@@ -24,8 +24,6 @@ DEFAULTS = {
         "Modul 5",
         "Modul 6",
         "Ponavljanje M6 i Praktičarski dan",
-        "Ponavljanje M6",
-        "Praktičarski dan",
     ],
     "output_dir": "/Users/ninokecman/Desktop/Prijave",
     "state_path": "processed_uids.json",
