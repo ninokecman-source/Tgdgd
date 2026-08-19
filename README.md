@@ -78,7 +78,10 @@ Polja u `config.json`:
 - `instructor_name` – tvoje ime točno onako kako se pojavljuje u mailu
   (npr. `Nino Kecman`)
 - `course_codes` – popis svih kodova tečaja koje prepoznaješ (Modul 1&2,
-  Modul 3, Modul 4, Modul 5, Modul 6, Ponavljanje M6, Praktičarski dan)
+  Modul 3, Modul 4, Modul 5, Modul 6, Ponavljanje M6 i Praktičarski dan)
+- `folder_roots` – Zoho folderi (uz INBOX koji se uvijek pretražuje) čiji
+  se svi podfolderi pretražuju, npr. `["Split", "Zagreb"]` — ako imaš
+  mailove ručno razvrstane u foldere po gradu/tečaju, dodaj ih ovdje
 - `output_dir` – folder u koji se spremaju Excel datoteke (može biti i
   iCloud Drive folder, npr. `/Users/tvoje_ime/Library/Mobile Documents/com~apple~CloudDocs/Prijave`)
   — unutar njega se automatski stvara jedna `.xlsx` datoteka po kombinaciji
@@ -101,11 +104,14 @@ python zoho_to_excel.py
 ```
 
 Skripta će:
-- pronaći sve nove mailove od `sender_filter` adrese,
-- za svaki provjeriti sadrži li tvoje ime i poznati kod tečaja, te izvući
-  grad (bilo koji, ne samo unaprijed zadani),
+- pretražiti INBOX i sve podfoldere unutar `folder_roots` (npr. Split,
+  Zagreb i sve njihove podfoldere) za nove mailove od `sender_filter`
+  adrese,
+- za svaki provjeriti sadrži li poznati kod tečaja; grad se uzima iz
+  naziva foldera (ako mail dolazi iz Split/Zagreb stabla) ili se izvlači
+  iz teksta maila (za mailove u INBOX-u),
 - ako da — dodati red u odgovarajuću `.xlsx` datoteku, imenovanu po kodu
-  tečaja i tom gradu (kreirati je ako još ne postoji),
+  tečaja i gradu (kreirati je ako još ne postoji),
 - zapamtiti koje mailove je već obradila (`processed_uids.json`), tako da
   ponovno pokretanje ne stvara duplikate.
 

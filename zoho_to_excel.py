@@ -230,6 +230,77 @@ def sanitize_filename(name: str) -> str:
     return re.sub(r'[\\/:*?"<>|]', "", name).strip()
 
 
+FOLDER_LIST_RE = re.compile(r'^\((?P<flags>[^)]*)\)\s+"(?P<delim>[^"]*)"\s+"(?P<name>.*)"$')
+
+
+def imap_utf7_decode(s: str) -> str:
+    """Dekodira IMAP naziv foldera iz modificiranog UTF-7 (RFC 3501) u
+    normalan tekst, npr. 'Modul 1&-2' -> 'Modul 1&2',
+    'Upla&AQc-eno' -> 'Uplaćeno'."""
+    import base64
+
+    res = []
+    b64_chars = ""
+    in_b64 = False
+    for ch in s:
+        if not in_b64:
+            if ch == "&":
+                in_b64 = True
+                b64_chars = ""
+            else:
+                res.append(ch)
+        else:
+            if ch == "-":
+                if b64_chars == "":
+                    res.append("&")
+                else:
+                    padded = b64_chars.replace(",", "/")
+                    padded += "=" * (-len(padded) % 4)
+                    res.append(base64.b64decode(padded).decode("utf-16-be"))
+                in_b64 = False
+            else:
+                b64_chars += ch
+    if in_b64 and b64_chars:
+        padded = b64_chars.replace(",", "/")
+        padded += "=" * (-len(padded) % 4)
+        res.append(base64.b64decode(padded).decode("utf-16-be"))
+    return "".join(res)
+
+
+def discover_target_folders(imap: imaplib.IMAP4_SSL, roots: list) -> list:
+    """Vrati listu (sirovi_naziv_foldera, lokacija) za sve foldere koji
+    pripadaju jednom od zadanih 'root' foldera (npr. 'Split', 'Zagreb') ili
+    su njihovi podfolderi (npr. 'Zagreb/Modul 3'). 'Lokacija' je prvi dio
+    puta (npr. 'Zagreb' za 'Zagreb/Modul 3'). Sirovi naziv se koristi
+    izravno u IMAP SELECT (već je u ispravnom kodiranju)."""
+    status, data = imap.list()
+    if status != "OK":
+        return []
+
+    found = []
+    for line in data:
+        text = line.decode("utf-8", errors="replace")
+        m = FOLDER_LIST_RE.match(text)
+        if not m:
+            continue
+        raw_name = m.group("name")
+        decoded_name = imap_utf7_decode(raw_name)
+
+        for root in roots:
+            if decoded_name == root or decoded_name.startswith(root + "/"):
+                location = decoded_name.split("/")[0]
+                found.append((raw_name, location))
+                break
+    return found
+
+
+def find_course_code(identifier_line: str, course_codes: list) -> str:
+    for code in sorted(course_codes, key=len, reverse=True):
+        if code.lower() in identifier_line.lower():
+            return code
+    return ""
+
+
 def build_search_query(config: dict) -> str:
     """IMAP SEARCH kriterij - mailovi od sender_filter adrese, opcionalno
     samo od since_date nadalje (npr. da se ignoriraju stare, prošlogodišnje
@@ -443,34 +514,34 @@ def get_or_create_workbook(path: Path, course_code: str, location: str,
     return wb, wb["podaci"]
 
 
-def main():
-    config = load_config()
-    state_path = Path(config.get("state_path", "processed_uids.json"))
-    output_dir = Path(config["output_dir"])
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    processed = load_state(state_path)
-
-    imap = imaplib.IMAP4_SSL(config["imap_host"])
-    imap.login(config["zoho_email"], config["zoho_app_password"])
-    imap.select(config.get("imap_folder", "INBOX"))
+def process_folder(imap, raw_folder: str, folder_location: str, config: dict,
+                    processed: set, workbooks: dict) -> int:
+    """Obradi jedan IMAP folder. folder_location je 'Split'/'Zagreb' (grad
+    poznat iz naziva foldera) ili None (za INBOX - grad se mora pročitati
+    iz teksta maila). Vraća broj dodanih prijava iz ovog foldera."""
+    status, _ = imap.select(f'"{raw_folder}"')
+    if status != "OK":
+        print(f"[!] Ne mogu otvoriti folder {raw_folder!r}, preskačem.")
+        return 0
 
     status, uid_data = imap.uid("search", None, build_search_query(config))
-    if status != "OK":
-        sys.exit(f"IMAP pretraga nije uspjela: {status}")
+    if status != "OK" or not uid_data or uid_data[0] is None:
+        return 0
 
     uids = uid_data[0].split()
-    new_uids = [uid.decode() for uid in uids if uid.decode() not in processed]
+    state_key_prefix = f"{raw_folder}::"
+    new_uids = [
+        uid.decode() for uid in uids
+        if f"{state_key_prefix}{uid.decode()}" not in processed
+    ]
 
     if not new_uids:
-        print("Nema novih mailova.")
-        imap.logout()
-        return
+        return 0
 
-    workbooks = {}  # (course_code, location) -> (path, wb, ws, totals_row)
     added = 0
-
     for uid in new_uids:
+        state_key = f"{state_key_prefix}{uid}"
+
         status, msg_data = imap.uid("fetch", uid, "(RFC822)")
         if status != "OK" or not msg_data or msg_data[0] is None:
             continue
@@ -480,9 +551,13 @@ def main():
         text = get_plain_text(msg)
         parsed = parse_application(text)
 
-        course_code, location = match_course_and_location(
-            parsed["identifier_line"], config["course_codes"],
-        )
+        if folder_location:
+            course_code = find_course_code(parsed["identifier_line"], config["course_codes"])
+            location = folder_location if course_code else None
+        else:
+            course_code, location = match_course_and_location(
+                parsed["identifier_line"], config["course_codes"],
+            )
 
         if course_code and location:
             dates = extract_dates(parsed["identifier_line"], course_code)
@@ -492,7 +567,7 @@ def main():
             key = (course_code, location)
             if key not in workbooks:
                 filename = sanitize_filename(f"{course_code} {location}") + ".xlsx"
-                path = output_dir / filename
+                path = Path(config["output_dir"]) / filename
                 wb, ws = get_or_create_workbook(
                     path, course_code, location, dates, instructor
                 )
@@ -509,7 +584,7 @@ def main():
                 totals_row = find_totals_row(ws)
                 workbooks[key][3] = totals_row
             added += 1
-            print(f"Dodano ({course_code} / {location}): "
+            print(f"Dodano [{raw_folder}] ({course_code} / {location}): "
                   f"{parsed['First name']} {parsed['Last Name']}")
 
             if config.get("send_replies"):
@@ -525,9 +600,32 @@ def main():
                 except Exception as e:
                     print(f"  Greška pri slanju potvrde: {e}")
         else:
-            print(f"Preskočeno: {parsed['identifier_line'][:80]}")
+            print(f"Preskočeno [{raw_folder}]: {parsed['identifier_line'][:80]}")
 
-        processed.add(uid)
+        processed.add(state_key)
+
+    return added
+
+
+def main():
+    config = load_config()
+    state_path = Path(config.get("state_path", "processed_uids.json"))
+    output_dir = Path(config["output_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    processed = load_state(state_path)
+
+    imap = imaplib.IMAP4_SSL(config["imap_host"])
+    imap.login(config["zoho_email"], config["zoho_app_password"])
+
+    folder_roots = config.get("folder_roots", ["Split", "Zagreb"])
+    target_folders = [("INBOX", None)] + discover_target_folders(imap, folder_roots)
+
+    workbooks = {}  # (course_code, location) -> [path, wb, ws, totals_row]
+    added = 0
+
+    for raw_folder, folder_location in target_folders:
+        added += process_folder(imap, raw_folder, folder_location, config, processed, workbooks)
 
     for path, wb, ws, _ in workbooks.values():
         wb.save(path)
@@ -535,7 +633,10 @@ def main():
     save_state(state_path, processed)
     imap.logout()
 
-    print(f"\nGotovo. Dodano {added} novih prijava u {len(workbooks)} datoteka.")
+    if added == 0 and not workbooks:
+        print("Nema novih mailova.")
+    print(f"\nGotovo. Dodano {added} novih prijava u {len(workbooks)} datoteka "
+          f"(pretraženo {len(target_folders)} foldera).")
 
 
 if __name__ == "__main__":

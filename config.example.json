@@ -2,7 +2,7 @@
   "zoho_email": "tvoj_mail@primjer.com",
   "zoho_app_password": "app-specific lozinka iz Zoho postavki",
   "imap_host": "imap.zoho.eu",
-  "imap_folder": "INBOX",
+  "folder_roots": ["Split", "Zagreb"],
   "sender_filter": "prijava@emmett-hr.com",
   "instructor_name": "Nino Kecman",
   "course_codes": [

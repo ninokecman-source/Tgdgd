@@ -14,7 +14,7 @@ CONFIG_PATH = Path(__file__).with_name("config.json")
 DEFAULTS = {
     "zoho_email": "nino.k@emmett-hr.com",
     "imap_host": "imap.zoho.com",
-    "imap_folder": "INBOX",
+    "folder_roots": ["Split", "Zagreb"],
     "sender_filter": "prijava@emmett-hr.com",
     "instructor_name": "Nino Kecman",
     "course_codes": [
