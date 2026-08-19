@@ -163,24 +163,52 @@ def parse_application(text: str) -> dict:
     }
 
 
-def extract_location(identifier_line: str, course_code: str) -> str:
-    """Grad se nalazi između koda tečaja i datuma u retku, npr.
-    'EMMET - MODUL 1&2 - Split -05.-06.09.2026. - Nino Kecman' -> 'Split'.
-    Radi za bilo koji grad, ne samo unaprijed poznati popis."""
+def split_after_course_code(identifier_line: str, course_code: str):
+    """Vrati (grad, datum_i_ostatak) - sve između koda tečaja i prve
+    znamenke je grad (radi za bilo koji grad), a od prve znamenke nadalje
+    je datum (+ eventualno ime instruktora na kraju). Ovo je otporno na
+    razne zapise datuma koje EMMETT koristi u praksi (18/19.01.2025.,
+    22-23.03.2025., 30.11.-01.12.2024. itd.) jer se ne oslanja na strogi
+    regex za datum, nego samo traži gdje datum počinje."""
     code_match = re.search(re.escape(course_code), identifier_line, re.IGNORECASE)
     if not code_match:
-        return ""
-    date_match = DATE_RE.search(identifier_line)
-    end = code_match.end()
-    stop = date_match.start() if date_match else len(identifier_line)
-    return identifier_line[end:stop].strip(" -\t")
+        return "", ""
+    rest = identifier_line[code_match.end():]
+    digit_match = re.search(r"\d", rest)
+    if not digit_match:
+        return rest.strip(" -\t/"), ""
+    location = rest[:digit_match.start()].strip(" -\t/")
+    remainder = rest[digit_match.start():]
+    return location, remainder
 
 
-def match_course_and_location(identifier_line: str, instructor_name: str,
-                               course_codes: list):
-    if instructor_name.lower() not in identifier_line.lower():
-        return None, None
+def extract_location(identifier_line: str, course_code: str) -> str:
+    location, _ = split_after_course_code(identifier_line, course_code)
+    return location
 
+
+def extract_dates(identifier_line: str, course_code: str = None) -> str:
+    if course_code is None:
+        match = DATE_RE.search(identifier_line)
+        return match.group(0) if match else ""
+    _, remainder = split_after_course_code(identifier_line, course_code)
+    return remainder.split(" - ", 1)[0].strip()
+
+
+def extract_trailing_name(identifier_line: str, course_code: str) -> str:
+    """Ime instruktora na kraju retka, ako ga mail sadrži (noviji format).
+    Vraća prazan string ako nije prisutno (stariji mailovi)."""
+    _, remainder = split_after_course_code(identifier_line, course_code)
+    parts = remainder.split(" - ", 1)
+    return parts[1].strip() if len(parts) == 2 else ""
+
+
+def match_course_and_location(identifier_line: str, course_codes: list):
+    """Kod tečaja mora biti jedan od poznatih (Modul 1&2, Modul 3, ...) -
+    to je dovoljno da isključi mailove koji nisu prijave na tečaj (npr.
+    generičke obavijesti). Ime instruktora se više ne provjerava jer ga
+    stariji mailovi ne sadrže, a u praksi svi mailovi s poznatim kodom u
+    ovom sandučiću i tako pripadaju tebi."""
     course_code = None
     for code in sorted(course_codes, key=len, reverse=True):
         if code.lower() in identifier_line.lower():
@@ -195,11 +223,6 @@ def match_course_and_location(identifier_line: str, instructor_name: str,
         return None, None
 
     return course_code, location
-
-
-def extract_dates(identifier_line: str) -> str:
-    match = DATE_RE.search(identifier_line)
-    return match.group(0) if match else ""
 
 
 def sanitize_filename(name: str) -> str:
@@ -445,23 +468,24 @@ def main():
         parsed = parse_application(text)
 
         course_code, location = match_course_and_location(
-            parsed["identifier_line"], config["instructor_name"],
-            config["course_codes"],
+            parsed["identifier_line"], config["course_codes"],
         )
 
         if course_code and location:
+            dates = extract_dates(parsed["identifier_line"], course_code)
+            trailing_name = extract_trailing_name(parsed["identifier_line"], course_code)
+            instructor = trailing_name or config["instructor_name"]
+
             key = (course_code, location)
             if key not in workbooks:
                 filename = sanitize_filename(f"{course_code} {location}") + ".xlsx"
                 path = output_dir / filename
-                dates = extract_dates(parsed["identifier_line"])
                 wb, ws = get_or_create_workbook(
-                    path, course_code, location, dates, config["instructor_name"]
+                    path, course_code, location, dates, instructor
                 )
                 totals_row = find_totals_row(ws)
                 workbooks[key] = [path, wb, ws, totals_row]
             else:
-                dates = extract_dates(parsed["identifier_line"])
                 path, wb, ws, totals_row = workbooks[key]
                 if dates and ws["C6"].value != dates:
                     ws["C6"] = dates
