@@ -1,5 +1,6 @@
 config.json
 processed_uids.json
 *.xlsx
+!template_admin_sheet.xlsx
 __pycache__/
 *.pyc

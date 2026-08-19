@@ -24,33 +24,14 @@ import sys
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font
-from openpyxl.utils import get_column_letter
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
 # --- Predložak: struktura Emmett administrativne tablice -------------------
 
-PARTICIPANT_HEADERS = [
-    "First name",
-    "Last Name",
-    "Street ",
-    "City/ Town ",
-    "State/  Province",
-    "Post/Zip Code ",
-    "Email Address",
-    "Mobile Ph",
-    "Country",
-    "New (N) or Revised (R) ",
-    "Payment Received",
-    "NOTES",
-]
-
 FIRST_PARTICIPANT_ROW = 10
-LAST_PARTICIPANT_ROW = 28  # 19 redova (brojevi 1-19)
 TOTALS_ROW = 29  # red s '=SUM(...)' formulom, pomiče se ako se doda red
 
-EUR_FORMAT = '_ [$€-2]\\ * #,##0.00_ ;_ [$€-2]\\ * \\-#,##0.00_ ;_ [$€-2]\\ * "-"??_ ;_ @_ '
 PHONE_FORMAT = "@"
 
 FIELD_LABELS = {
@@ -352,63 +333,23 @@ def send_confirmation_email(config: dict, data: dict, course_code: str,
 # --- Građenje / popunjavanje Excel predloška --------------------------------
 
 
+TEMPLATE_PATH = Path(__file__).with_name("template_admin_sheet.xlsx")
+
+
 def build_course_workbook(course_code: str, location: str, dates: str,
                            instructor: str, currency: str = "eur") -> Workbook:
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "podaci"
+    """Učita pravi Emmett predložak (template_admin_sheet.xlsx) - ista
+    vizualna forma, fontovi, boje, obrubi, visine redova kao original -
+    i samo popuni metapodatke. Tablica polaznika i formule su već u
+    predlošku, netaknuti."""
+    wb = load_workbook(TEMPLATE_PATH)
+    ws = wb["podaci"]
 
-    ws["B1"] = "EMMETT  TECHNIQUE  INSTRUCTOR ADMINISTRATION SHEET"
-    ws["B1"].font = Font(bold=True, size=14)
-    ws["M1"] = "=NOW()"
-    ws["M1"].number_format = "m/d/yy h:mm"
-
-    ws["B4"] = "COURSE/MOD"
     ws["C4"] = course_code
-    ws["J4"] = "Instructor"
-    ws["M4"] = instructor
-
-    ws["B5"] = "LOCATION"
     ws["C5"] = location
-    ws["J5"] = "Venue"
-    ws["M5"] = ""  # popunjava se ručno
-
-    ws["B6"] = "DATES"
     ws["C6"] = dates
-    ws["J6"] = "Currency"
+    ws["M4"] = instructor
     ws["M6"] = currency
-
-    ws["L7"] = "Table Totals"
-    ws["L7"].number_format = EUR_FORMAT
-
-    ws.merge_cells("C4:I4")
-    ws.merge_cells("C5:I5")
-    ws.merge_cells("C6:I6")
-    ws.merge_cells("J4:L4")
-    ws.merge_cells("J5:L5")
-    ws.merge_cells("J6:L6")
-    ws.merge_cells("M4:N4")
-    ws.merge_cells("M5:N5")
-    ws.merge_cells("M6:N6")
-
-    for col_idx, header in enumerate(PARTICIPANT_HEADERS, start=2):  # B..M
-        cell = ws.cell(row=9, column=col_idx, value=header)
-        cell.font = Font(bold=True)
-    ws["A9"] = None
-
-    for row in range(FIRST_PARTICIPANT_ROW, LAST_PARTICIPANT_ROW + 1):
-        ws.cell(row=row, column=1, value=row - FIRST_PARTICIPANT_ROW + 1)
-        ws.cell(row=row, column=9).number_format = PHONE_FORMAT  # Mobile Ph
-        ws.cell(row=row, column=12).number_format = '#,##0.00\\ "€"'  # Payment
-
-    write_totals_formulas(ws, TOTALS_ROW)
-
-    widths = {
-        "A": 5.5, "B": 27, "C": 28, "D": 40, "E": 30, "F": 18, "G": 19,
-        "H": 55, "I": 22, "J": 25, "K": 14, "L": 22, "M": 40,
-    }
-    for col, width in widths.items():
-        ws.column_dimensions[col].width = width
 
     return wb
 

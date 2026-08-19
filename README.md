@@ -11,6 +11,10 @@ nije ograničen na unaprijed zadani popis, radi za bilo koji grad. Prijava
 se upisuje samo ako je u tom retku navedeno tvoje ime kao instruktora i
 kod tečaja je jedan od poznatih kodova.
 
+Nove datoteke se kreiraju iz `template_admin_sheet.xlsx` (kopija tvog
+stvarnog Emmett predloška — isti fontovi, boje, obrubi, visine redova),
+tako da svaka izgleda identično originalu, samo popunjena podacima.
+
 Za svakog polaznika upisuje se: ime, prezime, ulica, grad, poštanski broj,
 email, mobitel (kolone iz predloška — Country se automatski postavlja na
 "Croatia", "New/Revised" na "N"). Polje **Venue** i **financijski dio**
