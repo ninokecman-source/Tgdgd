@@ -7,7 +7,6 @@ Pokretanje:
 """
 
 import json
-import getpass
 from pathlib import Path
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
@@ -59,15 +58,21 @@ def main():
     config["output_dir"] = ask("Folder za Excel datoteke", DEFAULTS["output_dir"])
     config["since_date"] = ask("Obradi mailove od datuma (YYYY-MM-DD)", DEFAULTS["since_date"])
 
-    app_password = getpass.getpass(
-        "App-specific lozinka (zalijepi i pritisni Enter, neće se prikazati na ekranu): "
-    )
+    app_password = ""
+    while not app_password:
+        app_password = input(
+            "App-specific lozinka (zalijepi je ovdje - VIDJET ĆE SE na ekranu, to je ok): "
+        ).strip()
+        if not app_password:
+            print("Prazno je, pokušaj ponovno - zalijepi lozinku pa pritisni Enter.")
+
     config["zoho_app_password"] = app_password
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
 
     print(f"\n{CONFIG_PATH} je uspješno napravljen/ažuriran.")
+    print(f"Lozinka spremljena, duljina: {len(app_password)} znakova.")
 
 
 if __name__ == "__main__":
