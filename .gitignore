@@ -6,3 +6,6 @@ __pycache__/
 
 cliniko_solo/config.json
 cliniko_solo/*.sqlite3
+
+bank_solo/config.json
+bank_solo/*.sqlite3

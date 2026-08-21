@@ -1,0 +1,18 @@
+{
+  "zoho_email": "nino.k@emmett-hr.com",
+  "zoho_app_password": "ista app-specific lozinka kao za glavnu Zoho skriptu",
+  "imap_host": "imap.zoho.com",
+  "imap_folder": "INBOX",
+  "bank_sender": "netbanking.support@erstebank.hr",
+
+  "excel_dir": "/Users/ninokecman/Desktop/Prijave",
+
+  "solo_api_token": "tvoj Solo API token",
+  "solo_tip_kupca": 1,
+  "solo_tip_usluge": "ID_USLUGE_ZA_EMMETT_TECAJEVE_IZ_SOLO_SUCELJA",
+  "solo_nacin_placanja": "PROVJERI_TOCAN_KOD_ZA_TRANSAKCIJSKI_RACUN",
+  "solo_default_tax_rate": 25,
+  "solo_service_description": "Uplata za Emmett tečaj",
+
+  "state_db_path": "bank_solo_state.sqlite3"
+}
