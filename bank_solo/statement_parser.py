@@ -4,8 +4,9 @@ i vraća listu ulaznih (kreditnih) transakcija.
 
 Format je proprietaran, redak po redak, svaki redak završava 3-znamenkastim
 kodom tipa retka (900=zaglavlje, 903=račun, 905=transakcija, 907=saldo,
-909/999=kraj). Transakcijski redak počinje s "10" + IBAN pošiljatelja, i
-sadrži iznos kao 15-znamenkasti broj s predznakom (u centima), dva datuma
+909/999=kraj). Transakcijski redak počinje s dvoznamenkastim kodom tipa
+transakcije (10, 20, ... - varira) + IBAN pošiljatelja, i sadrži iznos
+kao 15-znamenkasti broj s predznakom (u centima), dva datuma
 (YYYYMMDD) prije "EUR", te jedinstvenu referencu transakcije na kraju retka
 (koristi se za sprečavanje dupliciranja).
 
@@ -16,7 +17,7 @@ retka (`raw_line`) koristi za pretragu poznatih imena polaznika.
 
 import re
 
-TRANSACTION_RE = re.compile(r"^10[A-Z]{2}\d")
+TRANSACTION_RE = re.compile(r"^\d{2}[A-Z]{2}\d")
 AMOUNT_RE = re.compile(r"[+-]\d{15}")
 DATE_RE = re.compile(r"(\d{8})(\d{8})EUR")
 
