@@ -2,7 +2,7 @@
   "zoho_email": "nino.k@emmett-hr.com",
   "zoho_app_password": "ista app-specific lozinka kao za glavnu Zoho skriptu",
   "imap_host": "imap.zoho.com",
-  "imap_folder": "INBOX",
+  "imap_folder": "Izvodi",
   "bank_sender": "netbanking.support@erstebank.hr",
 
   "excel_dir": "/Users/ninokecman/Desktop/Prijave",
