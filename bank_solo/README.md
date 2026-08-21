@@ -40,18 +40,39 @@ Popuni u `config.json`:
 - `excel_dir` – folder s Excel tablicama prijava (isti `output_dir` kao u
   glavnoj Zoho skripti, npr. `/Users/ninokecman/Desktop/Prijave`)
 - `solo_api_token` – Solo API token (Solo -> Postavke -> API)
-- `solo_tip_kupca` – tip kupca (1 = fizička osoba/B2C, provjeri s
-  knjigovođom ako nisi siguran)
-- `solo_tip_usluge` – ID usluge za Emmett tečajeve iz Solo sučelja
-  (Usluge -> Tipovi usluga) — **treba popuniti prije prvog pokretanja**
-- `solo_nacin_placanja` – Solo kod za način plaćanja "transakcijski
-  račun/žiro" (bankovni transfer) — **provjeri točan broj u Solo sučelju
-  ili s knjigovođom prije prvog pravog slanja**, pogrešan kod će odbiti
-  zahtjev
-- `solo_default_tax_rate` – stopa PDV-a (25 = zadano za HR)
-- `solo_service_description` – opis stavke na ponudi (vidljiv kupcu)
+- `solo_tip_kupca` – **1** (potvrđeno u Solo API dokumentaciji = fizička
+  osoba/B2C, to odgovara polaznicima)
+- `solo_nacin_placanja` – **1** (potvrđeno u Solo API dokumentaciji =
+  "Transakcijski račun", to je bankovni transfer)
+- `solo_default_tax_rate` – **0** (prema tvojoj listi usluga, svi Emmett
+  tečajevi su na 0% PDV)
+- `deposit_amount` – iznos akontacije (100)
+- `deposit_service_id` – Solo ID usluge "Ak" (Akontacija za Emmett tečaj)
+  iz Solo sučelja — **treba popuniti prije prvog pokretanja**
+- `course_service_map` – ID-jevi Solo usluga po kodu tečaja (M1&2, M3, M4,
+  M5, M6, Ponavljanje M6 i Praktičarski dan) — **treba popuniti svih 6
+  ID-jeva prije prvog pokretanja**
 - `state_db_path` – gdje se sprema baza obrađenih transakcija/mailova (ne
   treba dirati)
+
+### Kako naći Solo ID usluge
+
+Solo API traži **brojčani ID** usluge, ne interni kod (npr. "M12") koji se
+vidi u CSV izvozu. Da ga nađeš:
+
+1. Prijavi se u Solo -> **Usluge -> Tipovi usluga**
+2. Klikni na uslugu (npr. "Emmett tečaj M1&2")
+3. ID je vidljiv u URL-u stranice (ili u detaljima usluge)
+
+Ponovi za svih 7 usluga (Ak, M12, M3, M4, M5, M6, Pm6) i upiši brojeve u
+`config.json`.
+
+### Kako skripta bira uslugu
+
+Ako je uplaćeni iznos jednak `deposit_amount` (100) — koristi se
+`deposit_service_id` (Akontacija). Inače se kod tečaja polaznika (iz
+Excel tablice) traži u `course_service_map` i koristi odgovarajuća
+usluga. Ako kod tečaja nije u mapi, uplata se preskače uz upozorenje.
 
 **Napomena:** `config.json` sadrži tajne podatke i nikad se ne smije
 commitati (već je u `.gitignore`).
@@ -79,10 +100,10 @@ uparivanja uplata.
 
 ## Prije prvog pravog slanja
 
-1. Ostavi `solo_document_type` na ponudi (ovaj modul uvijek šalje ponude,
-   ne fiskalizirane račune) dok ne budeš siguran da su podaci ispravni.
+1. Ovaj modul uvijek šalje **ponude** (quote), nikad fiskalizirane
+   račune — nema JIR/ZKI, sigurno za testiranje.
 2. Provjeri barem jednu uplatu ručno u Solo sučelju nakon prvog
-   pokretanja — ime kupca, iznos, opis.
+   pokretanja — ime kupca, iznos, opis, ispravna usluga.
 3. Ako neka uplata ostane neuparena (ime nije prepoznato), otvori
    `sync.log` da vidiš cijeli redak transakcije i provjeri zašto (npr.
    polaznik možda još nije upisan u Excel, ili banka koristi neočekivan

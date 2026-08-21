@@ -9,10 +9,21 @@
 
   "solo_api_token": "tvoj Solo API token",
   "solo_tip_kupca": 1,
-  "solo_tip_usluge": "ID_USLUGE_ZA_EMMETT_TECAJEVE_IZ_SOLO_SUCELJA",
-  "solo_nacin_placanja": "PROVJERI_TOCAN_KOD_ZA_TRANSAKCIJSKI_RACUN",
-  "solo_default_tax_rate": 25,
-  "solo_service_description": "Uplata za Emmett tečaj",
+  "solo_nacin_placanja": 1,
+  "solo_default_tax_rate": 0,
+
+  "deposit_amount": 100,
+  "deposit_service_id": "ID_USLUGE_Ak_IZ_SOLO_SUCELJA",
+  "deposit_service_description": "Akontacija za Emmett tečaj",
+
+  "course_service_map": {
+    "Modul 1&2": {"solo_tip_usluge": "ID_USLUGE_M12", "opis": "Emmett tečaj M1&2"},
+    "Modul 3": {"solo_tip_usluge": "ID_USLUGE_M3", "opis": "Emmett tečaj M3"},
+    "Modul 4": {"solo_tip_usluge": "ID_USLUGE_M4", "opis": "Emmett tečaj M4"},
+    "Modul 5": {"solo_tip_usluge": "ID_USLUGE_M5", "opis": "Emmett tečaj M5"},
+    "Modul 6": {"solo_tip_usluge": "ID_USLUGE_M6", "opis": "Emmett tečaj M6"},
+    "Ponavljanje M6 i Praktičarski dan": {"solo_tip_usluge": "ID_USLUGE_Pm6", "opis": "Ponavljanje Emmett tečaja M6 + praktičarski dan"}
+  },
 
   "state_db_path": "bank_solo_state.sqlite3"
 }

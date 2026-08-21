@@ -53,6 +53,21 @@ def extract_statement_attachments(msg) -> list:
     return texts
 
 
+def resolve_service(config: dict, amount: float, course_code: str):
+    """Odluči koju Solo uslugu (tip_usluge + opis) koristiti za ovu uplatu:
+    akontaciju (ako iznos odgovara deposit_amount) ili uslugu tog
+    konkretnog tečaja. Vrati (tip_usluge, opis) ili (None, None) ako se
+    kod tečaja ne može pronaći u course_service_map."""
+    deposit_amount = config.get("deposit_amount")
+    if deposit_amount is not None and abs(amount - deposit_amount) < 0.01:
+        return config["deposit_service_id"], config["deposit_service_description"]
+
+    service = config.get("course_service_map", {}).get(course_code)
+    if service is None:
+        return None, None
+    return service["solo_tip_usluge"], service["opis"]
+
+
 def process_transaction(tx, registrants, config, solo, state) -> bool:
     """Vrati True ako je transakcija obrađena (uparena i poslana), False
     ako nije uparena (preskočena, treba ručna provjera)."""
@@ -68,8 +83,15 @@ def process_transaction(tx, registrants, config, solo, state) -> bool:
     full_name = f"{registrant['first_name']} {registrant['last_name']}".strip()
     napomene = f"{registrant['course_code']} - {registrant['location']}".strip(" -")
 
+    tip_usluge, opis = resolve_service(config, tx["amount"], registrant["course_code"])
+    if tip_usluge is None:
+        print(f"[!] Uplata {tx['amount']:.2f} EUR za {full_name} uparena, ali kod tečaja "
+              f"{registrant['course_code']!r} nema definiranu Solo uslugu u "
+              f"course_service_map - preskačem, treba ručna provjera.")
+        return False
+
     stavke = [{
-        "opis": config["solo_service_description"],
+        "opis": opis,
         "cijena": tx["amount"],
         "kolicina": 1,
         "porez_stopa": config["solo_default_tax_rate"],
@@ -78,7 +100,7 @@ def process_transaction(tx, registrants, config, solo, state) -> bool:
     try:
         ponuda = solo.create_ponuda(
             tip_kupca=config["solo_tip_kupca"],
-            tip_usluge=config["solo_tip_usluge"],
+            tip_usluge=tip_usluge,
             nacin_placanja=config["solo_nacin_placanja"],
             kupac_naziv=full_name,
             stavke=stavke,
