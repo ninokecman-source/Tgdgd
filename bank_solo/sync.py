@@ -154,9 +154,11 @@ def run():
 
         msg = email.message_from_bytes(msg_data[0][1], policy=policy.default)
         attachments = extract_statement_attachments(msg)
+        print(f"Mail UID {uid} ({msg['Subject']}): {len(attachments)} prilog(a)")
 
         for attachment_text in attachments:
             transactions = parse_statement(attachment_text)
+            print(f"  Pronađeno {len(transactions)} transakcija u prilogu.")
             for tx in transactions:
                 if process_transaction(tx, registrants, config, solo, state):
                     processed_count += 1
