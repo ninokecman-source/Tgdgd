@@ -42,37 +42,31 @@ Popuni u `config.json`:
 - `solo_api_token` – Solo API token (Solo -> Postavke -> API)
 - `solo_tip_kupca` – **1** (potvrđeno u Solo API dokumentaciji = fizička
   osoba/B2C, to odgovara polaznicima)
+- `solo_tip_usluge` – **2** (šira kategorija usluge - ista za sve Emmett
+  tečajeve, isto što koristi i postojeća Cliniko integracija). Ovo NIJE
+  isto što i "Ak"/"M12"/... šifre iz Solo Kataloga - to su zasebne stavke
+  s vlastitom cijenom u Solo-u, dok `tip_usluge` API poziv traži samo
+  kao klasifikacijsku kategoriju; konkretan naziv tečaja ide u opis
+  stavke (`course_description_map` ispod)
 - `solo_nacin_placanja` – **1** (potvrđeno u Solo API dokumentaciji =
   "Transakcijski račun", to je bankovni transfer)
 - `solo_default_tax_rate` – **0** (prema tvojoj listi usluga, svi Emmett
   tečajevi su na 0% PDV)
 - `deposit_amount` – iznos akontacije (100)
-- `deposit_service_id` – Solo ID usluge "Ak" (Akontacija za Emmett tečaj)
-  iz Solo sučelja — **treba popuniti prije prvog pokretanja**
-- `course_service_map` – ID-jevi Solo usluga po kodu tečaja (M1&2, M3, M4,
-  M5, M6, Ponavljanje M6 i Praktičarski dan) — **treba popuniti svih 6
-  ID-jeva prije prvog pokretanja**
+- `deposit_description` – opis stavke kad uplaćeni iznos odgovara
+  akontaciji
+- `course_description_map` – opis stavke po kodu tečaja (M1&2, M3, M4,
+  M5, M6, Ponavljanje M6 i Praktičarski dan) - ovo je već popunjeno
+  nazivima iz tvog Solo kataloga
 - `state_db_path` – gdje se sprema baza obrađenih transakcija/mailova (ne
   treba dirati)
 
-### Kako naći Solo ID usluge
-
-Solo API traži **brojčani ID** usluge, ne interni kod (npr. "M12") koji se
-vidi u CSV izvozu. Da ga nađeš:
-
-1. Prijavi se u Solo -> **Usluge -> Tipovi usluga**
-2. Klikni na uslugu (npr. "Emmett tečaj M1&2")
-3. ID je vidljiv u URL-u stranice (ili u detaljima usluge)
-
-Ponovi za svih 7 usluga (Ak, M12, M3, M4, M5, M6, Pm6) i upiši brojeve u
-`config.json`.
-
-### Kako skripta bira uslugu
+### Kako skripta bira opis stavke
 
 Ako je uplaćeni iznos jednak `deposit_amount` (100) — koristi se
-`deposit_service_id` (Akontacija). Inače se kod tečaja polaznika (iz
-Excel tablice) traži u `course_service_map` i koristi odgovarajuća
-usluga. Ako kod tečaja nije u mapi, uplata se preskače uz upozorenje.
+`deposit_description` (Akontacija). Inače se kod tečaja polaznika (iz
+Excel tablice) traži u `course_description_map` i koristi odgovarajući
+naziv. Ako kod tečaja nije u mapi, uplata se preskače uz upozorenje.
 
 **Napomena:** `config.json` sadrži tajne podatke i nikad se ne smije
 commitati (već je u `.gitignore`).

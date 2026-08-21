@@ -53,19 +53,16 @@ def extract_statement_attachments(msg) -> list:
     return texts
 
 
-def resolve_service(config: dict, amount: float, course_code: str):
-    """Odluči koju Solo uslugu (tip_usluge + opis) koristiti za ovu uplatu:
-    akontaciju (ako iznos odgovara deposit_amount) ili uslugu tog
-    konkretnog tečaja. Vrati (tip_usluge, opis) ili (None, None) ako se
-    kod tečaja ne može pronaći u course_service_map."""
+def resolve_description(config: dict, amount: float, course_code: str):
+    """Odluči koji opis staviti na ponudi: akontacija (ako iznos odgovara
+    deposit_amount) ili naziv tog konkretnog tečaja. tip_usluge je uvijek
+    ista (šira) kategorija - vrati None ako se kod tečaja ne može
+    pronaći u course_description_map."""
     deposit_amount = config.get("deposit_amount")
     if deposit_amount is not None and abs(amount - deposit_amount) < 0.01:
-        return config["deposit_service_id"], config["deposit_service_description"]
+        return config["deposit_description"]
 
-    service = config.get("course_service_map", {}).get(course_code)
-    if service is None:
-        return None, None
-    return service["solo_tip_usluge"], service["opis"]
+    return config.get("course_description_map", {}).get(course_code)
 
 
 def process_transaction(tx, registrants, config, solo, state) -> bool:
@@ -83,11 +80,11 @@ def process_transaction(tx, registrants, config, solo, state) -> bool:
     full_name = f"{registrant['first_name']} {registrant['last_name']}".strip()
     napomene = f"{registrant['course_code']} - {registrant['location']}".strip(" -")
 
-    tip_usluge, opis = resolve_service(config, tx["amount"], registrant["course_code"])
-    if tip_usluge is None:
+    opis = resolve_description(config, tx["amount"], registrant["course_code"])
+    if opis is None:
         print(f"[!] Uplata {tx['amount']:.2f} EUR za {full_name} uparena, ali kod tečaja "
-              f"{registrant['course_code']!r} nema definiranu Solo uslugu u "
-              f"course_service_map - preskačem, treba ručna provjera.")
+              f"{registrant['course_code']!r} nema definiran opis u "
+              f"course_description_map - preskačem, treba ručna provjera.")
         return False
 
     stavke = [{
@@ -100,7 +97,7 @@ def process_transaction(tx, registrants, config, solo, state) -> bool:
     try:
         ponuda = solo.create_ponuda(
             tip_kupca=config["solo_tip_kupca"],
-            tip_usluge=tip_usluge,
+            tip_usluge=config["solo_tip_usluge"],
             nacin_placanja=config["solo_nacin_placanja"],
             kupac_naziv=full_name,
             stavke=stavke,
