@@ -18,6 +18,13 @@ Svaka transakcija (po jedinstvenoj referenci) i svaki mail se obrađuju
 točno jednom (SQLite stanje u `state_db_path`), pa ponovno pokretanje ne
 stvara duplikate.
 
+Na ponudu se šalje i **adresa** i **OIB** polaznika. Adresa dolazi iz
+Excel tablice (već se tamo sprema). OIB se **ne** sprema u Excel (Emmett
+predložak nema stupac za to) — umjesto toga se svaki put kad zatreba
+dohvati izravno iz izvorne Zoho prijave tog polaznika (pretraga po email
+adresi kroz INBOX + Split/Zagreb foldere). Ako OIB nije pronađen, ponuda
+se ipak šalje (bez OIB-a), uz upozorenje u ispisu.
+
 ## 1. Instalacija
 
 ```bash
@@ -37,6 +44,11 @@ Popuni u `config.json`:
   glavnu Zoho skriptu u root folderu (ista adresa prima i bankovne izvode)
 - `bank_sender` – adresa s koje banka šalje izvode
   (`netbanking.support@erstebank.hr`)
+- `imap_folder` – folder u kojem se nalaze bankovni izvodi (`Izvodi`)
+- `sender_filter` – adresa pošiljatelja prijava (`prijava@emmett-hr.com`),
+  koristi se za pronalaženje izvorne prijave radi dohvaćanja OIB-a
+- `course_folder_roots` – isti Zoho folderi kao u glavnoj skripti
+  (`["Split", "Zagreb"]`) koji se pretražuju (uz INBOX) pri traženju OIB-a
 - `excel_dir` – folder s Excel tablicama prijava (isti `output_dir` kao u
   glavnoj Zoho skripti, npr. `/Users/ninokecman/Desktop/Prijave`)
 - `solo_api_token` – Solo API token (Solo -> Postavke -> API)
