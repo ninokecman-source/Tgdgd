@@ -20,6 +20,7 @@ import sys
 from email import policy
 from pathlib import Path
 
+from oib_lookup import discover_registration_folders, find_oib
 from registrants import add_payment, find_matching_registrant, load_registrants
 from solo_client import SoloAPIError, SoloClient
 from state import StateStore
@@ -65,7 +66,7 @@ def resolve_description(config: dict, amount: float, course_code: str):
     return config.get("course_description_map", {}).get(course_code)
 
 
-def process_transaction(tx, registrants, config, solo, state) -> bool:
+def process_transaction(tx, registrants, config, solo, state, imap, registration_folders) -> bool:
     """Vrati True ako je transakcija obrađena (uparena i poslana), False
     ako nije uparena (preskočena, treba ručna provjera)."""
     if state.is_transaction_processed(tx["ref_id"]):
@@ -94,6 +95,14 @@ def process_transaction(tx, registrants, config, solo, state) -> bool:
         "porez_stopa": config["solo_default_tax_rate"],
     }]
 
+    # OIB nije spremljen u Excelu - dohvati ga direktno iz izvorne prijave
+    # tog polaznika (po email adresi). imap.select() ovdje mijenja
+    # trenutno odabrani folder, pa se izvorni (bankovni) folder ponovno
+    # odabire na početku sljedeće iteracije glavne petlje u run().
+    oib = find_oib(imap, config["sender_filter"], registration_folders, registrant["email"])
+    if not oib:
+        print(f"  (OIB nije pronađen za {full_name} - ponuda se šalje bez OIB-a)")
+
     try:
         ponuda = solo.create_ponuda(
             tip_kupca=config["solo_tip_kupca"],
@@ -101,7 +110,7 @@ def process_transaction(tx, registrants, config, solo, state) -> bool:
             nacin_placanja=config["solo_nacin_placanja"],
             kupac_naziv=full_name,
             kupac_adresa=registrant.get("address") or None,
-            kupac_oib=registrant.get("oib") or None,
+            kupac_oib=oib or None,
             stavke=stavke,
             napomene=napomene,
         )
@@ -146,10 +155,15 @@ def run():
     registrants = load_registrants(Path(config["excel_dir"]))
     print(f"Učitano {len(registrants)} polaznika iz Excel tablica.")
 
+    registration_folder_roots = config.get("course_folder_roots", ["Split", "Zagreb"])
+    registration_folders = discover_registration_folders(imap, registration_folder_roots)
+
     processed_count = 0
     unmatched_count = 0
+    bank_folder = config.get("imap_folder", "INBOX")
 
     for uid in new_uids:
+        imap.select(f'"{bank_folder}"')  # find_oib() mijenja odabrani folder - vrati se ovdje
         status, msg_data = imap.uid("fetch", uid, "(RFC822)")
         if status != "OK" or not msg_data or msg_data[0] is None:
             continue
@@ -162,7 +176,7 @@ def run():
             transactions = parse_statement(attachment_text)
             print(f"  Pronađeno {len(transactions)} transakcija u prilogu.")
             for tx in transactions:
-                if process_transaction(tx, registrants, config, solo, state):
+                if process_transaction(tx, registrants, config, solo, state, imap, registration_folders):
                     processed_count += 1
                 elif not state.is_transaction_processed(tx["ref_id"]):
                     unmatched_count += 1

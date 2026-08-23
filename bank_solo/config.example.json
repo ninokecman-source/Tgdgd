@@ -4,6 +4,8 @@
   "imap_host": "imap.zoho.com",
   "imap_folder": "Izvodi",
   "bank_sender": "netbanking.support@erstebank.hr",
+  "sender_filter": "prijava@emmett-hr.com",
+  "course_folder_roots": ["Split", "Zagreb"],
 
   "excel_dir": "/Users/ninokecman/Desktop/Prijave",
 

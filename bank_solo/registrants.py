@@ -62,7 +62,6 @@ def load_registrants(excel_dir: Path) -> list:
                     "name_variants": [normalize_name(full), normalize_name(reversed_name)],
                     "email": ws.cell(row=row, column=8).value or "",
                     "address": address,
-                    "oib": "",  # nije dostupan - vidi napomenu u README
                     "course_code": course_code,
                     "location": location,
                     "file_path": path,
