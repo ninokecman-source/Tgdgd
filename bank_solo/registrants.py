@@ -52,11 +52,17 @@ def load_registrants(excel_dir: Path) -> list:
             if first_name:
                 full = f"{first_name} {last_name or ''}".strip()
                 reversed_name = f"{last_name or ''} {first_name}".strip()
+                street = ws.cell(row=row, column=4).value or ""
+                city = ws.cell(row=row, column=5).value or ""
+                postal_code = ws.cell(row=row, column=7).value or ""
+                address = f"{street}, {postal_code} {city}".strip(", ")
                 registrants.append({
                     "first_name": str(first_name).strip(),
                     "last_name": str(last_name or "").strip(),
                     "name_variants": [normalize_name(full), normalize_name(reversed_name)],
                     "email": ws.cell(row=row, column=8).value or "",
+                    "address": address,
+                    "oib": "",  # nije dostupan - vidi napomenu u README
                     "course_code": course_code,
                     "location": location,
                     "file_path": path,

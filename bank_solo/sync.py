@@ -100,6 +100,8 @@ def process_transaction(tx, registrants, config, solo, state) -> bool:
             tip_usluge=config["solo_tip_usluge"],
             nacin_placanja=config["solo_nacin_placanja"],
             kupac_naziv=full_name,
+            kupac_adresa=registrant.get("address") or None,
+            kupac_oib=registrant.get("oib") or None,
             stavke=stavke,
             napomene=napomene,
         )

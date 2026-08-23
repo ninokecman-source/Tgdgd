@@ -19,7 +19,7 @@ class SoloClient:
         self.session = requests.Session()
 
     def create_ponuda(self, tip_kupca, tip_usluge, nacin_placanja, kupac_naziv,
-                       stavke, kupac_oib=None, napomene=None):
+                       stavke, kupac_oib=None, kupac_adresa=None, napomene=None):
         """
         stavke: lista dictova {"opis": str, "cijena": float, "kolicina": float, "porez_stopa": int}
         Vraća parsirani 'ponuda' dio odgovora (id, broj_ponude, pdf, ...).
@@ -31,6 +31,8 @@ class SoloClient:
             ("nacin_placanja", nacin_placanja),
             ("kupac_naziv", kupac_naziv),
         ]
+        if kupac_adresa:
+            payload.append(("kupac_adresa", kupac_adresa))
         if kupac_oib:
             payload.append(("kupac_oib", kupac_oib))
         if napomene:
