@@ -1,0 +1,16 @@
+{
+  "cliniko_api_key": "tvoj Cliniko API ključ (Postavke -> API keys u Cliniku)",
+  "cliniko_shard": "au4",
+  "cliniko_user_agent": "Klinika analitika (tvoj@email.com)",
+
+  "solo_api_token": "tvoj Solo API token (Postavke servisa u Solu)",
+
+  "db_url": "sqlite:///cliniko_solo/cliniko_solo.db",
+
+  "matching": {
+    "amount_tolerance_percent": 10,
+    "amount_tolerance_absolute": 5,
+    "name_match_threshold": 80,
+    "auto_accept_confidence": 0.7
+  }
+}

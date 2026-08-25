@@ -4,3 +4,6 @@ processed_uids.json
 !template_admin_sheet.xlsx
 __pycache__/
 *.pyc
+
+cliniko_solo/config.json
+cliniko_solo/*.db
