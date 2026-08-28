@@ -1,8 +1,11 @@
 """Tanki klijent za Solo API - izrada ponude (quote, nefiskalizirano)."""
 
+import time
+
 import requests
 
 BASE_URL = "https://api.solo.com.hr"
+MIN_SECONDS_BETWEEN_REQUESTS = 6  # Solo traži barem 5s - malo marže
 
 
 class SoloAPIError(Exception):
@@ -17,6 +20,7 @@ class SoloClient:
     def __init__(self, api_token):
         self.api_token = api_token
         self.session = requests.Session()
+        self._last_request_time = None
 
     def create_ponuda(self, tip_kupca, tip_usluge, nacin_placanja, kupac_naziv,
                        stavke, kupac_oib=None, kupac_adresa=None, napomene=None):
@@ -48,7 +52,17 @@ class SoloClient:
 
         return self._post("ponuda", payload, result_key="ponuda")
 
+    def _wait_for_rate_limit(self):
+        if self._last_request_time is None:
+            return
+        elapsed = time.monotonic() - self._last_request_time
+        remaining = MIN_SECONDS_BETWEEN_REQUESTS - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
+
     def _post(self, endpoint, payload, result_key="racun"):
+        self._wait_for_rate_limit()
+        self._last_request_time = time.monotonic()
         resp = self.session.post(f"{BASE_URL}/{endpoint}", data=payload, timeout=30)
         resp.raise_for_status()
         data = resp.json()
