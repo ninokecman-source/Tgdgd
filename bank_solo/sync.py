@@ -20,6 +20,7 @@ import sys
 from email import policy
 from pathlib import Path
 
+from mailer import send_unmatched_notification
 from oib_lookup import discover_registration_folders, find_oib
 from registrants import add_payment, find_matching_registrant, load_registrants
 from solo_client import SoloAPIError, SoloClient
@@ -67,12 +68,13 @@ def resolve_description(config: dict, amount: float, course_code: str):
 
 
 def process_transaction(tx, registrants, config, solo, state, imap, registration_folders) -> str:
-    """Vrati 'sent' ako je transakcija uparena i poslana, 'unmatched' ako
-    ne treba (ili ne može) biti automatski poslana (nema imena, nema
-    opisa - treba ručna provjera), ili 'failed' ako je uparena ali slanje
-    u Solo nije uspjelo (privremena greška - treba ponovni pokušaj)."""
+    """Vrati 'sent' ako je transakcija uparena i poslana, 'already_done'
+    ako je već ranije poslana, 'unmatched' ako ne treba (ili ne može)
+    biti automatski poslana (nema imena, nema opisa - treba ručna
+    provjera), ili 'failed' ako je uparena ali slanje u Solo nije uspjelo
+    (privremena greška - treba ponovni pokušaj)."""
     if state.is_transaction_processed(tx["ref_id"]):
-        return "unmatched"
+        return "already_done"
 
     registrant = find_matching_registrant(tx["raw_line"], registrants)
     if registrant is None:
@@ -162,6 +164,7 @@ def run():
 
     processed_count = 0
     unmatched_count = 0
+    unmatched_to_notify = []
     bank_folder = config.get("imap_folder", "INBOX")
 
     for uid in new_uids:
@@ -184,6 +187,8 @@ def run():
                     processed_count += 1
                 elif outcome == "unmatched":
                     unmatched_count += 1
+                    if not state.is_unmatched_notified(tx["ref_id"]):
+                        unmatched_to_notify.append(tx)
                 elif outcome == "failed":
                     had_failure = True
 
@@ -196,6 +201,16 @@ def run():
             print(f"  (mail UID {uid} nije označen obrađenim zbog greške - pokušat će se ponovno)")
 
     imap.logout()
+
+    if unmatched_to_notify:
+        try:
+            send_unmatched_notification(config, unmatched_to_notify)
+            for tx in unmatched_to_notify:
+                state.mark_unmatched_notified(tx["ref_id"])
+            print(f"Poslana mail obavijest za {len(unmatched_to_notify)} neuparenu/ih uplatu/a.")
+        except Exception as e:
+            print(f"[UPOZORENJE] Obavijest o neuparenim uplatama nije poslana: {e}", file=sys.stderr)
+
     state.close()
 
     print(f"\nGotovo. Poslano {processed_count} novih Solo ponuda, "

@@ -12,7 +12,9 @@ Ime uplatitelja se ne čita s točno određene pozicije u izvodu (format za to
 nije bio dovoljno pouzdano potvrđen) — umjesto toga se **cijeli tekst
 retka** transakcije pretražuje za bilo koju poznatu kombinaciju
 ime+prezime (ili prezime+ime) iz Excel tablica. Ako se ime ne prepozna,
-uplata se preskače uz upozorenje u ispisu — tu treba ručna provjera.
+uplata se preskače uz upozorenje u ispisu **i mail obavijest** (na
+`notify_email`) — tu treba ručna provjera. Svaka neuparena uplata javlja
+se mailom samo **jednom** (ne ponavlja se svako pokretanje).
 
 Svaka transakcija (po jedinstvenoj referenci) i svaki mail se obrađuju
 točno jednom (SQLite stanje u `state_db_path`), pa ponovno pokretanje ne
@@ -50,7 +52,11 @@ Popuni u `config.json`:
 - `course_folder_roots` – isti Zoho folderi kao u glavnoj skripti
   (`["Split", "Zagreb"]`) koji se pretražuju (uz INBOX) pri traženju OIB-a
 - `excel_dir` – folder s Excel tablicama prijava (isti `output_dir` kao u
-  glavnoj Zoho skripti, npr. `/Users/ninokecman/Desktop/Prijave`)
+  glavnoj Zoho skripti)
+- `smtp_host`, `smtp_port` – za slanje mail obavijesti o neuparenim
+  uplatama (ista Zoho SMTP postavka kao za auto-potvrde u glavnoj skripti)
+- `notify_email` – adresa na koju stižu obavijesti o neuparenim uplatama
+  (obično ista kao `zoho_email`)
 - `solo_api_token` – Solo API token (Solo -> Postavke -> API)
 - `solo_tip_kupca` – **1** (potvrđeno u Solo API dokumentaciji = fizička
   osoba/B2C, to odgovara polaznicima)

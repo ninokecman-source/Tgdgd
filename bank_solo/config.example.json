@@ -7,7 +7,11 @@
   "sender_filter": "prijava@emmett-hr.com",
   "course_folder_roots": ["Split", "Zagreb"],
 
-  "excel_dir": "/Users/ninokecman/Desktop/Prijave",
+  "excel_dir": "/Users/ninokecman/Prijave",
+
+  "smtp_host": "smtp.zoho.com",
+  "smtp_port": 465,
+  "notify_email": "nino.k@emmett-hr.com",
 
   "solo_api_token": "tvoj Solo API token",
   "solo_tip_kupca": 1,

@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS processed_mails (
     uid          TEXT PRIMARY KEY,
     processed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS notified_unmatched (
+    ref_id       TEXT PRIMARY KEY,
+    notified_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -47,6 +52,18 @@ class StateStore:
         with self.conn:
             self.conn.execute(
                 "INSERT OR REPLACE INTO processed_mails (uid) VALUES (?)", (uid,)
+            )
+
+    def is_unmatched_notified(self, ref_id):
+        cur = self.conn.execute(
+            "SELECT 1 FROM notified_unmatched WHERE ref_id = ?", (ref_id,)
+        )
+        return cur.fetchone() is not None
+
+    def mark_unmatched_notified(self, ref_id):
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO notified_unmatched (ref_id) VALUES (?)", (ref_id,)
             )
 
     def close(self):
