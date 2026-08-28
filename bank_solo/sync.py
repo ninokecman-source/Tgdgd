@@ -66,17 +66,19 @@ def resolve_description(config: dict, amount: float, course_code: str):
     return config.get("course_description_map", {}).get(course_code)
 
 
-def process_transaction(tx, registrants, config, solo, state, imap, registration_folders) -> bool:
-    """Vrati True ako je transakcija obrađena (uparena i poslana), False
-    ako nije uparena (preskočena, treba ručna provjera)."""
+def process_transaction(tx, registrants, config, solo, state, imap, registration_folders) -> str:
+    """Vrati 'sent' ako je transakcija uparena i poslana, 'unmatched' ako
+    ne treba (ili ne može) biti automatski poslana (nema imena, nema
+    opisa - treba ručna provjera), ili 'failed' ako je uparena ali slanje
+    u Solo nije uspjelo (privremena greška - treba ponovni pokušaj)."""
     if state.is_transaction_processed(tx["ref_id"]):
-        return False
+        return "unmatched"
 
     registrant = find_matching_registrant(tx["raw_line"], registrants)
     if registrant is None:
         print(f"[!] Neuparena uplata {tx['amount']:.2f} EUR ({tx['date']}, ref {tx['ref_id']}) "
               f"- nijedno ime polaznika nije pronađeno u retku, treba ručna provjera.")
-        return False
+        return "unmatched"
 
     full_name = f"{registrant['first_name']} {registrant['last_name']}".strip()
     napomene = f"{registrant['course_code']} - {registrant['location']}".strip(" -")
@@ -86,7 +88,7 @@ def process_transaction(tx, registrants, config, solo, state, imap, registration
         print(f"[!] Uplata {tx['amount']:.2f} EUR za {full_name} uparena, ali kod tečaja "
               f"{registrant['course_code']!r} nema definiran opis u "
               f"course_description_map - preskačem, treba ručna provjera.")
-        return False
+        return "unmatched"
 
     stavke = [{
         "opis": opis,
@@ -116,7 +118,7 @@ def process_transaction(tx, registrants, config, solo, state, imap, registration
         )
     except SoloAPIError as e:
         print(f"[GREŠKA] Solo ponuda za {full_name} ({tx['ref_id']}): {e}", file=sys.stderr)
-        return False
+        return "failed"
 
     broj_ponude = ponuda.get("broj_ponude")
     new_total = add_payment(registrant["file_path"], registrant["row"], tx["amount"])
@@ -125,7 +127,7 @@ def process_transaction(tx, registrants, config, solo, state, imap, registration
 
     print(f"Uplata {tx['amount']:.2f} EUR -> {full_name} ({napomene}) "
           f"-> Solo ponuda {broj_ponude}, ukupno uplaćeno sad: {new_total:.2f} EUR")
-    return True
+    return "sent"
 
 
 def run():
@@ -172,16 +174,26 @@ def run():
         attachments = extract_statement_attachments(msg)
         print(f"Mail UID {uid} ({msg['Subject']}): {len(attachments)} prilog(a)")
 
+        had_failure = False
         for attachment_text in attachments:
             transactions = parse_statement(attachment_text)
             print(f"  Pronađeno {len(transactions)} transakcija u prilogu.")
             for tx in transactions:
-                if process_transaction(tx, registrants, config, solo, state, imap, registration_folders):
+                outcome = process_transaction(tx, registrants, config, solo, state, imap, registration_folders)
+                if outcome == "sent":
                     processed_count += 1
-                elif not state.is_transaction_processed(tx["ref_id"]):
+                elif outcome == "unmatched":
                     unmatched_count += 1
+                elif outcome == "failed":
+                    had_failure = True
 
-        state.mark_mail_processed(uid)
+        # Ako je slanje neke transakcije privremeno palo (npr. Solo rate
+        # limit), ne označavaj mail obrađenim - treba ga ponovno pokušati
+        # sljedeći put, inače se ta uplata nikad ne bi poslala.
+        if not had_failure:
+            state.mark_mail_processed(uid)
+        else:
+            print(f"  (mail UID {uid} nije označen obrađenim zbog greške - pokušat će se ponovno)")
 
     imap.logout()
     state.close()
