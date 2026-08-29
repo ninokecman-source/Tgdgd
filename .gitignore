@@ -4,8 +4,5 @@ processed_uids.json
 __pycache__/
 *.pyc
 
-cliniko_solo/config.json
-cliniko_solo/*.sqlite3
-
 bank_solo/config.json
 bank_solo/*.sqlite3

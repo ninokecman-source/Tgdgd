@@ -5,9 +5,8 @@ i za svaku uplatu izdaje Solo ponudu (nefiskaliziranu) na stvarno
 uplaćeni iznos. Iznos se automatski zbraja u "Payment Received" koloni
 odgovarajućeg Excel retka.
 
-Namijenjena pokretanju preko crona, isto kao zoho_to_excel.py i
-cliniko_solo/sync.py. Svaka transakcija se obrađuje točno jednom (SQLite
-stanje u state_db_path).
+Namijenjena pokretanju preko crona, isto kao zoho_to_excel.py. Svaka
+transakcija se obrađuje točno jednom (SQLite stanje u state_db_path).
 
 Pokretanje:
     python3 sync.py
