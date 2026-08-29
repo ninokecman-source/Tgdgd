@@ -35,6 +35,36 @@ def extract_patient_id(invoice):
     return match.group(1) if match else None
 
 
+def extract_oib(patient, section_name="Fiskalizacija", field_label="OIB"):
+    """Cliniko nema ugrađeno polje za OIB - klinika ga drži kao custom field
+    (sekcija "Fiskalizacija", polje "OIB"). Cliniko-ova javna dokumentacija ne
+    navodi točan naziv ključeva unutar `fields[]`, pa ova funkcija provjerava
+    oba plauzibilna varijantna naziva (`label`/`name` i `response`/`value`).
+    Provjeri na jednom stvarnom pacijentu s upisanim OIB-om prije nego se
+    osloniš na ovo u produkciji - ako ne vrati ništa, ispiši
+    `patient["custom_fields"]` i prilagodi ključeve."""
+    sections = (patient.get("custom_fields") or {}).get("sections") or []
+    for section in sections:
+        if section.get("name") != section_name:
+            continue
+        for field in section.get("fields") or []:
+            label = field.get("label") or field.get("name")
+            if label == field_label:
+                return field.get("response") or field.get("value") or None
+    return None
+
+
+def format_address(patient):
+    """Sastavlja `kupac_adresa` za Solo iz standardnih Cliniko adresnih polja."""
+    street = ", ".join(
+        p for p in (patient.get("address_1"), patient.get("address_2")) if p
+    )
+    city_line = " ".join(
+        p for p in (patient.get("post_code"), patient.get("city")) if p
+    )
+    return ", ".join(p for p in (street, city_line) if p) or None
+
+
 def iso_now(offset_seconds=0):
     return (datetime.now(timezone.utc) - timedelta(seconds=offset_seconds)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
@@ -76,6 +106,8 @@ def run(backfill_days=None):
         patient = cliniko.get_patient(patient_id) if patient_id else {}
         patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip()
         patient_email = patient.get("email")
+        patient_oib = extract_oib(patient)
+        patient_address = format_address(patient)
 
         # Cliniko total_amount je iznos koji je pacijent stvarno platio (bruto,
         # s PDV-om). Solo traži cijenu BEZ PDV-a i sam ga dodaje, pa moramo
@@ -99,6 +131,8 @@ def run(backfill_days=None):
                     tip_usluge=config["solo_tip_usluge"],
                     nacin_placanja=config["solo_nacin_placanja"],
                     kupac_naziv=patient_name or "Kupac",
+                    kupac_oib=patient_oib,
+                    kupac_adresa=patient_address,
                     stavke=stavke,
                 )
                 broj = racun.get("broj_ponude")
@@ -109,6 +143,8 @@ def run(backfill_days=None):
                     tip_usluge=config["solo_tip_usluge"],
                     nacin_placanja=config["solo_nacin_placanja"],
                     kupac_naziv=patient_name or "Kupac",
+                    kupac_oib=patient_oib,
+                    kupac_adresa=patient_address,
                     stavke=stavke,
                 )
                 broj = racun.get("broj_racuna")

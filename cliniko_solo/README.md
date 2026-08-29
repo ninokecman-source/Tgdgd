@@ -110,6 +110,25 @@ operater. To je jednokratno ručno podešavanje u Solo-u (nema veze s ovom
 skriptom ni s API tokenom) — bez toga Solo ne može izdati fiskalizirani
 račun za plaćanja karticom/gotovinom.
 
+## OIB i adresa kupca na računu
+
+Skripta sad automatski šalje u Solo i OIB i adresu pacijenta, ako postoje:
+
+- **Adresa** dolazi iz standardnih Cliniko polja na kartici pacijenta
+  (Address 1/2, Post code, City) — ništa dodatno ne treba podesiti.
+- **OIB** dolazi iz custom field sekcije **"Fiskalizacija"**, polje
+  **"OIB"**, na kartici pacijenta u Clinku (to polje se u Clinku prikazuje
+  samo kad je ispunjeno). Ako pacijent nema upisan OIB, račun se svejedno
+  šalje — samo bez tog podatka.
+
+**Napomena:** Cliniko javno ne dokumentira točan naziv JSON ključeva unutar
+custom field zapisa (`label` vs `name`, `response` vs `value`) — kod u
+`sync.py::extract_oib` provjerava obje varijante, ali svakako **testiraj na
+jednom stvarnom pacijentu s upisanim OIB-om** prije nego se osloniš na ovo.
+Ako OIB ne stigne u Solo, ispiši `patient["custom_fields"]` za tog
+pacijenta (u `run()`, odmah nakon `cliniko.get_patient(...)`) i prilagodi
+ključeve u `extract_oib`.
+
 ## Napomena o privatnosti
 
 Skripta iz Clinika u Solo šalje samo ono što je potrebno za račun (ime

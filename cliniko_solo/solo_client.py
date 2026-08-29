@@ -19,7 +19,7 @@ class SoloClient:
         self.session = requests.Session()
 
     def create_invoice(self, tip_racuna, tip_kupca, tip_usluge, nacin_placanja, kupac_naziv,
-                        stavke, kupac_oib=None, napomene=None, status=None):
+                        stavke, kupac_oib=None, kupac_adresa=None, napomene=None, status=None):
         """
         stavke: lista dictova {"opis": str, "cijena": float, "kolicina": float, "porez_stopa": int}
         status: 1=Otvoreno, 2=Poslano, 3=Opomena, 5=Plaćeno (default u Solo-u je Otvoreno)
@@ -35,6 +35,8 @@ class SoloClient:
         ]
         if kupac_oib:
             payload.append(("kupac_oib", kupac_oib))
+        if kupac_adresa:
+            payload.append(("kupac_adresa", kupac_adresa))
         if napomene:
             payload.append(("napomene", napomene))
         if status is not None:
@@ -51,7 +53,7 @@ class SoloClient:
         return self._post("racun", payload)
 
     def create_ponuda(self, tip_kupca, tip_usluge, nacin_placanja, kupac_naziv,
-                       stavke, kupac_oib=None, napomene=None):
+                       stavke, kupac_oib=None, kupac_adresa=None, napomene=None):
         """
         Isto kao create_invoice, ali kao 'ponuda' (quote) - NE fiskalizira se
         (nema JIR/ZKI), korisno za testiranje prijenosa podataka dok Solo
@@ -66,6 +68,8 @@ class SoloClient:
         ]
         if kupac_oib:
             payload.append(("kupac_oib", kupac_oib))
+        if kupac_adresa:
+            payload.append(("kupac_adresa", kupac_adresa))
         if napomene:
             payload.append(("napomene", napomene))
 
