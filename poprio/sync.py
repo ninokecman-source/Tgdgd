@@ -61,6 +61,26 @@ def extract_oib(patient, section_name="Fiskalizacija", field_label="OIB"):
     return None
 
 
+def detect_nacin_placanja(invoice, config):
+    """Cliniko API ne šalje način plaćanja kao posebno polje na računu, ali
+    ga osoblje upisuje u napomenu (`notes`) računa. Ova funkcija pretražuje
+    taj tekst za ključne riječi iz `solo_nacin_placanja_keywords` (npr.
+    "kartic" -> 3) i vraća prvi Solo kod čija se ijedna ključna riječ pojavi
+    u napomeni (case-insensitive). Ako ništa ne prepozna, vraća
+    `solo_nacin_placanja_default` i to jasno ispisuje u logu."""
+    notes = (invoice.get("notes") or "").lower()
+    for solo_code, keywords in config["solo_nacin_placanja_keywords"].items():
+        if any(keyword.lower() in notes for keyword in keywords):
+            return int(solo_code)
+
+    default = config["solo_nacin_placanja_default"]
+    print(
+        f"[UPOZORENJE] Cliniko račun {invoice['id']}: napomena ('{invoice.get('notes') or ''}') "
+        f"ne sadrži prepoznat način plaćanja, koristim zadani ({default})."
+    )
+    return default
+
+
 def format_address(patient):
     """Sastavlja `kupac_adresa` za Solo iz standardnih Cliniko adresnih polja."""
     street = ", ".join(
@@ -115,13 +135,14 @@ def run_once(config, cliniko, solo, state, backfill_days=None):
             "porez_stopa": tax_rate,
         }]
         document_type = config.get("solo_document_type", "racun")
+        nacin_placanja = detect_nacin_placanja(invoice, config)
 
         try:
             if document_type == "ponuda":
                 racun = solo.create_ponuda(
                     tip_kupca=config["solo_tip_kupca"],
                     tip_usluge=config["solo_tip_usluge"],
-                    nacin_placanja=config["solo_nacin_placanja"],
+                    nacin_placanja=nacin_placanja,
                     kupac_naziv=patient_name or "Kupac",
                     kupac_oib=patient_oib,
                     kupac_adresa=patient_address,
@@ -133,7 +154,7 @@ def run_once(config, cliniko, solo, state, backfill_days=None):
                     tip_racuna=config["solo_tip_racuna"],
                     tip_kupca=config["solo_tip_kupca"],
                     tip_usluge=config["solo_tip_usluge"],
-                    nacin_placanja=config["solo_nacin_placanja"],
+                    nacin_placanja=nacin_placanja,
                     kupac_naziv=patient_name or "Kupac",
                     kupac_oib=patient_oib,
                     kupac_adresa=patient_address,
@@ -146,7 +167,8 @@ def run_once(config, cliniko, solo, state, backfill_days=None):
 
         state.mark_processed(cliniko_id, racun)
         processed_count += 1
-        print(f"Cliniko #{cliniko_id} -> Solo {document_type} {broj} (JIR {racun.get('jir', '-')})")
+        print(f"Cliniko #{cliniko_id} -> Solo {document_type} {broj} "
+              f"(način plaćanja {nacin_placanja}, JIR {racun.get('jir', '-')})")
 
         if config.get("send_pdf_email") and patient_email and racun.get("pdf"):
             try:

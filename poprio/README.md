@@ -59,12 +59,14 @@ Popuni u `config.json`:
   modu provjerava Cliniko za nove plaćene račune (zadano 15; može i niže,
   vidi gore)
 - `solo_api_token` – Solo API token (korak 3)
-- `solo_tip_racuna`, `solo_tip_kupca`, `solo_nacin_placanja`,
-  `solo_default_tax_rate` – **provjeri s knjigovođom** prije prvog pravog
-  slanja; zadane vrijednosti (`tip_kupca=1` znači B2C/fizička osoba,
-  `nacin_placanja=3` znači kartice, 25% PDV) odgovaraju uobičajenom
-  dogovoru za kartične/Stripe naplate, ali svakako testiraj jedan račun
-  ručno prije puštanja u pogon
+- `solo_tip_racuna`, `solo_tip_kupca`, `solo_default_tax_rate` –
+  **provjeri s knjigovođom** prije prvog pravog slanja; zadano
+  `tip_kupca=1` znači B2C/fizička osoba, a `solo_default_tax_rate=0` znači
+  bez PDV-a (Solo API prihvaća 0/5/13/25 kao stopu). Ako si ipak u sustavu
+  PDV-a, promijeni na stvarnu stopu (npr. 25).
+- `solo_nacin_placanja_keywords` + `solo_nacin_placanja_default` – kako
+  skripta bira kartice (3) / gotovinu (2) / transakcijski (1), po
+  računu, vidi "Način plaćanja po računu" niže
 - `solo_tip_usluge` – ID usluge iz tvog Solo računa. Prijavi se u Solo ->
   **Usluge -> Tipovi usluga**, otvori uslugu koju koristiš za naplatu
   (npr. "Fizioterapija") i uzmi njen ID (vidljiv u URL-u ili detaljima
@@ -154,6 +156,37 @@ docker logs -f poprio
 * * * * * cd /putanja/do/poprio && /usr/bin/python3 sync.py >> sync.log 2>&1
 ```
 
+## Način plaćanja po računu
+
+Cliniko-ov javni API **ne šalje** način plaćanja kao posebno polje na
+računu (nema ga u `Invoice` objektu, niti postoji zaseban `payments`
+endpoint) — zato skripta način plaćanja prepoznaje iz teksta **napomene
+(`notes`)** na Cliniko računu, na temelju `solo_nacin_placanja_keywords` u
+`config.json`:
+
+```json
+"solo_nacin_placanja_keywords": {
+  "3": ["kartic", "card"],
+  "2": ["gotovin", "cash"],
+  "1": ["transakcij", "transfer", "virman", "IBAN"]
+}
+```
+
+Za svaki ključ (Solo kod: 1=transakcijski, 2=gotovina, 3=kartice,
+4=ček, 5=ostalo) navedi popis riječi/dijelova riječi koje se mogu pojaviti
+u napomeni tog Cliniko računa (usporedba je case-insensitive, traži se kao
+podniz). Prvi kod čija se ijedna riječ pronađe u napomeni se koristi.
+
+Ako napomena ne sadrži nijednu poznatu riječ, koristi se
+`solo_nacin_placanja_default`, uz upozorenje u ispisu (`journalctl -u
+poprio` ili `sync.log`) — to je znak da tekst napomene na tom računu ne
+odgovara ključnim riječima u configu, pa ih po potrebi proširi.
+
+**Prije puštanja u pogon provjeri na par stvarnih računa** da napomena u
+Clinku doista sadrži prepoznatljiv tekst za svaki način plaćanja koji
+koristiš — ako osoblje piše nešto drugačije (npr. "kes" umjesto "gotovina"),
+dodaj tu riječ u odgovarajuću listu.
+
 ## OIB i adresa kupca na računu
 
 Skripta automatski šalje u Solo i OIB i adresu pacijenta, ako postoje:
@@ -184,6 +217,8 @@ Otkriveno testiranjem na živom Solo računu, ugrađeno u `solo_client.py`:
 - `popust_N` je obavezan po stavci čak i kad je 0
 - `tip_kupca` mora biti broj (1 = B2C), ne string
 - `tip_usluge` (ID tipa usluge iz Solo računa) je obavezan
+- `porez_stopa_N` prihvaća samo 0, 5, 13 ili 25 (posto) — nema posebnog
+  parametra za "nisam u sustavu PDV-a"; za to se koristi `0`
 - Solo traži barem ~5 sekundi između API poziva — `solo_client.py` sam
   ugrađeno čeka (`MIN_SECONDS_BETWEEN_REQUESTS`), ne treba ništa ručno
   regulirati

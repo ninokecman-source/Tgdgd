@@ -9,8 +9,13 @@
   "solo_tip_racuna": 3,
   "solo_tip_kupca": 1,
   "solo_tip_usluge": "id_iz_solo_sucelja_Usluge->Tipovi_usluga",
-  "solo_nacin_placanja": 3,
-  "solo_default_tax_rate": 25,
+  "solo_nacin_placanja_keywords": {
+    "3": ["kartic", "card"],
+    "2": ["gotovin", "cash"],
+    "1": ["transakcij", "transfer", "virman", "IBAN"]
+  },
+  "solo_nacin_placanja_default": 3,
+  "solo_default_tax_rate": 0,
   "solo_default_service_description": "Fizioterapija",
 
   "send_pdf_email": true,
