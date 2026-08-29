@@ -1,7 +1,7 @@
 {
   "cliniko_api_key": "tvoj_cliniko_api_kljuc-shard",
   "cliniko_user_agent": "Poprio Cliniko-Solo integracija (tvoj_mail@primjer.com)",
-  "poll_interval_seconds": 60,
+  "poll_interval_seconds": 15,
   "lookback_overlap_seconds": 180,
 
   "solo_api_token": "tvoj_solo_api_token",

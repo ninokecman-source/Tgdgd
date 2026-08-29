@@ -1,5 +1,7 @@
 """Tanki klijent za Cliniko API (v1) - samo ono što nam treba za sinkronizaciju plaćenih računa."""
 
+import time
+
 import requests
 
 STATUS_PAID = 20
@@ -18,7 +20,18 @@ class ClinikoClient:
         })
 
     def _get(self, path, params=None):
-        resp = self.session.get(f"{self.base_url}{path}", params=params, timeout=30)
+        # Cliniko dopušta 200 zahtjeva/min po korisniku; kod čestog pollanja
+        # se to ne bi trebalo dogoditi, ali za svaki slučaj poštujemo 429 i
+        # X-RateLimit-Reset umjesto da propadnemo.
+        for attempt in range(3):
+            resp = self.session.get(f"{self.base_url}{path}", params=params, timeout=30)
+            if resp.status_code == 429:
+                reset_at = resp.headers.get("X-RateLimit-Reset")
+                wait_seconds = max(float(reset_at) - time.time(), 1) if reset_at else 5
+                time.sleep(min(wait_seconds, 60))
+                continue
+            resp.raise_for_status()
+            return resp.json()
         resp.raise_for_status()
         return resp.json()
 

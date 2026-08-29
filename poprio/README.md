@@ -14,8 +14,12 @@ Cliniko "ima li novih plaćenih računa" umjesto da čeka da Cliniko nešto
 pošalje njoj. To znači da nije potreban javni HTTPS endpoint, provjera
 potpisa webhooka ni otvaranje ulaznih portova — server treba samo izlazni
 internet pristup, što je najjednostavnije za pokrenuti na jeftinoj vanjskoj
-instanci (vidi "Pokretanje na vanjskom serveru" niže). Uz zadani
-`poll_interval_seconds: 60` kašnjenje je u praksi ispod minute.
+instanci (vidi "Pokretanje na vanjskom serveru" niže). Uz zadani `poll_interval_seconds: 15` kašnjenje je u praksi svega par
+sekundi. Cliniko dopušta 200 zahtjeva/min po korisniku, a svaki prazan
+prolaz (nema novih plaćenih računa) košta samo 1 zahtjev, pa se interval
+može spustiti i niže (npr. 5-10s) bez rizika od rate-limita — Solo-ovo
+ograničenje od ~5s vrijedi samo za stvarno kreiranje računa, ne za
+provjeru ima li novih.
 
 ## 1. Instalacija
 
@@ -52,7 +56,8 @@ Popuni u `config.json`:
 - `cliniko_user_agent` – naziv aplikacije + tvoj mail (Cliniko to traži u
   svakom zahtjevu)
 - `poll_interval_seconds` – koliko često (u sekundama) skripta u `--loop`
-  modu provjerava Cliniko za nove plaćene račune (zadano 60)
+  modu provjerava Cliniko za nove plaćene račune (zadano 15; može i niže,
+  vidi gore)
 - `solo_api_token` – Solo API token (korak 3)
 - `solo_tip_racuna`, `solo_tip_kupca`, `solo_nacin_placanja`,
   `solo_default_tax_rate` – **provjeri s knjigovođom** prije prvog pravog
