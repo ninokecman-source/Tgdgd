@@ -187,6 +187,24 @@ Clinku doista sadrži prepoznatljiv tekst za svaki način plaćanja koji
 koristiš — ako osoblje piše nešto drugačije (npr. "kes" umjesto "gotovina"),
 dodaj tu riječ u odgovarajuću listu.
 
+**Zašto ovo mora ići kroz napomenu (istraženo uživo, ne samo iz
+dokumentacije):** Cliniko PDF prikazuje način plaćanja u sekciji "Payment
+Details" (npr. "Gotovina"), ali taj podatak **nije dostupan preko API-ja**
+— testirano na stvarnom, plaćenom Cliniko računu:
+- puni JSON objekt računa (svih dokumentiranih i nedokumentiranih polja)
+  nema nikakvo polje za način plaćanja; `notes` i `patient_extra_information`
+  su prazni čak i kad PDF pokazuje "Gotovina"
+- `/patient_payments`, `/payments`, `/invoices/{id}/payments`,
+  `/invoices/{id}/patient_payments` — sve vraćaju `404 Not Found`
+- nema webhookova za invoice/payment evente u javnom API-ju
+- `online_payment_url` (javni link s računa) za već plaćen račun prikazuje
+  samo "already been paid", bez detalja o plaćanju
+- PDF/print izvoz postoji samo kroz prijavljenu web sesiju, nije
+  dokumentiran API endpoint — dohvat bi zahtijevao spremanje stvarne
+  Cliniko lozinke na server i automatizaciju preglednika (Playwright), što
+  je lomljivo (puca čim Cliniko promijeni sučelje) i rizičnije od API
+  ključa, pa je odbačeno u korist pretrage `notes` polja.
+
 ## OIB i adresa kupca na računu
 
 Skripta automatski šalje u Solo i OIB i adresu pacijenta, ako postoje:
