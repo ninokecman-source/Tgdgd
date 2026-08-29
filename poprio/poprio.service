@@ -1,0 +1,26 @@
+# systemd servis za Poprio (Cliniko -> Solo) na vanjskom serveru.
+#
+# Instalacija:
+#   1. Kopiraj cijeli poprio/ folder na server, npr. u /opt/poprio
+#   2. Popuni /opt/poprio/config.json (vidi README.md)
+#   3. sudo cp poprio.service /etc/systemd/system/poprio.service
+#   4. Prilagodi WorkingDirectory/ExecStart ako folder nije /opt/poprio
+#   5. sudo systemctl daemon-reload
+#   6. sudo systemctl enable --now poprio
+#   7. Prati log: journalctl -u poprio -f
+
+[Unit]
+Description=Poprio - Cliniko to Solo fiskalizacija
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/poprio
+ExecStart=/usr/bin/python3 /opt/poprio/sync.py --loop
+Restart=always
+RestartSec=15
+User=poprio
+
+[Install]
+WantedBy=multi-user.target

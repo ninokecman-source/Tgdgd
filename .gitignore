@@ -6,3 +6,7 @@ __pycache__/
 
 bank_solo/config.json
 bank_solo/*.sqlite3
+
+poprio/config.json
+poprio/state/
+poprio/*.sqlite3

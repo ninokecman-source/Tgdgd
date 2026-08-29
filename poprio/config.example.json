@@ -1,0 +1,25 @@
+{
+  "cliniko_api_key": "tvoj_cliniko_api_kljuc-shard",
+  "cliniko_user_agent": "Poprio Cliniko-Solo integracija (tvoj_mail@primjer.com)",
+  "poll_interval_seconds": 60,
+  "lookback_overlap_seconds": 180,
+
+  "solo_api_token": "tvoj_solo_api_token",
+  "solo_document_type": "racun",
+  "solo_tip_racuna": 3,
+  "solo_tip_kupca": 1,
+  "solo_tip_usluge": "id_iz_solo_sucelja_Usluge->Tipovi_usluga",
+  "solo_nacin_placanja": 3,
+  "solo_default_tax_rate": 25,
+  "solo_default_service_description": "Fizioterapija",
+
+  "send_pdf_email": true,
+  "smtp_host": "smtppro.zoho.com",
+  "smtp_port": 465,
+  "smtp_username": "tvoj_mail@primjer.com",
+  "smtp_password": "app-specific lozinka",
+  "smtp_from_name": "Ime ordinacije",
+  "smtp_from_email": "tvoj_mail@primjer.com",
+
+  "state_db_path": "state/poprio_state.sqlite3"
+}
