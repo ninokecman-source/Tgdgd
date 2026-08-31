@@ -1,9 +1,14 @@
-# Poprio — Cliniko -> Solo (automatska fiskalizacija plaćenih računa)
+# Poprio — Cliniko -> Solo (automatska priprema računa za fiskalizaciju)
 
 Skripta prati Cliniko za novoplaćene ("Paid") račune i za svaki od njih
-odmah kreira fiskalizirani račun u Solo-u — praktički u istom trenutku kad
-je pacijent platio u Clinku. Nakon uspješne fiskalizacije, pacijentu se
-mailom šalje PDF računa iz Solo-a (Cliniko ne šalje paralelno svoj račun).
+odmah kreira **Solo ponudu** (nefiskalni nacrt, s istim kupcem/OIB-om/
+adresom/iznosom) — praktički u istom trenutku kad je pacijent platio u
+Clinku. Ponuda **nije fiskalni dokument** (nema JIR/ZKI); ti ili osoblje je
+zatim u Solo sučelju pretvorite u pravi fiskalizirani račun, birajući tad
+stvarni način plaćanja (kartica/gotovina/transakcijski) — vidi "Zašto
+ponuda, a ne odmah račun" niže za razlog. Skripta automatski šalje
+PDF pacijentu mailom **samo** kad je stvarno kreiran fiskalizirani račun
+(`solo_document_type: "racun"`), nikad za ponudu.
 
 Svaki Cliniko račun se šalje u Solo **točno jednom** — obrađeni ID-jevi se
 pamte u lokalnoj SQLite bazi (`state_db_path`), pa ponovno pokretanje ili
@@ -59,6 +64,8 @@ Popuni u `config.json`:
   modu provjerava Cliniko za nove plaćene račune (zadano 15; može i niže,
   vidi gore)
 - `solo_api_token` – Solo API token (korak 3)
+- `solo_document_type` – `"ponuda"` (zadano, preporučeno) ili `"racun"`;
+  vidi "Zašto ponuda, a ne odmah račun" niže prije mijenjanja
 - `solo_tip_racuna`, `solo_tip_kupca`, `solo_default_tax_rate` –
   **provjeri s knjigovođom** prije prvog pravog slanja; zadano
   `tip_kupca=1` znači B2C/fizička osoba, a `solo_default_tax_rate=0` znači
@@ -83,22 +90,34 @@ Popuni u `config.json`:
 **Napomena:** `config.json` sadrži tajne podatke i nikad se ne smije
 commitati (već je u `.gitignore`).
 
-## 5. Fiskalizacija mora biti postavljena u Solo web sučelju
+## 5. Zašto ponuda, a ne odmah račun
 
-Ako pri slanju dobiješ grešku "Odabrani način plaćanja za ovog kupca
-zahtijeva fiskalizaciju...", to znači da u Solo web sučelju, pod
-**Postavke -> Fiskalizacija**, još nisu uneseni certifikat, poslovnica i
-operater. To je jednokratno ručno podešavanje u Solo-u (nema veze s ovom
-skriptom ni s API tokenom) — bez toga Solo ne može izdati fiskalizirani
-račun za plaćanja karticom/gotovinom.
+Solo **fiskalizira `racun` odmah pri kreiranju** (JIR/ZKI se dodjeljuju u
+tom trenutku, ako je fiskalizacija postavljena) — polje `status`
+(Otvoreno/Poslano/Plaćeno) je samo knjigovodstvena oznaka i ne utječe na
+to je li dokument već fiskaliziran. Drugim riječima, `racun` se ne može
+"kreirati, a fiskalizirati kasnije" — zato je bitno da je način plaćanja
+točan **prije** slanja.
 
-Dok to nije podešeno, u `config.json` možeš staviti
-`"solo_document_type": "ponuda"` — skripta će tada umjesto fiskaliziranog
-računa kreirati Solo **ponudu** (quote) s istim podacima (kupac, usluga,
-cijena, PDV). Ponude se ne fiskaliziraju (nema JIR/ZKI) pa mogu poslužiti
-za provjeru da se podaci ispravno prenose iz Clinika. Kad fiskalizacija
-bude postavljena, promijeni na `"solo_document_type": "racun"` za stvarne
-fiskalizirane račune.
+Kako Cliniko API ne šalje stvarni način plaćanja po računu (vidi "Način
+plaćanja po računu" niže), zadano ponašanje (`solo_document_type:
+"ponuda"`) izbjegava taj rizik: ponuda se **nikad ne fiskalizira**, pa
+netočan `nacin_placanja` na njoj nema fiskalne posljedice. Skripta odradi
+sav ostali ručni unos odmah (kupac, OIB, adresa, iznos, PDV), a ti/osoblje
+u Solo sučelju otvorite ponudu, potvrdite/ispravite stvarni način plaćanja
+i pretvorite je u pravi fiskalizirani račun — taj jedan klik ostaje svjesna
+ljudska potvrda umjesto automatskog nagađanja.
+
+Ako u tvojoj praksi svi automatski sinkronizirani računi dosljedno idu
+istim, poznatim načinom plaćanja (npr. isključivo kartica kroz online
+booking), možeš postaviti `"solo_document_type": "racun"` da se odmah
+fiskalizira bez međukoraka — u tom slučaju `solo_nacin_placanja_default`
+mora biti točno taj način, jer se ovdje više ne ispravlja naknadno.
+
+Bez obzira na način rada, prvo mora biti postavljena fiskalizacija u Solo
+web sučelju, pod **Postavke -> Fiskalizacija** (certifikat, poslovnica,
+operater) — bez toga Solo ne može izdati fiskalizirani `racun` (na `ponuda`
+ne utječe, jer se ona nikad ne fiskalizira).
 
 ## 6. Prvo pokretanje
 

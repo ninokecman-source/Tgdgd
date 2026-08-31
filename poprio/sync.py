@@ -170,11 +170,14 @@ def run_once(config, cliniko, solo, state, backfill_days=None):
         print(f"Cliniko #{cliniko_id} -> Solo {document_type} {broj} "
               f"(način plaćanja {nacin_placanja}, JIR {racun.get('jir', '-')})")
 
-        if config.get("send_pdf_email") and patient_email and racun.get("pdf"):
+        # Ponuda nije fiskalni dokument (nema JIR/ZKI) - pacijentu se šalje samo
+        # kad je stvarno kreiran fiskalizirani racun, da slučajno ne dobije
+        # nešto što izgleda kao račun, a nije.
+        if document_type == "racun" and config.get("send_pdf_email") and patient_email and racun.get("pdf"):
             try:
                 send_invoice_pdf(config, patient_email, patient_name, racun["pdf"], broj)
             except Exception as e:
-                print(f"[UPOZORENJE] {document_type.capitalize()} {broj} kreiran, ali mail nije poslan: {e}", file=sys.stderr)
+                print(f"[UPOZORENJE] Račun {broj} kreiran, ali mail nije poslan: {e}", file=sys.stderr)
 
     overlap = config.get("lookback_overlap_seconds", 180)
     new_watermark_dt = datetime.strptime(latest_updated_at, "%Y-%m-%dT%H:%M:%SZ") - timedelta(seconds=overlap)
