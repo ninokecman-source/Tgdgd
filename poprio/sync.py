@@ -20,6 +20,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import requests
+
 from cliniko_client import ClinikoClient
 from solo_client import SoloClient, SoloAPIError
 from state import StateStore
@@ -165,7 +167,12 @@ def run_once(config, cliniko, solo, state, backfill_days=None):
                     stavke=stavke,
                 )
                 broj = racun.get("broj_racuna")
-        except SoloAPIError as e:
+        except (SoloAPIError, requests.exceptions.RequestException) as e:
+            # requests.exceptions.RequestException hvata i prolazne mrežne/HTTP
+            # greške (npr. Solo 502/503, timeout) - ne samo Solo-ove aplikacijske
+            # greške - da jedan neuspjeh ne prekine obradu ostalih računa u istom
+            # prolazu. Račun ostaje neobrađen u state bazi, pa se ponovno
+            # pokušava sljedeći put kad skripta prođe kroz njega.
             print(f"[GREŠKA] Cliniko račun {cliniko_id}: {e}", file=sys.stderr)
             continue
 
