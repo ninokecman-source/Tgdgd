@@ -61,22 +61,25 @@ def extract_oib(patient, section_name="Fiskalizacija", field_label="OIB"):
     return None
 
 
-def detect_nacin_placanja(invoice, config):
+def detect_nacin_placanja(invoice_id, invoice_items, config):
     """Cliniko API ne šalje način plaćanja kao posebno polje na računu, ali
-    ga osoblje upisuje u napomenu (`notes`) računa. Ova funkcija pretražuje
-    taj tekst za ključne riječi iz `solo_nacin_placanja_keywords` (npr.
-    "kartic" -> 3) i vraća prvi Solo kod čija se ijedna ključna riječ pojavi
-    u napomeni (case-insensitive). Ako ništa ne prepozna, vraća
-    `solo_nacin_placanja_default` i to jasno ispisuje u logu."""
-    notes = (invoice.get("notes") or "").lower()
-    for solo_code, keywords in config["solo_nacin_placanja_keywords"].items():
-        if any(keyword.lower() in notes for keyword in keywords):
+    ga osoblje označava dodavanjem posebne stavke od 0 EUR na račun (npr.
+    "Način plaćanja: Gotovina", šifra "GOT" postavljena kao item code te
+    stavke u Cliniko Settings -> Billable items). Ova funkcija traži tu
+    stavku po `code` polju svake stavke računa (točno podudaranje,
+    case-insensitive) prema mapi `solo_nacin_placanja_item_codes` u
+    config.json (Solo kod -> Cliniko item code). Ako nijedna stavka na
+    računu ne odgovara, vraća `solo_nacin_placanja_default` i to jasno
+    ispisuje u logu."""
+    item_codes = {(item.get("code") or "").strip().upper() for item in invoice_items}
+    for solo_code, cliniko_code in config["solo_nacin_placanja_item_codes"].items():
+        if cliniko_code.strip().upper() in item_codes:
             return int(solo_code)
 
     default = config["solo_nacin_placanja_default"]
     print(
-        f"[UPOZORENJE] Cliniko račun {invoice['id']}: napomena ('{invoice.get('notes') or ''}') "
-        f"ne sadrži prepoznat način plaćanja, koristim zadani ({default})."
+        f"[UPOZORENJE] Cliniko račun {invoice_id}: nijedna stavka računa ne "
+        f"odgovara poznatoj šifri načina plaćanja, koristim zadani ({default})."
     )
     return default
 
@@ -135,7 +138,8 @@ def run_once(config, cliniko, solo, state, backfill_days=None):
             "porez_stopa": tax_rate,
         }]
         document_type = config.get("solo_document_type", "racun")
-        nacin_placanja = detect_nacin_placanja(invoice, config)
+        invoice_items = cliniko.get_invoice_items(cliniko_id)
+        nacin_placanja = detect_nacin_placanja(cliniko_id, invoice_items, config)
 
         try:
             if document_type == "ponuda":

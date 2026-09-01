@@ -58,3 +58,9 @@ class ClinikoClient:
 
     def get_patient(self, patient_id):
         return self._get(f"/patients/{patient_id}")
+
+    def get_invoice_items(self, invoice_id):
+        """Stavke danog računa - koristimo ih za prepoznavanje markera načina
+        plaćanja koji osoblje doda uz uslugu (vidi sync.py::detect_nacin_placanja)."""
+        data = self._get(f"/invoices/{invoice_id}/invoice_items")
+        return data.get("invoice_items", [])

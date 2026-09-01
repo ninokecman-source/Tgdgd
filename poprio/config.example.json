@@ -5,14 +5,14 @@
   "lookback_overlap_seconds": 180,
 
   "solo_api_token": "tvoj_solo_api_token",
-  "solo_document_type": "ponuda",
+  "solo_document_type": "racun",
   "solo_tip_racuna": 3,
   "solo_tip_kupca": 1,
   "solo_tip_usluge": "id_iz_solo_sucelja_Usluge->Tipovi_usluga",
-  "solo_nacin_placanja_keywords": {
-    "3": ["kartic", "card"],
-    "2": ["gotovin", "cash"],
-    "1": ["transakcij", "transfer", "virman", "IBAN"]
+  "solo_nacin_placanja_item_codes": {
+    "3": "KART",
+    "2": "GOT",
+    "1": "TRAN"
   },
   "solo_nacin_placanja_default": 3,
   "solo_default_tax_rate": 0,

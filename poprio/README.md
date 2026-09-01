@@ -1,14 +1,13 @@
-# Poprio — Cliniko -> Solo (automatska priprema računa za fiskalizaciju)
+# Poprio — Cliniko -> Solo (automatska fiskalizacija plaćenih računa)
 
 Skripta prati Cliniko za novoplaćene ("Paid") račune i za svaki od njih
-odmah kreira **Solo ponudu** (nefiskalni nacrt, s istim kupcem/OIB-om/
-adresom/iznosom) — praktički u istom trenutku kad je pacijent platio u
-Clinku. Ponuda **nije fiskalni dokument** (nema JIR/ZKI); ti ili osoblje je
-zatim u Solo sučelju pretvorite u pravi fiskalizirani račun, birajući tad
-stvarni način plaćanja (kartica/gotovina/transakcijski) — vidi "Zašto
-ponuda, a ne odmah račun" niže za razlog. Skripta automatski šalje
-PDF pacijentu mailom **samo** kad je stvarno kreiran fiskalizirani račun
-(`solo_document_type: "racun"`), nikad za ponudu.
+odmah kreira fiskalizirani račun u Solo-u — praktički u istom trenutku kad
+je pacijent platio u Clinku. Nakon uspješne fiskalizacije, pacijentu se
+mailom šalje PDF računa iz Solo-a (Cliniko ne šalje paralelno svoj račun).
+Stvarni način plaćanja (kartica/gotovina/transakcijski) prepoznaje se iz
+posebne stavke od 0 EUR koju osoblje doda na Cliniko račun — vidi "Kako se
+određuje način plaćanja" niže za postavljanje i razlog zašto je taj korak
+bitan.
 
 Svaki Cliniko račun se šalje u Solo **točno jednom** — obrađeni ID-jevi se
 pamte u lokalnoj SQLite bazi (`state_db_path`), pa ponovno pokretanje ili
@@ -64,16 +63,18 @@ Popuni u `config.json`:
   modu provjerava Cliniko za nove plaćene račune (zadano 15; može i niže,
   vidi gore)
 - `solo_api_token` – Solo API token (korak 3)
-- `solo_document_type` – `"ponuda"` (zadano, preporučeno) ili `"racun"`;
-  vidi "Zašto ponuda, a ne odmah račun" niže prije mijenjanja
+- `solo_document_type` – `"racun"` (zadano) kreira odmah fiskalizirani
+  račun; `"ponuda"` kreira nefiskalni nacrt koji se ručno pretvara u Solo
+  sučelju (sigurnija opcija ako ne vjeruješ da će stavka za način plaćanja
+  iz "Kako se određuje način plaćanja" niže uvijek biti ispravno dodana)
 - `solo_tip_racuna`, `solo_tip_kupca`, `solo_default_tax_rate` –
   **provjeri s knjigovođom** prije prvog pravog slanja; zadano
   `tip_kupca=1` znači B2C/fizička osoba, a `solo_default_tax_rate=0` znači
   bez PDV-a (Solo API prihvaća 0/5/13/25 kao stopu). Ako si ipak u sustavu
   PDV-a, promijeni na stvarnu stopu (npr. 25).
-- `solo_nacin_placanja_keywords` + `solo_nacin_placanja_default` – kako
+- `solo_nacin_placanja_item_codes` + `solo_nacin_placanja_default` – kako
   skripta bira kartice (3) / gotovinu (2) / transakcijski (1), po
-  računu, vidi "Način plaćanja po računu" niže
+  računu, vidi "Kako se određuje način plaćanja" niže
 - `solo_tip_usluge` – ID usluge iz tvog Solo računa. Prijavi se u Solo ->
   **Usluge -> Tipovi usluga**, otvori uslugu koju koristiš za naplatu
   (npr. "Fizioterapija") i uzmi njen ID (vidljiv u URL-u ili detaljima
@@ -90,34 +91,26 @@ Popuni u `config.json`:
 **Napomena:** `config.json` sadrži tajne podatke i nikad se ne smije
 commitati (već je u `.gitignore`).
 
-## 5. Zašto ponuda, a ne odmah račun
+## 5. Fiskalizacija mora biti postavljena u Solo web sučelju
 
-Solo **fiskalizira `racun` odmah pri kreiranju** (JIR/ZKI se dodjeljuju u
-tom trenutku, ako je fiskalizacija postavljena) — polje `status`
-(Otvoreno/Poslano/Plaćeno) je samo knjigovodstvena oznaka i ne utječe na
-to je li dokument već fiskaliziran. Drugim riječima, `racun` se ne može
-"kreirati, a fiskalizirati kasnije" — zato je bitno da je način plaćanja
-točan **prije** slanja.
+Ako pri slanju dobiješ grešku "Odabrani način plaćanja za ovog kupca
+zahtijeva fiskalizaciju...", to znači da u Solo web sučelju, pod
+**Postavke -> Fiskalizacija**, još nisu uneseni certifikat, poslovnica i
+operater. To je jednokratno ručno podešavanje u Solo-u (nema veze s ovom
+skriptom ni s API tokenom) — bez toga Solo ne može izdati fiskalizirani
+račun za plaćanja karticom/gotovinom.
 
-Kako Cliniko API ne šalje stvarni način plaćanja po računu (vidi "Način
-plaćanja po računu" niže), zadano ponašanje (`solo_document_type:
-"ponuda"`) izbjegava taj rizik: ponuda se **nikad ne fiskalizira**, pa
-netočan `nacin_placanja` na njoj nema fiskalne posljedice. Skripta odradi
-sav ostali ručni unos odmah (kupac, OIB, adresa, iznos, PDV), a ti/osoblje
-u Solo sučelju otvorite ponudu, potvrdite/ispravite stvarni način plaćanja
-i pretvorite je u pravi fiskalizirani račun — taj jedan klik ostaje svjesna
-ljudska potvrda umjesto automatskog nagađanja.
-
-Ako u tvojoj praksi svi automatski sinkronizirani računi dosljedno idu
-istim, poznatim načinom plaćanja (npr. isključivo kartica kroz online
-booking), možeš postaviti `"solo_document_type": "racun"` da se odmah
-fiskalizira bez međukoraka — u tom slučaju `solo_nacin_placanja_default`
-mora biti točno taj način, jer se ovdje više ne ispravlja naknadno.
-
-Bez obzira na način rada, prvo mora biti postavljena fiskalizacija u Solo
-web sučelju, pod **Postavke -> Fiskalizacija** (certifikat, poslovnica,
-operater) — bez toga Solo ne može izdati fiskalizirani `racun` (na `ponuda`
-ne utječe, jer se ona nikad ne fiskalizira).
+**Zašto je bitno da je način plaćanja točan prije slanja:** Solo
+**fiskalizira `racun` odmah pri kreiranju** (JIR/ZKI se dodjeljuju u tom
+trenutku) — polje `status` (Otvoreno/Poslano/Plaćeno) je samo
+knjigovodstvena oznaka i na to ne utječe. `racun` se, drugim riječima, ne
+može "kreirati, a fiskalizirati kasnije". Zato skripta način plaćanja ne
+pogađa iz teksta nego ga čita iz strukturirane stavke na Cliniko računu —
+vidi "Kako se određuje način plaćanja" niže — a ako i dalje ne vjeruješ da
+će ta stavka uvijek biti dodana, `"solo_document_type": "ponuda"` je
+sigurnija alternativa (ponuda se nikad ne fiskalizira, pa netočan
+`nacin_placanja` na njoj nema fiskalne posljedice; ti/osoblje je onda
+ručno pretvorite u Solo sučelju, birajući tad stvarni način plaćanja).
 
 ## 6. Prvo pokretanje
 
@@ -175,41 +168,74 @@ docker logs -f poprio
 * * * * * cd /putanja/do/poprio && /usr/bin/python3 sync.py >> sync.log 2>&1
 ```
 
-## Način plaćanja po računu
+## Kako se određuje način plaćanja
 
 Cliniko-ov javni API **ne šalje** način plaćanja kao posebno polje na
-računu (nema ga u `Invoice` objektu, niti postoji zaseban `payments`
-endpoint) — zato skripta način plaćanja prepoznaje iz teksta **napomene
-(`notes`)** na Cliniko računu, na temelju `solo_nacin_placanja_keywords` u
-`config.json`:
+računu (istraženo uživo, ne samo iz dokumentacije — vidi "Zašto ne
+napomena/API" niže). Umjesto toga, osoblje na svaki Cliniko račun uz
+stvarnu uslugu doda **jednu dodatnu stavku od 0 EUR** koja označava kojim
+je načinom pacijent platio — ista radnja kao dodavanje bilo koje druge
+usluge na račun, samo jedan dodatni klik.
+
+### Jednokratno postavljanje u Clinku
+
+U Cliniko **Settings -> Billable Items** kreiraj tri stavke (proizvod ili
+uslugu, po tvom izboru), svaku s cijenom **0** i jasnim nazivom da ima
+smisla ako je pacijent primijeti na svom računu, npr.:
+
+| Naziv u Clinku | Item code | Cijena |
+|---|---|---|
+| Način plaćanja: Kartica | `KART` | 0 |
+| Način plaćanja: Gotovina | `GOT` | 0 |
+| Način plaćanja: Transakcijski | `TRAN` | 0 |
+
+**Item code** polje je bitno — po njemu skripta prepoznaje stavku, ne po
+nazivu (naziv možeš mijenjati kasnije bez utjecaja na skriptu). Uskladi
+kodove s `solo_nacin_placanja_item_codes` u `config.json`:
 
 ```json
-"solo_nacin_placanja_keywords": {
-  "3": ["kartic", "card"],
-  "2": ["gotovin", "cash"],
-  "1": ["transakcij", "transfer", "virman", "IBAN"]
+"solo_nacin_placanja_item_codes": {
+  "3": "KART",
+  "2": "GOT",
+  "1": "TRAN"
 }
 ```
 
-Za svaki ključ (Solo kod: 1=transakcijski, 2=gotovina, 3=kartice,
-4=ček, 5=ostalo) navedi popis riječi/dijelova riječi koje se mogu pojaviti
-u napomeni tog Cliniko računa (usporedba je case-insensitive, traži se kao
-podniz). Prvi kod čija se ijedna riječ pronađe u napomeni se koristi.
+(Solo kod: 1=transakcijski, 2=gotovina, 3=kartice, 4=ček, 5=ostalo — ključ
+lijevo je Solo kod, vrijednost desno je Cliniko item code koji mu
+odgovara.)
 
-Ako napomena ne sadrži nijednu poznatu riječ, koristi se
+### Svakodnevna upotreba
+
+Kod zatvaranja svakog Cliniko računa, osoblje doda odgovarajuću stavku
+načina plaćanja uz uslugu (npr. "Fizioterapijski tretman" + "Način
+plaćanja: Gotovina"). Skripta dohvaća stavke računa
+(`GET /invoices/{id}/invoice_items`), traži onu čiji `code` odgovara
+jednom od kodova u configu (točno podudaranje, case-insensitive), i
+koristi pripadajući Solo kod. Stavka od 0 EUR **ne utječe** na iznos koji
+ide u Solo (Solo dobiva samo stvarnu uslugu, ne i marker).
+
+Ako nijedna stavka na računu ne odgovara nijednom kodu, koristi se
 `solo_nacin_placanja_default`, uz upozorenje u ispisu (`journalctl -u
-poprio` ili `sync.log`) — to je znak da tekst napomene na tom računu ne
-odgovara ključnim riječima u configu, pa ih po potrebi proširi.
+poprio` ili `sync.log`) — to je znak da je osoblje zaboravilo dodati
+stavku na taj račun.
 
-**Prije puštanja u pogon provjeri na par stvarnih računa** da napomena u
-Clinku doista sadrži prepoznatljiv tekst za svaki način plaćanja koji
-koristiš — ako osoblje piše nešto drugačije (npr. "kes" umjesto "gotovina"),
-dodaj tu riječ u odgovarajuću listu.
+**Prije puštanja u pogon (posebno ako je `solo_document_type: "racun"`):**
+napravi par test računa u Clinku sa svakom od tri stavke i provjeri da
+skripta u logu ispravno prijavi odgovarajući način plaćanja — pogrešan
+`nacin_placanja` na stvarnom `racun`-u znači formalni storno + novi račun,
+ne tihu ispravku.
 
-**Zašto ovo mora ići kroz napomenu (istraženo uživo, ne samo iz
-dokumentacije):** Cliniko PDF prikazuje način plaćanja u sekciji "Payment
-Details" (npr. "Gotovina"), ali taj podatak **nije dostupan preko API-ja**
-— testirano na stvarnom, plaćenom Cliniko računu:
+**Napomena o vidljivosti:** ta stavka od 0 EUR pojavljuje se i na
+Clinikovom vlastitom PDF računu koji pacijent može zatražiti (kao redak
+"Način plaćanja: Gotovina — 0,00€") — zato joj daj jasan naziv, ne
+kriptičnu šifru.
+
+### Zašto ne napomena/API
+
+Cliniko PDF prikazuje način plaćanja u sekciji "Payment Details" (npr.
+"Gotovina"), ali taj podatak **nije dostupan preko API-ja** — testirano na
+stvarnom, plaćenom Cliniko računu:
 - puni JSON objekt računa (svih dokumentiranih i nedokumentiranih polja)
   nema nikakvo polje za način plaćanja; `notes` i `patient_extra_information`
   su prazni čak i kad PDF pokazuje "Gotovina"
@@ -218,11 +244,18 @@ Details" (npr. "Gotovina"), ali taj podatak **nije dostupan preko API-ja**
 - nema webhookova za invoice/payment evente u javnom API-ju
 - `online_payment_url` (javni link s računa) za već plaćen račun prikazuje
   samo "already been paid", bez detalja o plaćanju
-- PDF/print izvoz postoji samo kroz prijavljenu web sesiju, nije
-  dokumentiran API endpoint — dohvat bi zahtijevao spremanje stvarne
-  Cliniko lozinke na server i automatizaciju preglednika (Playwright), što
-  je lomljivo (puca čim Cliniko promijeni sučelje) i rizičnije od API
-  ključa, pa je odbačeno u korist pretrage `notes` polja.
+- ni `Attendee` ni `Booking`/`Appointment` sheme nemaju polje za Stripe/
+  procesor plaćanja — samo `booking_ip_address`/`online_booking_policy_accepted`,
+  koji govore je li termin rezerviran online, ne je li i **plaćen** online
+- PDF/print izvoz i "Payments Summary" izvještaj postoje samo kroz
+  prijavljenu web sesiju, nisu dokumentiran API endpoint — dohvat bi
+  zahtijevao spremanje stvarne Cliniko lozinke na server i automatizaciju
+  preglednika (Playwright), što je lomljivo (puca čim Cliniko promijeni
+  sučelje) i rizičnije od API ključa
+
+Zato je stavka od 0 EUR na računu (`invoice_items`, dokumentiran i
+pouzdan endpoint) najbolji dostupan signal — strukturiran odabir iz
+Clinikovog popisa usluga, ne slobodan upis teksta.
 
 ## OIB i adresa kupca na računu
 
@@ -267,5 +300,9 @@ Otkriveno testiranjem na živom Solo računu, ugrađeno u `solo_client.py`:
 ## Napomena o privatnosti
 
 Skripta iz Clinika u Solo šalje samo ono što je potrebno za račun (ime
-pacijenta, email, iznos, PDV, način plaćanja). Dijagnoze, bilješke
-terapeuta i ostali medicinski podaci se nikad ne dohvaćaju ni ne šalju.
+pacijenta, email, iznos, PDV, način plaćanja). Stavke računa
+(`invoice_items`) se dohvaćaju samo da se pronađe marker načina plaćanja
+(`code` polje) — sadržaj/naziv stvarnih usluga se ne prosljeđuje u Solo,
+tamo ide `solo_default_service_description` iz configa. Dijagnoze,
+bilješke terapeuta i ostali medicinski podaci se nikad ne dohvaćaju ni ne
+šalju.
