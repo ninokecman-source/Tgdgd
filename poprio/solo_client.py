@@ -16,7 +16,7 @@ import time
 import requests
 
 BASE_URL = "https://api.solo.com.hr"
-MIN_SECONDS_BETWEEN_REQUESTS = 6  # Solo traži barem 5s između zahtjeva - malo marže
+MIN_SECONDS_BETWEEN_REQUESTS = 7  # Solo traži barem 5s između zahtjeva - malo marže
 
 
 class SoloAPIError(Exception):
@@ -104,8 +104,14 @@ class SoloClient:
 
     def _post(self, endpoint, payload, result_key="racun"):
         self._wait_for_rate_limit()
-        self._last_request_time = time.monotonic()
-        resp = self.session.post(f"{BASE_URL}/{endpoint}", data=payload, timeout=30)
+        try:
+            resp = self.session.post(f"{BASE_URL}/{endpoint}", data=payload, timeout=30)
+        finally:
+            # Mjeri se od završetka ovog poziva, ne od njegovog početka - Solo
+            # traži barem 5s od kad je PRETHODNI zahtjev gotov (obrađen), ne od
+            # kad je poslan. Ponuda/racun kreiranje traje par sekundi (PDF), pa
+            # bi mjerenje od početka podcijenilo stvarni razmak.
+            self._last_request_time = time.monotonic()
         resp.raise_for_status()
         data = resp.json()
 
