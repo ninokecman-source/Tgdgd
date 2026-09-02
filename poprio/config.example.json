@@ -10,9 +10,9 @@
   "solo_tip_kupca": 1,
   "solo_tip_usluge": "id_iz_solo_sucelja_Usluge->Tipovi_usluga",
   "solo_nacin_placanja_item_codes": {
-    "3": "KART",
-    "2": "GOT",
-    "1": "TRAN"
+    "3": "19",
+    "2": "18",
+    "1": "20"
   },
   "solo_nacin_placanja_default": 2,
   "solo_default_tax_rate": 0,

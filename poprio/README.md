@@ -181,29 +181,30 @@ usluge na račun, samo jedan dodatni klik.
 
 U Cliniko **Settings -> Billable Items** kreiraj tri stavke (proizvod ili
 uslugu, po tvom izboru), svaku s cijenom **0** i jasnim nazivom da ima
-smisla ako je pacijent primijeti na svom računu, npr.:
+smisla ako je pacijent primijeti na svom računu, npr. "Način plaćanja:
+Kartica", "Način plaćanja: Gotovina", "Način plaćanja: Transakcijski".
 
-| Naziv u Clinku | Item code | Cijena |
-|---|---|---|
-| Način plaćanja: Kartica | `KART` | 0 |
-| Način plaćanja: Gotovina | `GOT` | 0 |
-| Način plaćanja: Transakcijski | `TRAN` | 0 |
-
-**Item code** polje je bitno — po njemu skripta prepoznaje stavku, ne po
-nazivu (naziv možeš mijenjati kasnije bez utjecaja na skriptu). Uskladi
-kodove s `solo_nacin_placanja_item_codes` u `config.json`:
+**Item code polje pokušaj popuniti ručno** (npr. `KART`/`GOT`/`TRAN`) —
+ako ga ostaviš prazno, Cliniko će sam dodijeliti sljedeći slobodan
+**broj** (npr. `18`, `19`, `20`, nastavak na postojeći brojčani katalog
+usluga). Oboje radi identično za skriptu — bitno je samo da **točno
+prepišeš stvarno dodijeljeni `item_code`** u `solo_nacin_placanja_item_codes`
+u `config.json`, jer se po njemu (ne po nazivu) prepoznaje stavka. Provjeri
+stvarnu vrijednost u Clinku (Settings -> Billable Items -> otvori stavku)
+prije nego je upišeš u config:
 
 ```json
 "solo_nacin_placanja_item_codes": {
-  "3": "KART",
-  "2": "GOT",
-  "1": "TRAN"
+  "3": "19",
+  "2": "18",
+  "1": "20"
 }
 ```
 
 (Solo kod: 1=transakcijski, 2=gotovina, 3=kartice, 4=ček, 5=ostalo — ključ
 lijevo je Solo kod, vrijednost desno je Cliniko item code koji mu
-odgovara.)
+odgovara. Brojevi u primjeru gore su konkretni kodovi koje je Cliniko
+dodijelio u ovom računu — kod tebe mogu biti drugačiji, uvijek provjeri.)
 
 ### Svakodnevna upotreba
 
