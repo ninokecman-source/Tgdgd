@@ -14,6 +14,7 @@ Postavke se čitaju iz config.json (napravi ga iz config.example.json).
 
 import imaplib
 import smtplib
+import ssl
 import email
 from email import policy
 from email.message import EmailMessage
@@ -21,6 +22,7 @@ from datetime import datetime
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
@@ -45,6 +47,22 @@ FIELD_LABELS = {
 POSTAL_CODE_RE = re.compile(r"\b\d{5}\b")
 DATE_RE = re.compile(r"\d{1,2}\.\s*-?\s*\d{0,2}\.?\s*\d{1,2}\.\s*\d{4}\.?")
 TAG_RE = re.compile(r"<[^<]+?>")
+
+
+def with_retry(func, attempts=3, delay=5, retry_on=(OSError, ssl.SSLError)):
+    """Pokuša pozvati func() do 'attempts' puta, uz pauzu 'delay' sekundi
+    između pokušaja, ako baci neku od 'retry_on' iznimki (npr. privremeni
+    mrežni prekid pri IMAP konekciji, ili macOS privremeno blokira pristup
+    Desktop/iCloud datoteci dok se ne sinkronizira). Zadnji pokušaj, ako i
+    on padne, propagira iznimku dalje."""
+    for attempt in range(1, attempts + 1):
+        try:
+            return func()
+        except retry_on as e:
+            if attempt == attempts:
+                raise
+            print(f"  [!] {e} - pokušaj {attempt}/{attempts}, ponavljam za {delay}s...")
+            time.sleep(delay)
 
 
 def load_config() -> dict:
@@ -463,7 +481,9 @@ def append_participant(ws, data: dict, totals_row: int) -> int:
 def get_or_create_workbook(path: Path, course_code: str, location: str,
                             dates: str, instructor: str):
     if path.exists():
-        wb = load_workbook(path)
+        # PermissionError na macOS zna biti privremen (Desktop/iCloud sync
+        # datoteku na trenutak drži nedostupnom pozadinskom cron procesu).
+        wb = with_retry(lambda: load_workbook(path), retry_on=(PermissionError, OSError))
         ws = wb["podaci"]
         if dates and ws["C6"].value != dates:
             ws["C6"] = dates
@@ -578,7 +598,7 @@ def main():
 
     processed = load_state(state_path)
 
-    imap = imaplib.IMAP4_SSL(config["imap_host"])
+    imap = with_retry(lambda: imaplib.IMAP4_SSL(config["imap_host"]))
     imap.login(config["zoho_email"], config["zoho_app_password"])
 
     folder_roots = config.get("folder_roots", ["Split", "Zagreb"])
@@ -591,7 +611,7 @@ def main():
         added += process_folder(imap, raw_folder, folder_location, config, processed, workbooks)
 
     for path, wb, ws, _ in workbooks.values():
-        wb.save(path)
+        with_retry(lambda: wb.save(path), retry_on=(PermissionError, OSError))
 
     save_state(state_path, processed)
     imap.logout()
