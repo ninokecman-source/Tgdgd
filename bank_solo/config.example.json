@@ -1,0 +1,35 @@
+{
+  "zoho_email": "nino.k@emmett-hr.com",
+  "zoho_app_password": "ista app-specific lozinka kao za glavnu Zoho skriptu",
+  "imap_host": "imap.zoho.com",
+  "imap_folder": "Izvodi",
+  "bank_sender": "netbanking.support@erstebank.hr",
+  "sender_filter": "prijava@emmett-hr.com",
+  "course_folder_roots": ["Split", "Zagreb"],
+
+  "excel_dir": "/Users/ninokecman/Prijave",
+
+  "smtp_host": "smtp.zoho.com",
+  "smtp_port": 465,
+  "notify_email": "nino.k@emmett-hr.com",
+
+  "solo_api_token": "tvoj Solo API token",
+  "solo_tip_kupca": 1,
+  "solo_tip_usluge": 2,
+  "solo_nacin_placanja": 1,
+  "solo_default_tax_rate": 0,
+
+  "deposit_amount": 100,
+  "deposit_description": "Akontacija za Emmett tečaj",
+
+  "course_description_map": {
+    "Modul 1&2": "Emmett tečaj M1&2",
+    "Modul 3": "Emmett tečaj M3",
+    "Modul 4": "Emmett tečaj M4",
+    "Modul 5": "Emmett tečaj M5",
+    "Modul 6": "Emmett tečaj M6",
+    "Ponavljanje M6 i Praktičarski dan": "Ponavljanje Emmett tečaja M6 + praktičarski dan"
+  },
+
+  "state_db_path": "bank_solo_state.sqlite3"
+}
