@@ -236,11 +236,65 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
     return sent_count
 
 
+def show_overview(files: list, config: dict, state: dict, today: date) -> None:
+    """Ispiše što skripta vidi u svakoj tablici i zašto (ne)šalje podsjetnik.
+    Korisno kad --pregled ništa ne pokaže, pa nije jasno je li problem u
+    datumu, praznoj dvorani ili je jednostavno još prerano."""
+    rules = sorted(config.get("reminders", []), key=lambda r: r["days_before"], reverse=True)
+
+    for xlsx_path in files:
+        wb = with_retry(lambda: load_workbook(xlsx_path), retry_on=(PermissionError, OSError))
+        if "podaci" not in wb.sheetnames:
+            print(f"{xlsx_path.name}: nema list 'podaci', preskačem.")
+            continue
+        ws = wb["podaci"]
+        info = course_info(ws, config)
+        broj = len(read_participants(ws, find_totals_row(ws)))
+        start = parse_start_date(info["dates"])
+
+        print(f"\n{xlsx_path.name}")
+        print(f"  Tečaj:     {info['course_code']} / {info['location']}")
+        print(f"  Datum:     {info['dates'] or '(prazno)'}", end="")
+
+        if start is None:
+            print("  -> NE MOGU PROČITATI, podsjetnici se ne šalju")
+            continue
+        days_until = (start - today).days
+        print(f"  -> počinje {start.strftime('%d.%m.%Y')} ({days_until} dana)")
+        print(f"  Polaznika: {broj}")
+        print(f"  Dvorana:   {info['venue'] or 'PRAZNO (polje M5)'}")
+
+        if days_until < 1:
+            print("  Status:    tečaj je prošao ili je danas - ništa se ne šalje")
+            continue
+        if broj == 0:
+            print("  Status:    nema upisanih polaznika - nema kome slati")
+            continue
+
+        for i, rule in enumerate(rules):
+            dana = rule["days_before"]
+            donja = rules[i + 1]["days_before"] if i + 1 < len(rules) else 0
+            poslano = len(state.get(f"{xlsx_path.name}::{dana}", []))
+            if poslano:
+                stanje = f"već poslano ({poslano})"
+            elif days_until > dana:
+                stanje = f"još nije vrijeme (kreće na {dana} dana)"
+            elif days_until <= donja:
+                stanje = "prozor je prošao"
+            elif "{venue}" in rule["body"] and not info["venue"]:
+                stanje = "SPREMNO, ali čeka da upišeš dvoranu u M5"
+            else:
+                stanje = f"ŠALJE SE ({broj} polaznika)"
+            print(f"  {dana:>2} dana prije: {stanje}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Šalje automatske podsjetnike polaznicima prije tečaja.")
     parser.add_argument("--pregled", action="store_true",
                         help="Samo prikaži što bi poslao, bez slanja")
+    parser.add_argument("--popis", action="store_true",
+                        help="Ispiši stanje svake tablice (datum, polaznici, dvorana)")
     args = parser.parse_args()
 
     config = load_config()
@@ -263,6 +317,12 @@ def main():
         return
 
     state = load_state()
+
+    if args.popis:
+        show_overview(files, config, state, today)
+        print(f"\nUkupno {len(files)} tablica.")
+        return
+
     total = 0
     for xlsx_path in files:
         total += process_course(xlsx_path, config, state, today, dry_run)

@@ -74,6 +74,13 @@ Prije nego pustiš da stvarno šalje, pogledaj što bi poslao:
 python send_reminders.py --pregled
 ```
 
+Ako `--pregled` ništa ne pokaže, a nije jasno zašto, ispiši stanje svih
+tablica — datum, broj polaznika, dvoranu i status svakog podsjetnika:
+
+```bash
+python send_reminders.py --popis
+```
+
 Uključuje se u `config.json` s `"send_reminders": true`, a rokovi i tekst
 se podešavaju u polju `reminders`:
 
