@@ -36,9 +36,26 @@ Da uključiš, u `config.json` postavi:
 ```json
 "send_replies": true
 ```
-i po želji prilagodi `reply_subject` i `reply_body` (podržani su placeholderi
+i po želji prilagodi `reply_subject` i `reply_body`. Podržani placeholderi
+popunjavaju se iz same prijave, za svakog polaznika zasebno:
 `{first_name}`, `{last_name}`, `{course_code}`, `{location}`, `{dates}`,
-`{instructor_name}`).
+`{instructor_name}`.
+
+### Uvjeti plaćanja koji se razlikuju po tečaju
+
+Cijena je ista za sve module, ali akontacija (i uvjeti otkazivanja vezani
+uz nju) vrijedi samo za neke. Zato `reply_body` sadrži i placeholder
+`{deposit_section}`, koji se popunjava ovisno o tečaju:
+
+- `deposit_course_codes` — popis kodova tečaja koji imaju akontaciju
+  (npr. `["Modul 1&2"]`)
+- `reply_deposit_section` — tekst koji se šalje za te tečajeve (iznos
+  akontacije, rok uplate, uvjeti otkazivanja)
+- `reply_no_deposit_section` — tekst za sve ostale tečajeve (rok uplate
+  punog iznosa, upućivanje na uvjete pohađanja)
+
+Ako neki tečaj dobije/izgubi akontaciju, dovoljno je dodati ili maknuti
+njegov kod iz `deposit_course_codes` — tekst se ne dira.
 
 **Napomena:** poruka se šalje kao **nova** poruka polazniku (nije "reply"
 na izvornu obavijest koju ti primiš, jer polaznik nije primatelj te
