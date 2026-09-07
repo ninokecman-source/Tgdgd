@@ -61,6 +61,53 @@ njegov kod iz `deposit_course_codes` — tekst se ne dira.
 na izvornu obavijest koju ti primiš, jer polaznik nije primatelj te
 obavijesti — nema na što nastaviti nit razgovora).
 
+## Automatski podsjetnici prije tečaja (`send_reminders.py`)
+
+Zasebna skripta prolazi kroz sve tablice u `output_dir`, iz svake pročita
+datum tečaja i sve upisane polaznike, pa im pošalje podsjetnik kad tečaj
+dođe blizu — po defaultu **10 dana prije** (lokacija, što ponijeti,
+podsjetnik na uplatu) i **1 dan prije** ("sutra počinje").
+
+Prije nego pustiš da stvarno šalje, pogledaj što bi poslao:
+
+```bash
+python send_reminders.py --pregled
+```
+
+Uključuje se u `config.json` s `"send_reminders": true`, a rokovi i tekst
+se podešavaju u polju `reminders`:
+
+```json
+"reminders": [
+  {"days_before": 10, "subject": "...", "body": "..."},
+  {"days_before": 1,  "subject": "...", "body": "..."}
+]
+```
+
+Uz placeholdere iz automatske potvrde, ovdje su dostupni i `{venue}`
+(dvorana — ono što ručno upišeš u polje Venue, ćelija M5) i `{days_until}`
+(stvaran broj dana do tečaja).
+
+Kako to radi u praksi:
+
+- Svako pravilo pokriva prozor **do sljedećeg, užeg pravila**: uz 10 i 1
+  dan, "10 dana prije" vrijedi za 10–2 dana, a "1 dan prije" samo za točno
+  1 dan. Tako netko tko se prijavi 3 dana prije tečaja dobije informativnu
+  poruku (s točnim brojem dana u naslovu), a ne obje odjednom.
+- Poruka koja spominje `{venue}` **neće se poslati** ako je polje Venue u
+  tablici prazno — skripta to javi u logu da znaš popuniti dvoranu.
+- Tečajevi koji su danas ili su prošli se preskaču, kao i tablice s
+  datumom koji se ne može pouzdano pročitati.
+- U `sent_reminders.json` se pamti kome je koji podsjetnik poslan, pa se
+  ponovnim pokretanjem nikome ne šalje isto dvaput.
+
+Za automatsko pokretanje dodaj u cron još jednu liniju, uz onu za
+`zoho_to_excel.py`:
+
+```
+0 8 * * * cd /putanja/do/ovog/foldera && /usr/bin/python3 send_reminders.py >> log.txt 2>&1
+```
+
 ## 1. Instalacija
 
 Potreban je Python 3.9+.
