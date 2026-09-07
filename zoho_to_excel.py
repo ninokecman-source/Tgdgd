@@ -333,6 +333,16 @@ def send_confirmation_email(config: dict, data: dict, course_code: str,
         "dates": dates,
         "instructor_name": config["instructor_name"],
     }
+
+    # Uvjeti plaćanja se razlikuju po tečaju: akontacija (i s njom vezani
+    # uvjeti otkazivanja) vrijedi samo za tečajeve navedene u
+    # deposit_course_codes, za ostale ide reply_no_deposit_section.
+    if course_code in config.get("deposit_course_codes", []):
+        section = config.get("reply_deposit_section", "")
+    else:
+        section = config.get("reply_no_deposit_section", "")
+    template_vars["deposit_section"] = section.format(**template_vars)
+
     subject = config["reply_subject"].format(**template_vars)
     body = config["reply_body"].format(**template_vars)
 
