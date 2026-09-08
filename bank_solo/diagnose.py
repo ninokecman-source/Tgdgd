@@ -30,6 +30,13 @@ from statement_parser import parse_statement
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
 
+def maskiraj(line: str) -> str:
+    """Zamijeni svaku znamenku s 9 i svako slovo s A, ostalo ostavi. Tako
+    se vidi raspored polja u retku izvoda (gdje su iznosi, datumi, oznake)
+    bez ijednog stvarnog podatka - ni IBAN-a ni imena."""
+    return "".join("9" if ch.isdigit() else ("A" if ch.isalpha() else ch) for ch in line)
+
+
 def load_config():
     if not CONFIG_PATH.exists():
         sys.exit(
@@ -72,7 +79,7 @@ def diagnose_folder(config, imap):
     print(f"Pronađeno: {len(matched_uids)} -> {matched_uids}")
 
 
-def diagnose_statements(config, imap, koliko: int, puni_redak: bool):
+def diagnose_statements(config, imap, koliko: int, puni_redak: bool, maska: bool):
     folder = config.get("imap_folder", "INBOX")
     imap.select(f'"{folder}"')
     status, data = imap.uid("search", None, f'(FROM "{config["bank_sender"]}")')
@@ -112,6 +119,8 @@ def diagnose_statements(config, imap, koliko: int, puni_redak: bool):
                       f"{t['date']}  ref {t['ref_id']}")
                 if puni_redak:
                     print(f"      {t['raw_line']}")
+                if maska:
+                    print(f"      {maskiraj(t['raw_line'])}")
 
             for p in preskoceno:
                 svi_kodovi.setdefault(p["type_code"], {"uplata": 0, "preskoceno": 0})
@@ -120,6 +129,8 @@ def diagnose_statements(config, imap, koliko: int, puni_redak: bool):
                 print(f"    preskočeno kod {p['type_code']}  {iznos}  -> {p['razlog']}")
                 if puni_redak:
                     print(f"      {p['raw_line']}")
+                if maska:
+                    print(f"      {maskiraj(p['raw_line'])}")
         print()
 
     if svi_kodovi:
@@ -139,13 +150,17 @@ def main():
                         help="Koliko zadnjih izvoda pregledati (uz --izvod, default 3)")
     parser.add_argument("--puni-redak", action="store_true",
                         help="Ispiši i cijeli redak izvoda (sadrži IBAN i ime uplatitelja)")
+    parser.add_argument("--maska", action="store_true",
+                        help="Ispiši oblik retka sa zamijenjenim znakovima "
+                             "(znamenke -> 9, slova -> A) - pokazuje raspored polja "
+                             "bez ijednog tvog podatka, sigurno za dijeljenje")
     args = parser.parse_args()
 
     config = load_config()
     imap = connect(config)
     try:
         if args.izvod:
-            diagnose_statements(config, imap, args.koliko, args.puni_redak)
+            diagnose_statements(config, imap, args.koliko, args.puni_redak, args.maska)
         else:
             diagnose_folder(config, imap)
     finally:
