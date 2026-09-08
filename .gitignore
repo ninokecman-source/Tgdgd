@@ -1,0 +1,10 @@
+config.json
+processed_uids.json
+sent_reminders.json
+*.xlsx
+!template_admin_sheet.xlsx
+__pycache__/
+*.pyc
+
+bank_solo/config.json
+bank_solo/*.sqlite3

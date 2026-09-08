@@ -1,0 +1,46 @@
+{
+  "zoho_email": "tvoj_mail@primjer.com",
+  "zoho_app_password": "app-specific lozinka iz Zoho postavki",
+  "imap_host": "imap.zoho.eu",
+  "folder_roots": [
+    "Split",
+    "Zagreb"
+  ],
+  "sender_filter": "prijava@emmett-hr.com",
+  "instructor_name": "Nino Kecman",
+  "require_instructor_name": true,
+  "course_codes": [
+    "Modul 1&2",
+    "Modul 3",
+    "Modul 4",
+    "Modul 5",
+    "Modul 6",
+    "Ponavljanje M6 i Praktičarski dan"
+  ],
+  "output_dir": "/putanja/do/foldera/gdje/zelis/Excel/datoteke",
+  "state_path": "processed_uids.json",
+  "since_date": "2026-01-01",
+  "send_replies": false,
+  "smtp_host": "smtp.zoho.eu",
+  "smtp_port": 465,
+  "reply_subject": "Potvrda prijave - Emmett tehnika {course_code} ({dates})",
+  "deposit_course_codes": [
+    "Modul 1&2"
+  ],
+  "reply_body": "Poštovani/a {first_name} {last_name},\n\nzahvaljujemo na Vašoj prijavi na tečaj Emmett tehnike za ljude – {course_code}, koji će se održati {dates} u mjestu {location}.\n\nUkupna cijena tečaja iznosi 400 EUR.\n{deposit_section}\nPodaci za uplatu:\nIme i prezime\nNaziv obrta\nAdresa, poštanski broj i mjesto\nOIB: 00000000000\nIBAN: HR0000000000000000000\nE-mail: tvoj_mail@primjer.com\nOpis plaćanja: Tečaj Emmett tehnike {course_code} + Vaše ime i prezime\n\nLokacija održavanja tečaja bit će naknadno objavljena.\n\nRaspored:\nSubota i nedjelja od 9:00 do 17:00 sati\n\nNa tečaj je potrebno ponijeti:\n• 2 ručnika\n• kratke hlače\n• papuče\n\nMolimo Vas da nokti na rukama budu kratko podrezani radi izvođenja praktičnog dijela edukacije.\nPolaznicima je osigurana skripta na hrvatskom jeziku, a prema uvjetima tečaja kotizacija uključuje i pravo prisustvovanja predavanjima te priručnike na hrvatskom jeziku.\n\nTijekom dana predviđene su dvije kraće pauze za kavu te pauza za ručak u trajanju od 60 minuta.\nUvjeti pohađanja tečaja dostupni su na sljedećoj poveznici: emmett-hr.com/uvjeti-pohadanja-tecaja\n\nNapomena: na prijavnici EMMETT Hrvatska također stoji da je prijava obvezujuća u potpunosti te da se otkazivanje prijave provodi e-mailom instruktoru najkasnije 28 dana prije tečaja.\n\nZahvaljujemo na ukazanom povjerenju i veselimo se Vašem dolasku.\n\nSrdačan pozdrav,\n{instructor_name}",
+  "reply_deposit_section": "Akontacija za tečaj iznosi 100 EUR te ju je potrebno uplatiti najkasnije mjesec dana prije početka tečaja. Uplatom akontacije osiguravate svoje mjesto na tečaju. Preostali iznos potrebno je podmiriti najkasnije tjedan dana prije početka tečaja.\n\nU slučaju odustajanja od tečaja, akontacija od 100 EUR je nepovratna. Ako je uplaćen puni iznos tečaja, a odustajanje je prijavljeno najkasnije dva tjedna prije početka tečaja, vraća se uplaćeni iznos umanjen za akontaciju. U slučaju odustajanja unutar dva tjedna prije početka tečaja ili nedolaska na tečaj, povrat uplaćenih sredstava nije moguć, osim u opravdanim i izvanrednim okolnostima, kada se može odobriti povrat 50% kotizacije.\n",
+  "reply_no_deposit_section": "Iznos tečaja potrebno je podmiriti najkasnije tjedan dana prije početka tečaja.\n\nUvjeti otkazivanja prijave navedeni su u uvjetima pohađanja tečaja (poveznica pri dnu ove poruke).\n",
+  "send_reminders": false,
+  "reminders": [
+    {
+      "days_before": 10,
+      "subject": "Podsjetnik: {course_code} počinje za {days_until} dana - {location}",
+      "body": "Poštovani/a {first_name} {last_name},\n\npodsjećamo Vas da se tečaj {course_code} održava {dates} u mjestu {location}.\n\nLokacija održavanja: {venue}\n\nRaspored:\nSubota i nedjelja od 9:00 do 17:00 sati\n\nNa tečaj je potrebno ponijeti:\n• 2 ručnika\n• kratke hlače\n• papuče\n\nMolimo Vas da nokti na rukama budu kratko podrezani radi izvođenja praktičnog dijela edukacije.\n\nAko iznos tečaja još nije u cijelosti podmiren, molimo Vas da to učinite najkasnije tjedan dana prije početka tečaja.\n\nVeselimo se Vašem dolasku.\n\nSrdačan pozdrav,\n{instructor_name}"
+    },
+    {
+      "days_before": 1,
+      "subject": "Sutra počinje {course_code} - {location}",
+      "body": "Poštovani/a {first_name} {last_name},\n\nsutra počinje tečaj {course_code} ({dates}).\n\nLokacija: {venue}\nPočetak: 9:00\n\nNe zaboravite ponijeti 2 ručnika, kratke hlače i papuče, te kratko podrezati nokte na rukama.\n\nVidimo se sutra!\n\nSrdačan pozdrav,\n{instructor_name}"
+    }
+  ]
+}
