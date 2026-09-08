@@ -21,6 +21,7 @@ import argparse
 import email
 import imaplib
 import json
+import sys
 from email import policy
 from pathlib import Path
 
@@ -30,6 +31,13 @@ CONFIG_PATH = Path(__file__).with_name("config.json")
 
 
 def load_config():
+    if not CONFIG_PATH.exists():
+        sys.exit(
+            f"Nema {CONFIG_PATH}.\n"
+            "bank_solo ima svoj config, odvojen od glavnog. Napravi ga s:\n"
+            "    python3 setup_config.py\n"
+            "(traži samo Zoho app-lozinku i Solo API token, ostalo je već upisano)."
+        )
     with open(CONFIG_PATH, encoding="utf-8") as f:
         return json.load(f)
 
