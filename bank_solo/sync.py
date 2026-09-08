@@ -178,8 +178,15 @@ def run():
 
         had_failure = False
         for attachment_text in attachments:
-            transactions = parse_statement(attachment_text)
-            print(f"  Pronađeno {len(transactions)} transakcija u prilogu.")
+            transactions, preskoceno = parse_statement(
+                attachment_text, config.get("credit_type_codes"),
+            )
+            print(f"  Pronađeno {len(transactions)} uplata u prilogu.")
+            if preskoceno:
+                print(f"  Preskočeno {len(preskoceno)} transakcija (nisu uplate):")
+                for p in preskoceno:
+                    iznos = f"{p['amount']:.2f} EUR" if p["amount"] is not None else "?"
+                    print(f"    - {iznos}, kod {p['type_code']}: {p['razlog']}")
             for tx in transactions:
                 outcome = process_transaction(tx, registrants, config, solo, state, imap, registration_folders)
                 if outcome == "sent":

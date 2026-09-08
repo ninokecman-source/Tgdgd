@@ -120,3 +120,24 @@ uparivanja uplata.
    `sync.log` da vidiš cijeli redak transakcije i provjeri zašto (npr.
    polaznik možda još nije upisan u Excel, ili banka koristi neočekivan
    format imena).
+
+## Uplate vs isplate
+
+S izvoda se uzimaju **samo uplate** — nikad isplate. Redak se smatra
+uplatom samo ako oba uvjeta vrijede:
+
+1. dvoznamenkasti kod tipa transakcije je među `credit_type_codes`
+   (u `config.json`, po defaultu `["10"]`),
+2. iznos nema minus predznak.
+
+Namjerno je strogo: nepoznat kod se preskoči umjesto da se pretpostavi da
+je uplata, jer kriva pretpostavka znači izdanu Solo ponudu za tuđu isplatu.
+Sve preskočeno se ispisuje u logu, s razlogom, pa ništa ne nestaje nečujno.
+
+Ako neka tvoja stvarna uplata bude preskočena, provjeri koji kod ima:
+
+```bash
+python3 diagnose.py --izvod
+```
+
+pa taj kod dodaj u `credit_type_codes`.

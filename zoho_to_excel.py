@@ -203,12 +203,22 @@ def extract_trailing_name(identifier_line: str, course_code: str) -> str:
     return parts[1].strip() if len(parts) == 2 else ""
 
 
-def match_course_and_location(identifier_line: str, course_codes: list):
-    """Kod tečaja mora biti jedan od poznatih (Modul 1&2, Modul 3, ...) -
-    to je dovoljno da isključi mailove koji nisu prijave na tečaj (npr.
-    generičke obavijesti). Ime instruktora se više ne provjerava jer ga
-    stariji mailovi ne sadrže, a u praksi svi mailovi s poznatim kodom u
-    ovom sandučiću i tako pripadaju tebi."""
+def mentions_instructor(identifier_line: str, instructor_name: str) -> bool:
+    """Je li u retku s tečajem naveden baš taj instruktor. Usporedba ne
+    pazi na velika/mala slova ni na višestruke razmake, jer se zapis u
+    mailovima zna razlikovati."""
+    if not instructor_name:
+        return True
+    norm = lambda s: " ".join(str(s).lower().split())
+    return norm(instructor_name) in norm(identifier_line)
+
+
+def match_course_and_location(identifier_line: str, course_codes: list,
+                               instructor_name: str = None):
+    """Prijava se uzima u obzir samo ako je kod tečaja jedan od poznatih
+    (Modul 1&2, Modul 3, ...) I ako je u tom retku naveden zadani
+    instruktor - inače bi se upisivale i tuđe prijave koje stižu na isti
+    sandučić."""
     course_code = None
     for code in sorted(course_codes, key=len, reverse=True):
         if code.lower() in identifier_line.lower():
@@ -216,6 +226,9 @@ def match_course_and_location(identifier_line: str, course_codes: list):
             break
 
     if not course_code:
+        return None, None
+
+    if not mentions_instructor(identifier_line, instructor_name):
         return None, None
 
     location = extract_location(identifier_line, course_code)
@@ -539,12 +552,20 @@ def process_folder(imap, raw_folder: str, folder_location: str, config: dict,
         text = get_plain_text(msg)
         parsed = parse_application(text)
 
+        # Ime instruktora mora pisati u retku s tečajem, inače bi se upisale
+        # i prijave za tuđe tečajeve koje stignu na isti sandučić. Provjera
+        # se može isključiti s "require_instructor_name": false.
+        instruktor = (config["instructor_name"]
+                      if config.get("require_instructor_name", True) else None)
+
         if folder_location:
             course_code = find_course_code(parsed["identifier_line"], config["course_codes"])
+            if course_code and not mentions_instructor(parsed["identifier_line"], instruktor):
+                course_code = None
             location = folder_location if course_code else None
         else:
             course_code, location = match_course_and_location(
-                parsed["identifier_line"], config["course_codes"],
+                parsed["identifier_line"], config["course_codes"], instruktor,
             )
 
         if course_code and location:

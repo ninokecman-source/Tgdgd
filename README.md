@@ -8,8 +8,11 @@ Za svaku kombinaciju **kod tečaja + grad** postoji zasebna `.xlsx` datoteka
 (npr. `Modul 1&2 Split.xlsx`, `Modul 1&2 Zagreb.xlsx`, `Modul 1&2
 Makarska.xlsx`...). Grad se automatski prepoznaje iz retka s tečajem —
 nije ograničen na unaprijed zadani popis, radi za bilo koji grad. Prijava
-se upisuje samo ako je u tom retku navedeno tvoje ime kao instruktora i
-kod tečaja je jedan od poznatih kodova.
+se upisuje samo ako je u tom retku navedeno tvoje ime kao instruktora
+(`instructor_name`) i kod tečaja je jedan od poznatih kodova — tako tuđe
+prijave koje stignu na isti sandučić ne završe u tvojim tablicama. Provjeru
+imena možeš isključiti s `"require_instructor_name": false`, ali onda se
+upisuje svaka prijava s poznatim kodom tečaja.
 
 Nove datoteke se kreiraju iz `template_admin_sheet.xlsx` (kopija tvog
 stvarnog Emmett predloška — isti fontovi, boje, obrubi, visine redova),

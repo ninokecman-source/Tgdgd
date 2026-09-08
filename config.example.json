@@ -8,6 +8,7 @@
   ],
   "sender_filter": "prijava@emmett-hr.com",
   "instructor_name": "Nino Kecman",
+  "require_instructor_name": true,
   "course_codes": [
     "Modul 1&2",
     "Modul 3",
