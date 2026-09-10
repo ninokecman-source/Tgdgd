@@ -94,9 +94,31 @@ se podešavaju u polju `reminders`:
 ]
 ```
 
-Uz placeholdere iz automatske potvrde, ovdje su dostupni i `{venue}`
-(dvorana — ono što ručno upišeš u polje Venue, ćelija M5) i `{days_until}`
-(stvaran broj dana do tečaja).
+Uz placeholdere iz automatske potvrde, ovdje su dostupni i:
+
+| Placeholder | Odakle |
+|---|---|
+| `{venue}` | polje Venue (M5), upisuješ ručno |
+| `{days_until}` | stvaran broj dana do tečaja |
+| `{prvi_dan}` | prvi dan riječima — „3. listopada" |
+| `{rok_uplate}` | tjedan dana prije početka (`payment_due_days_before`) |
+| `{cijena}`, `{akontacija}`, `{preostali_iznos}` | iz `price_total` i `deposit_amount` |
+| `{blok_uplate}` | dio o uplati, ovisno o tome ima li tečaj akontaciju |
+| `{lokacija_tekst}` | tekst iz dokumenta s uputama za lokaciju |
+
+### Upute za lokaciju u zasebnom dokumentu
+
+Detaljne upute (adresa, put do lokacije, parking) drže se u dokumentu uz
+tablice, imenovanom po gradu: **`lokacija Split.docx`**, `lokacija
+Zagreb.docx` i tako dalje. Podržani su `.docx`, `.doc`, `.pdf` i `.odt`;
+velika i mala slova te kvačice nisu bitni.
+
+Pravilo koje ima `"attach_location": true` šalje taj dokument **u
+privitku**. Ako dokumenta nema, poruka se **ne šalje** — skripta javi
+koji dokument nedostaje, pa ga dodaš i podsjetnik ode sam.
+
+Tekst iz `.docx` dokumenta dostupan je i kao `{lokacija_tekst}`, ako ga
+radije želiš u samoj poruci nego u privitku.
 
 Kako to radi u praksi:
 

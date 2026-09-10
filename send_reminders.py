@@ -23,7 +23,7 @@ import json
 import re
 import smtplib
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -99,6 +99,81 @@ def parse_start_date(dates_text: str):
     return parse_course_dates(dates_text)[0]
 
 
+MJESECI_GENITIV = [
+    "siječnja", "veljače", "ožujka", "travnja", "svibnja", "lipnja",
+    "srpnja", "kolovoza", "rujna", "listopada", "studenoga", "prosinca",
+]
+
+
+def datum_rijecima(dan: date) -> str:
+    """3. listopada - oblik kakav ide u rečenicu ('Vidimo se 3. listopada')."""
+    return f"{dan.day}. {MJESECI_GENITIV[dan.month - 1]}"
+
+
+def iznosi_tecaja(config: dict, course_code: str) -> dict:
+    """Cijena tečaja i, za tečajeve s akontacijom, koliko još preostaje.
+    Vraća prazne stringove ako cijena nije podešena, da se u tekstu vidi da
+    fali umjesto da se izmisli broj."""
+    cijena = config.get("price_total")
+    akontacija = config.get("deposit_amount")
+    ima_akontaciju = course_code in config.get("deposit_course_codes", [])
+
+    if cijena is None:
+        return {"cijena": "", "akontacija": "", "preostali_iznos": ""}
+
+    return {
+        "cijena": f"{cijena:g}",
+        "akontacija": f"{akontacija:g}" if akontacija is not None else "",
+        "preostali_iznos": (f"{cijena - akontacija:g}"
+                            if ima_akontaciju and akontacija is not None
+                            else f"{cijena:g}"),
+    }
+
+
+DOKUMENT_NASTAVCI = [".docx", ".doc", ".pdf", ".odt"]
+
+
+def _bez_dijakritika(tekst: str) -> str:
+    zamjene = str.maketrans("čćžšđČĆŽŠĐ", "cczsdCCZSD")
+    return tekst.translate(zamjene).lower().strip()
+
+
+def nadji_dokument_lokacije(mapa: Path, location: str):
+    """Nađi dokument s uputama za lokaciju - 'lokacija split.docx' za tečaj u
+    Splitu. Ne pazi na velika/mala slova ni na kvačice, pa 'Lokacija Split'
+    i 'lokacija split' rade jednako."""
+    if not location:
+        return None
+    trazeno = f"lokacija {_bez_dijakritika(location)}"
+    for put in sorted(mapa.iterdir()):
+        if put.suffix.lower() not in DOKUMENT_NASTAVCI:
+            continue
+        if _bez_dijakritika(put.stem) == trazeno:
+            return put
+    return None
+
+
+def procitaj_docx_tekst(put: Path) -> str:
+    """Izvuče čisti tekst iz .docx datoteke (bez vanjskih biblioteka - .docx
+    je zip s XML-om). Vrati prazan string ako to nije .docx ili se ne može
+    pročitati; dokument se svejedno šalje u privitku."""
+    if put.suffix.lower() != ".docx":
+        return ""
+    try:
+        import zipfile
+        with zipfile.ZipFile(put) as z:
+            xml = z.read("word/document.xml").decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+    xml = re.sub(r"</w:p>", "\n", xml)
+    xml = re.sub(r"<w:br[^>]*/>", "\n", xml)
+    tekst = re.sub(r"<[^>]+>", "", xml)
+    tekst = (tekst.replace("&amp;", "&").replace("&lt;", "<")
+                  .replace("&gt;", ">").replace("&quot;", '"').replace("&apos;", "'"))
+    return "\n".join(r.rstrip() for r in tekst.splitlines() if r.strip())
+
+
 def read_participants(ws, totals_row: int) -> list:
     participants = []
     for row in range(FIRST_PARTICIPANT_ROW, totals_row):
@@ -146,12 +221,20 @@ def render(template: str, participant: dict, info: dict) -> str:
     )
 
 
-def send_one(config: dict, to_email: str, subject: str, body: str) -> None:
+def send_one(config: dict, to_email: str, subject: str, body: str,
+             privitak: Path = None) -> None:
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = config["zoho_email"]
     msg["To"] = to_email
     msg.set_content(body)
+
+    if privitak is not None:
+        import mimetypes
+        tip, _ = mimetypes.guess_type(privitak.name)
+        glavni, _, pod = (tip or "application/octet-stream").partition("/")
+        msg.add_attachment(privitak.read_bytes(), maintype=glavni,
+                           subtype=pod or "octet-stream", filename=privitak.name)
 
     def _send():
         with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
@@ -179,11 +262,31 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
     days_until = (start - today).days
     if days_until < 1:
         return 0  # tečaj je danas ili je već prošao
+
     info["days_until"] = days_until
+    info["prvi_dan"] = datum_rijecima(start)
+    # Ostatak kotizacije se plaća tjedan dana prije početka
+    rok = start - timedelta(days=config.get("payment_due_days_before", 7))
+    info["rok_uplate"] = rok.strftime("%d.%m.%Y.")
+    info.update(iznosi_tecaja(config, info["course_code"]))
+
+    # Dio o uplati se razlikuje: kod tečaja s akontacijom preostaje razlika,
+    # kod ostalih se plaća puni iznos.
+    if info["course_code"] in config.get("deposit_course_codes", []):
+        blok = config.get("reminder_deposit_block", "")
+    else:
+        blok = config.get("reminder_no_deposit_block", "")
+    info["blok_uplate"] = blok.format(**info) if blok else ""
 
     participants = read_participants(ws, find_totals_row(ws))
     if not participants:
         return 0
+
+    # Upute za lokaciju stoje u zasebnom dokumentu uz tablice, imenovanom po
+    # gradu ('lokacija split.docx'). Šalje se u privitku, a tekst iz njega je
+    # dostupan i kao {lokacija_tekst} ako ga želiš u samoj poruci.
+    dokument = nadji_dokument_lokacije(xlsx_path.parent, info["location"])
+    info["lokacija_tekst"] = procitaj_docx_tekst(dokument) if dokument else ""
 
     # Svako pravilo pokriva prozor do sljedećeg, užeg pravila: uz podsjetnike
     # na 10 i 1 dan, "10 dana prije" vrijedi za 10-2 dana, a "1 dan prije"
@@ -203,6 +306,14 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
         if "{venue}" in rule["body"] and not info["venue"]:
             print(f"[!] {xlsx_path.name}: podsjetnik {days_before} dana prije traži "
                   f"lokaciju, a polje Venue (M5) je prazno - preskačem.")
+            continue
+
+        # Bez dokumenta s uputama nema smisla slati poruku koja na njega
+        # upućuje - radije javi da fali, pa ga dodaš i poruka ode sama.
+        if rule.get("attach_location") and dokument is None:
+            print(f"[!] {xlsx_path.name}: podsjetnik {days_before} dana prije treba "
+                  f"dokument s lokacijom - nedostaje 'lokacija {info['location']}.docx' "
+                  f"u {xlsx_path.parent} - preskačem.")
             continue
 
         key = f"{xlsx_path.name}::{days_before}"
@@ -229,7 +340,8 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
             try:
                 send_one(config, p["email"],
                          render(rule["subject"], p, info),
-                         render(rule["body"], p, info))
+                         render(rule["body"], p, info),
+                         privitak=dokument if rule.get("attach_location") else None)
                 poslano.add(p["email"].lower())
                 sent_count += 1
                 print(f"  Poslano: {p['email']}")
