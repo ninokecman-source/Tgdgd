@@ -29,6 +29,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from send_reminders import (
+    FIRST_PARTICIPANT_ROW,
     course_info,
     find_totals_row,
     parse_course_dates,
@@ -55,6 +56,76 @@ Emmett Technique Instructor, Croatia
 """
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def provjeri_potpunost(ws, info: dict, polaznici: list) -> list:
+    """Vrati popis onoga što u tablici nedostaje. Provjerava se ono što se
+    popunjava ručno (dvorana, uplate, PDV) i zaglavlje tečaja - dakle sve
+    što skripte same ne upišu, pa lako ostane prazno."""
+    fali = []
+
+    for oznaka, polje in [("Kod tečaja (C4)", "course_code"),
+                          ("Mjesto (C5)", "location"),
+                          ("Datumi (C6)", "dates"),
+                          ("Instruktor (M4)", "instructor_name")]:
+        if not info.get(polje):
+            fali.append(f"{oznaka} je prazno")
+
+    if not info.get("venue"):
+        fali.append("Dvorana / Venue (M5) je prazna")
+
+    totals_row = find_totals_row(ws)
+    pdv = ws.cell(row=totals_row + 2, column=11).value
+    if pdv in (None, ""):
+        fali.append(f"PDV % (K{totals_row + 2}) nije upisan")
+
+    # Redci se gledaju izravno, a ne preko popisa polaznika: tako se uhvati i
+    # netko tko je u tablicu upisan ručno, bez email adrese.
+    neplaceni, bez_maila = [], []
+    for row in range(FIRST_PARTICIPANT_ROW, totals_row):
+        ime = ws.cell(row=row, column=2).value
+        if not ime:
+            continue
+        puno_ime = f"{ime} {ws.cell(row=row, column=3).value or ''}".strip()
+        if not ws.cell(row=row, column=12).value:
+            neplaceni.append(puno_ime)
+        if not ws.cell(row=row, column=8).value:
+            bez_maila.append(puno_ime)
+
+    if neplaceni:
+        fali.append(f"Payment Received nije upisan za: {', '.join(neplaceni)}")
+    if bez_maila:
+        fali.append(f"Nema email adrese za: {', '.join(bez_maila)}")
+
+    return fali
+
+
+def javi_nepotpunu(config: dict, xlsx_path: Path, info: dict, fali: list,
+                    broj_polaznika: int) -> None:
+    """Pošalje TEBI mail da tablica nije spremna za slanje centrali."""
+    tijelo = (
+        f"Tečaj {info['course_code']} / {info['location']} ({info['dates']}) je završio, "
+        f"ali tablica nije potpuna pa NIJE poslana centrali.\n\n"
+        f"Datoteka: {xlsx_path}\n"
+        f"Polaznika: {broj_polaznika}\n\n"
+        f"Nedostaje:\n" + "\n".join(f"  - {x}" for x in fali) +
+        "\n\nKad to popuniš, tablica će se poslati sama pri sljedećem prolasku "
+        "(jednom dnevno).\n"
+    )
+
+    msg = EmailMessage()
+    msg["Subject"] = (f"⚠️ Tablica nije potpuna - {info['course_code']} "
+                      f"{info['location']} nije poslana centrali")
+    msg["From"] = config["zoho_email"]
+    msg["To"] = config.get("notify_email", config["zoho_email"])
+    msg.set_content(tijelo)
+
+    def _posalji():
+        with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
+            smtp.login(config["zoho_email"], config["zoho_app_password"])
+            smtp.send_message(msg)
+
+    with_retry(_posalji)
 
 
 def load_state() -> dict:
@@ -113,8 +184,8 @@ def obradi_tablicu(xlsx_path: Path, config: dict, state: dict, danas: date,
     if proslo < dana_nakon:
         return False   # tečaj još traje ili je prerano
 
-    if xlsx_path.name in state:
-        return False   # već poslano
+    if state.get(xlsx_path.name, {}).get("poslano"):
+        return False   # već poslano centrali
 
     polaznici = read_participants(ws, find_totals_row(ws))
     if not polaznici:
@@ -125,6 +196,29 @@ def obradi_tablicu(xlsx_path: Path, config: dict, state: dict, danas: date,
     primatelji = config.get("course_report_to", [])
     if not primatelji:
         print("[!] U config.json nema 'course_report_to' - nemam kome slati.")
+        return False
+
+    # Nepotpuna tablica ne ide centrali - radije javi sebi da je dopuniš.
+    fali = provjeri_potpunost(ws, info, polaznici)
+    if fali:
+        print(f"\n[!] {xlsx_path.name}: tečaj je završio, ali tablica NIJE POTPUNA - "
+              f"ne šaljem centrali. Nedostaje:")
+        for stavka in fali:
+            print(f"      - {stavka}")
+
+        # Javi ti mailom, ali ne svaki dan istu stvar: samo kad se popis
+        # nedostataka promijeni (npr. popunio si dvoranu, uplate još fale).
+        zapis = state.get(xlsx_path.name, {})
+        if dry_run:
+            print("      (u pregledu ne šaljem obavijest)")
+        elif zapis.get("nedostaje") == fali:
+            print("      (već sam ti javio isto - ne šaljem opet)")
+        else:
+            javi_nepotpunu(config, xlsx_path, info, fali, len(polaznici))
+            state[xlsx_path.name] = {"nepotpuno_od": danas.isoformat(), "nedostaje": fali}
+            save_state(state)
+            print(f"      Poslana obavijest tebi na "
+                  f"{config.get('notify_email', config['zoho_email'])}")
         return False
 
     varijable = dict(info, broj_polaznika=len(polaznici))

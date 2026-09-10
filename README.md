@@ -137,9 +137,25 @@ Uključuje se s `"send_course_report": true`, a podešava ovako:
 - `course_report_subject`, `course_report_body` — tekst; uz uobičajene
   placeholdere dostupan je i `{broj_polaznika}`
 
+### Nepotpuna tablica se ne šalje
+
+Prije slanja se provjerava je li tablica popunjena. Ako nešto nedostaje,
+centrali **ne ide ništa** — umjesto toga tebi stigne mail s popisom što
+fali. Provjerava se ono što skripte same ne upisuju, pa lako ostane prazno:
+
+- dvorana (Venue, M5)
+- Payment Received za svakog polaznika
+- PDV % (nula je valjana vrijednost, prazno nije)
+- zaglavlje tečaja: kod, mjesto, datumi, instruktor
+- email adresa svakog polaznika
+
+Kad to popuniš, tablica ode sama pri sljedećem prolasku. Obavijest o
+nepotpunoj tablici ne dolazi svaki dan iznova — samo kad se popis
+nedostataka promijeni (npr. popunio si dvoranu, a uplate još fale).
+
 Kada se **ne** šalje: dok tečaj još traje, ako je tablica prazna (nema
-nijednog polaznika), ako se datum ne može pročitati, i ako je ta tablica
-već poslana — poslano se pamti u `sent_reports.json`.
+nijednog polaznika), ako je nepotpuna, ako se datum ne može pročitati, i
+ako je ta tablica već poslana — poslano se pamti u `sent_reports.json`.
 
 Datum završetka se čita iz zapisa datuma u tablici, pa radi i za tečajeve
 koji prelaze mjesec (`30.11.-01.12.2024.`) ili Novu godinu
