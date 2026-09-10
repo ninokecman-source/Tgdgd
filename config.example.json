@@ -42,5 +42,13 @@
       "subject": "Sutra počinje {course_code} - {location}",
       "body": "Poštovani/a {first_name} {last_name},\n\nsutra počinje tečaj {course_code} ({dates}).\n\nLokacija: {venue}\nPočetak: 9:00\n\nNe zaboravite ponijeti 2 ručnika, kratke hlače i papuče, te kratko podrezati nokte na rukama.\n\nVidimo se sutra!\n\nSrdačan pozdrav,\n{instructor_name}"
     }
-  ]
+  ],
+  "send_course_report": false,
+  "course_report_to": [
+    "ozren.m@emmett-hr.com",
+    "heidi@rossemmett.com.au"
+  ],
+  "course_report_days_after": 1,
+  "course_report_subject": "Emmett Technique {course_code} - {location}, {dates} - course administration sheet",
+  "course_report_body": "Hi Ozren and Heidi,\n\nThe {course_code} course in {location} wrapped up yesterday ({dates}), with {broj_polaznika} participants in total.\n\nPlease find the completed administration sheet attached.\n\nDo let me know if anything needs correcting, or if you would like it in a different format.\n\nKind regards,\n{instructor_name}\nEmmett Technique Instructor, Croatia\n"
 }

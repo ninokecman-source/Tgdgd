@@ -50,6 +50,39 @@ CELL_INSTRUCTOR = "M4"
 CELL_VENUE = "M5"
 
 
+def parse_course_dates(dates_text: str):
+    """Vrati (prvi_dan, zadnji_dan) tečaja, ili (None, None) ako se datum ne
+    može pouzdano pročitati. Za jednodnevni tečaj oba su ista."""
+    if not dates_text:
+        return None, None
+
+    numbers = [int(n) for n in re.findall(r"\d+", str(dates_text))]
+    if len(numbers) < 3 or numbers[-1] < 1000:
+        return None, None
+
+    year = numbers[-1]
+    rest = numbers[:-1]
+
+    if len(rest) == 2:            # d, m - jedan dan
+        pocetak = (rest[0], rest[1], year)
+        kraj = pocetak
+    elif len(rest) == 3:          # d1, d2, m - isti mjesec
+        pocetak = (rest[0], rest[2], year)
+        kraj = (rest[1], rest[2], year)
+    elif len(rest) == 4:          # d1, m1, d2, m2 - prelazi mjesec
+        kraj = (rest[2], rest[3], year)
+        # godina u zapisu pripada drugom datumu; ako tečaj prelazi Novu
+        # godinu, prvi dan je godinu ranije
+        pocetak = (rest[0], rest[1], year - 1 if rest[1] > rest[3] else year)
+    else:
+        return None, None
+
+    try:
+        return date(pocetak[2], pocetak[1], pocetak[0]), date(kraj[2], kraj[1], kraj[0])
+    except ValueError:
+        return None, None
+
+
 def parse_start_date(dates_text: str):
     """Iz zapisa datuma tečaja izvuče datum PRVOG dana. Emmettovi mailovi
     koriste razne oblike, pa se gleda samo niz brojeva u tekstu:

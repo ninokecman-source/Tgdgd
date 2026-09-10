@@ -118,6 +118,42 @@ Za automatsko pokretanje dodaj u cron još jednu liniju, uz onu za
 0 8 * * * cd /putanja/do/ovog/foldera && /usr/bin/python3 send_reminders.py >> log.txt 2>&1
 ```
 
+## Slanje tablice centrali nakon tečaja (`posalji_tablicu.py`)
+
+Dan nakon što tečaj završi, popunjena Excel tablica se automatski šalje
+Emmett centrali, s prigodnim tekstom na engleskom i tablicom u privitku.
+Kopija ide i tebi, da imaš trag u Sentu.
+
+```bash
+python posalji_tablicu.py --pregled    # pokaži što bi poslao, bez slanja
+```
+
+Uključuje se s `"send_course_report": true`, a podešava ovako:
+
+- `course_report_to` — primatelji
+  (`["ozren.m@emmett-hr.com", "heidi@rossemmett.com.au"]`)
+- `course_report_days_after` — koliko dana nakon **zadnjeg** dana tečaja
+  (default `1`)
+- `course_report_subject`, `course_report_body` — tekst; uz uobičajene
+  placeholdere dostupan je i `{broj_polaznika}`
+
+Kada se **ne** šalje: dok tečaj još traje, ako je tablica prazna (nema
+nijednog polaznika), ako se datum ne može pročitati, i ako je ta tablica
+već poslana — poslano se pamti u `sent_reports.json`.
+
+Datum završetka se čita iz zapisa datuma u tablici, pa radi i za tečajeve
+koji prelaze mjesec (`30.11.-01.12.2024.`) ili Novu godinu
+(`31.12.-01.01.2027.`).
+
+Za automatsko pokretanje, jednom dnevno:
+
+```
+30 9 * * * cd /putanja/do/ovog/foldera && /usr/bin/python3 posalji_tablicu.py >> log.txt 2>&1
+```
+
+**Napomena:** tablica sadrži osobne podatke polaznika (ime, adresa, email,
+telefon). Šalje se centrali jer je to njihov administrativni obrazac.
+
 ## Provjera logova (`provjeri_logove.py`)
 
 Skripte pišu u `log.txt` (prijave i podsjetnici) i `sync.log` (izvodi i
