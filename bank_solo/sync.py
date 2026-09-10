@@ -19,7 +19,7 @@ import sys
 from email import policy
 from pathlib import Path
 
-from mailer import send_unmatched_notification
+from mailer import send_payment_confirmation, send_unmatched_notification
 from oib_lookup import discover_registration_folders, find_oib
 from registrants import add_payment, find_matching_registrant, load_registrants
 from solo_client import SoloAPIError, SoloClient
@@ -133,6 +133,18 @@ def process_transaction(tx, registrants, config, solo, state, imap, registration
 
     print(f"Uplata {tx['amount']:.2f} EUR -> {full_name} ({napomene}) "
           f"-> Solo ponuda {broj_ponude}, ukupno uplaćeno sad: {new_total:.2f} EUR")
+
+    # Potvrda polazniku ide zadnja i ne smije srušiti obradu: uplata je već
+    # proknjižena i ponuda izdana, pa neuspjelo slanje javljamo i idemo dalje.
+    if config.get("send_payment_confirmation"):
+        try:
+            if send_payment_confirmation(config, registrant, tx["amount"], new_total):
+                print(f"  Poslana potvrda uplate na {registrant['email']}")
+            else:
+                print("  Potvrda uplate nije poslana (nema email adrese ili teksta)")
+        except Exception as e:
+            print(f"  [!] Potvrda uplate na {registrant.get('email')} nije poslana: {e}")
+
     return "sent"
 
 

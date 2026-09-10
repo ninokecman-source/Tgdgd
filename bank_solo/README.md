@@ -148,3 +148,29 @@ opisu.
 ```bash
 python3 diagnose.py --izvod
 ```
+
+## Potvrda uplate polazniku
+
+Čim se uplata upari i proknjiži, polazniku se javlja da je zaprimljena.
+Uključuje se s `"send_payment_confirmation": true`.
+
+Tekst se bira **prema ukupno uplaćenom**, ne prema iznosu jedne uplate —
+tako jedan mehanizam pokriva sva tri slučaja:
+
+| Situacija | Koji tekst ide |
+|---|---|
+| akontacija 100 € (od 400) | `payment_confirmation_body_partial` — potvrda + koliko preostaje |
+| doplata 300 € (ukupno 400) | `payment_confirmation_body_full` — kotizacija podmirena |
+| puna uplata 400 € odjednom | `payment_confirmation_body_full` |
+
+Placeholderi: `{first_name}`, `{last_name}`, `{course_code}`, `{location}`,
+`{dates}`, `{datumi_rijecima}` („3. i 4. listopada 2026."), `{iznos}`
+(ova uplata), `{ukupno_uplaceno}`, `{preostalo}`, `{cijena}`,
+`{instructor_name}`.
+
+Cijena se čita iz `price_total`. Bez nje se ne može znati preostaje li još
+nešto, pa se uvijek šalje tekst za podmirenu kotizaciju.
+
+Potvrda se šalje **nakon** knjiženja i izdavanja ponude, i njezin neuspjeh
+ne ruši obradu — uplata ostaje proknjižena, a greška se zapiše u log (pa je
+donese i provjera logova).

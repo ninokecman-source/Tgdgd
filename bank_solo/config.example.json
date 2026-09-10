@@ -31,5 +31,11 @@
     "Modul 6": "Emmett tečaj M6",
     "Ponavljanje M6 i Praktičarski dan": "Ponavljanje Emmett tečaja M6 + praktičarski dan"
   },
-  "state_db_path": "bank_solo_state.sqlite3"
+  "state_db_path": "bank_solo_state.sqlite3",
+  "instructor_name": "Nino Kecman",
+  "price_total": 400,
+  "send_payment_confirmation": false,
+  "payment_confirmation_subject": "Potvrda uplate - Emmett tehnika {course_code}, {location}",
+  "payment_confirmation_body_partial": "Poštovani/a {first_name} {last_name},\n\nhvala vam na uplati za tečaj Emmett tehnike za ljude - {course_code}, koji će se održati {datumi_rijecima} u mjestu {location}.\n\nOvim putem potvrđujemo da smo zaprimili vašu uplatu u iznosu od {iznos} EUR.\n\nTime je vaše mjesto na tečaju rezervirano. Za podmirenje kotizacije u cijelosti preostaje još {preostalo} EUR, koje je potrebno uplatiti najkasnije tjedan dana prije početka tečaja.\n\nSve ostale informacije vezane uz lokaciju, raspored i potrebnu opremu dobit ćete pravovremeno prije početka tečaja.\n\nAko imate bilo kakvih pitanja ili vam je potrebna dodatna informacija, slobodno nam se javite.\n\nVidimo se uskoro!\n\nLijep pozdrav,\n{instructor_name}\nEMMETT Hrvatska",
+  "payment_confirmation_body_full": "Poštovani/a {first_name} {last_name},\n\nhvala vam na uplati kotizacije za tečaj Emmett tehnike za ljude - {course_code}, koji će se održati {datumi_rijecima} u mjestu {location}.\n\nOvim putem potvrđujemo da smo zaprimili vašu uplatu u iznosu od {iznos} EUR, čime je kotizacija u cijelosti podmirena.\n\nVaša prijava za tečaj je time potvrđena i veselimo se vašem dolasku.\n\nSve ostale informacije vezane uz lokaciju, raspored i potrebnu opremu dobit ćete pravovremeno prije početka tečaja.\n\nAko imate bilo kakvih pitanja ili vam je potrebna dodatna informacija, slobodno nam se javite.\n\nVidimo se uskoro!\n\nLijep pozdrav,\n{instructor_name}\nEMMETT Hrvatska"
 }

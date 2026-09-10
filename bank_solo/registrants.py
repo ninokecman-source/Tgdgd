@@ -24,7 +24,7 @@ def normalize_name(text: str) -> str:
 def load_registrants(excel_dir: Path) -> list:
     """Vrati listu dictova za svakog polaznika u svim .xlsx datotekama u
     excel_dir (osim predloška): {first_name, last_name, name_variants,
-    email, course_code, location, file_path, row}."""
+    email, course_code, location, dates, file_path, row}."""
     registrants = []
 
     for path in sorted(Path(excel_dir).glob("*.xlsx")):
@@ -40,6 +40,7 @@ def load_registrants(excel_dir: Path) -> list:
 
         course_code = ws["C4"].value or ""
         location = ws["C5"].value or ""
+        dates = ws["C6"].value or ""
 
         row = FIRST_PARTICIPANT_ROW
         while True:
@@ -64,6 +65,7 @@ def load_registrants(excel_dir: Path) -> list:
                     "address": address,
                     "course_code": course_code,
                     "location": location,
+                    "dates": str(dates).strip(),
                     "file_path": path,
                     "row": row,
                 })
