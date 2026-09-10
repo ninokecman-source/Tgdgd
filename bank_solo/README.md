@@ -154,22 +154,32 @@ python3 diagnose.py --izvod
 Čim se uplata upari i proknjiži, polazniku se javlja da je zaprimljena.
 Uključuje se s `"send_payment_confirmation": true`.
 
-Tekst se bira **prema ukupno uplaćenom**, ne prema iznosu jedne uplate —
-tako jedan mehanizam pokriva sva tri slučaja:
+Tekst se bira prema tome **što je ta uplata pokrila**:
 
-| Situacija | Koji tekst ide |
+| Uplata | Koji tekst ide |
 |---|---|
-| akontacija 100 € (od 400) | `payment_confirmation_body_partial` — potvrda + koliko preostaje |
-| doplata 300 € (ukupno 400) | `payment_confirmation_body_full` — kotizacija podmirena |
-| puna uplata 400 € odjednom | `payment_confirmation_body_full` |
+| 2400 € (`course_total_price`) | `..._body_course` — cijeli program, svi moduli |
+| 400 € (`price_total`) odjednom | `..._body_module` — kotizacija za tečaj podmirena |
+| 300 € nakon akontacije (ukupno 400) | `..._body_full` — doplata, kotizacija podmirena |
+| 100 € akontacija | `..._body_partial` — potvrda + koliko preostaje |
+
+Redoslijed provjere je odozgo prema dolje, pa uplata cijelog programa ne
+završi kao „kotizacija za tečaj podmirena".
 
 Placeholderi: `{first_name}`, `{last_name}`, `{course_code}`, `{location}`,
 `{dates}`, `{datumi_rijecima}` („3. i 4. listopada 2026."), `{iznos}`
 (ova uplata), `{ukupno_uplaceno}`, `{preostalo}`, `{cijena}`,
-`{instructor_name}`.
+`{cijena_tecaja}`, `{instructor_name}`.
 
-Cijena se čita iz `price_total`. Bez nje se ne može znati preostaje li još
+Cijene se čitaju iz `price_total` (jedan modul, 400) i `course_total_price`
+(cijeli program, 2400). Bez `price_total` se ne može znati preostaje li još
 nešto, pa se uvijek šalje tekst za podmirenu kotizaciju.
+
+**Uplata cijelog programa upisuje se u tablicu tog jednog modula.** Iznos
+od 2400 € tako uđe u „Payment Received" tečaja na koji je polaznik
+prijavljen, pa taj Total Income izgleda veći nego što tečaj vrijedi.
+Poruka polazniku je točna, ali knjigovodstveno to treba raspodijeliti
+ručno po modulima.
 
 Potvrda se šalje **nakon** knjiženja i izdavanja ponude, i njezin neuspjeh
 ne ruši obradu — uplata ostaje proknjižena, a greška se zapiše u log (pa je

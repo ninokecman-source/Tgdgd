@@ -87,8 +87,22 @@ def send_payment_confirmation(config, registrant, iznos, ukupno_uplaceno):
         return False
 
     cijena = config.get("price_total")
+    cijena_tecaja = config.get("course_total_price")
     preostalo = max(0, cijena - ukupno_uplaceno) if cijena is not None else 0
-    podmireno = cijena is None or preostalo <= 0.01
+
+    # Koji tekst ide - po tome što je ta uplata pokrila:
+    #   cijeli program (2400)  -> uplaćeni su svi moduli odjednom
+    #   cijeli modul (400)     -> jedna uplata pokrila cijelu kotizaciju
+    #   doplata                -> ranija akontacija + ova uplata zatvaraju iznos
+    #   djelomično             -> nešto još preostaje
+    if cijena_tecaja is not None and abs(iznos - cijena_tecaja) < 0.01:
+        kljuc = "payment_confirmation_body_course"
+    elif cijena is not None and abs(iznos - cijena) < 0.01:
+        kljuc = "payment_confirmation_body_module"
+    elif cijena is None or preostalo <= 0.01:
+        kljuc = "payment_confirmation_body_full"
+    else:
+        kljuc = "payment_confirmation_body_partial"
 
     varijable = {
         "first_name": registrant.get("first_name", ""),
@@ -101,10 +115,10 @@ def send_payment_confirmation(config, registrant, iznos, ukupno_uplaceno):
         "ukupno_uplaceno": f"{ukupno_uplaceno:g}",
         "preostalo": f"{preostalo:g}",
         "cijena": f"{cijena:g}" if cijena is not None else "",
+        "cijena_tecaja": f"{cijena_tecaja:g}" if cijena_tecaja is not None else "",
         "instructor_name": config.get("instructor_name", ""),
     }
 
-    kljuc = "payment_confirmation_body_full" if podmireno else "payment_confirmation_body_partial"
     tijelo = config.get(kljuc)
     naslov = config.get("payment_confirmation_subject")
     if not tijelo or not naslov:
