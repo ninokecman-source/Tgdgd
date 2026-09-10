@@ -118,6 +118,47 @@ Za automatsko pokretanje dodaj u cron još jednu liniju, uz onu za
 0 8 * * * cd /putanja/do/ovog/foldera && /usr/bin/python3 send_reminders.py >> log.txt 2>&1
 ```
 
+## Provjera logova (`provjeri_logove.py`)
+
+Skripte pišu u `log.txt` (prijave i podsjetnici) i `sync.log` (izvodi i
+Solo). Ova skripta ih pregleda i **pošalje ti mail samo ako nađe problem** —
+inače šuti, da ne puni sandučić.
+
+```bash
+python provjeri_logove.py           # tiho, javlja samo probleme
+python provjeri_logove.py --test    # pošalje mail bez obzira na sve
+python provjeri_logove.py --ispis   # ispiše nalaz u terminal
+```
+
+Javlja dvije stvari:
+
+- **greške** — tracebackove (cijeli blok, sa samom greškom na kraju), retke
+  s `[!]` ili `[GREŠKA]`, izvode koji se ne poklapaju sa saldom, neuspjela
+  slanja. Isti ponovljeni problem se sažima u jedan redak s brojem
+  ponavljanja.
+- **tišinu** — ako u nekom logu od zadnje provjere nema **nijednog** novog
+  retka, znači da se ta skripta uopće nije pokrenula (ugašen cron, ugašeno
+  računalo). Bez toga bi kvar prošao nezapaženo, jer greške nema ako se
+  ništa ne izvršava.
+
+Pamti dokle je pročitala svaki log (`log_check_state.json`), pa svaki put
+javlja samo novo. Prvi put samo zapamti položaj i ne šalje ništa.
+
+Praćeni logovi se po potrebi mijenjaju u `config.json`:
+
+```json
+"watch_logs": {
+  "prijave i podsjetnici": "/Users/ime/Tgdgd/log.txt",
+  "izvodi i Solo": "/Users/ime/Tgdgd-bank-solo/bank_solo/sync.log"
+}
+```
+
+Za automatsko pokretanje svaka 3 dana u 9 ujutro:
+
+```
+0 9 */3 * * cd /putanja/do/ovog/foldera && /usr/bin/python3 provjeri_logove.py >> log.txt 2>&1
+```
+
 ## 1. Instalacija
 
 Potreban je Python 3.9+.

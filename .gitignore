@@ -1,6 +1,8 @@
 config.json
 processed_uids.json
 sent_reminders.json
+log_check_state.json
+log.txt
 *.xlsx
 !template_admin_sheet.xlsx
 __pycache__/
