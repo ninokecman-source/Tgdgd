@@ -4,6 +4,9 @@
   "imap_host": "imap.zoho.com",
   "imap_folder": "Izvodi",
   "bank_sender": "netbanking.support@erstebank.hr",
+  "credit_type_codes": [
+    "20"
+  ],
   "sender_filter": "prijava@emmett-hr.com",
   "course_folder_roots": [
     "Split",

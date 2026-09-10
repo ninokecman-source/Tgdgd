@@ -123,20 +123,25 @@ uparivanja uplata.
 
 ## Uplate vs isplate
 
-S izvoda se uzimaju **samo uplate**. Smjer se čita iz **predznaka iznosa**
-(`+` uplata, `-` isplata) — dvoznamenkasti kod tipa transakcije na početku
-retka NE označava smjer (potvrđeno na stvarnom izvodu gdje su obje
-transakcije s kodom `20` bile uplate).
+S izvoda se uzimaju **samo uplate**. Smjer nosi **dvoznamenkasti kod tipa
+transakcije** na početku retka — `20` je uplata, `10` isplata. Predznak
+iznosa ne znači ništa: u stvarnim izvodima i uplate i isplate imaju `+`.
 
 Da se smjer ne bi mogao krivo pročitati, **svaki izvod se provjerava protiv
-vlastitog salda**: razlika završnog i početnog salda iz `907` retka mora se
-poklopiti sa zbrojem pročitanih transakcija. Ako se ne poklapa, izvod se
-**ne obrađuje** i mail se ne označava obrađenim — pokušat će se ponovno.
-Bolje stati i javiti nego izdati krivu ponudu.
+vlastitog salda**. Redak `907` sadrži ukupan iznos uplata i ukupan iznos
+isplata; oba se moraju poklopiti s pročitanim transakcijama. Ako se ne
+poklope — npr. banka uvede novi kod tipa — izvod se **ne obrađuje**, mail
+ostaje neoznačen za idući pokušaj, a razlog piše u logu. Bolje propuštena
+uplata nego kriva ponuda u Solu.
 
-Iz svakog retka se čitaju i ime uplatitelja, IBAN, mjesto i opis plaćanja,
-sve s točnih pozicija u zapisu. Ime polaznika se traži u imenu uplatitelja
-i u opisu plaćanja.
+Kodovi koji se broje kao uplata podešavaju se s `credit_type_codes`
+(default `["20"]`). Nepoznat kod se broji kao isplata, pa provjera salda
+odmah javi da nešto ne štima.
+
+Iz svakog retka čitaju se i ime uplatitelja, IBAN, mjesto i opis plaćanja,
+sve s točnih pozicija. Polaznik se traži u imenu uplatitelja **i u opisu
+plaćanja** — bitno kad tečaj plaća firma, a ime polaznika stoji samo u
+opisu.
 
 Što je koji izvod pročitao vidiš s:
 

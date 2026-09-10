@@ -88,7 +88,7 @@ def diagnose_statements(config, imap, koliko: int, puni_redak: bool, maska: bool
         print(f"Nema nijednog maila od {config['bank_sender']!r} u folderu {folder!r}.")
         return
 
-    print("Smjer se čita iz predznaka iznosa i provjerava protiv salda izvoda.\n")
+    print("Smjer se čita iz koda tipa transakcije i provjerava protiv salda izvoda.\n")
 
     for uid in uids[-koliko:]:
         status, msg_data = imap.uid("fetch", uid, "(RFC822)")
@@ -106,7 +106,7 @@ def diagnose_statements(config, imap, koliko: int, puni_redak: bool, maska: bool
             except UnicodeDecodeError:
                 text = payload.decode("cp1250", errors="replace")
 
-            izvod = parse_statement(text)
+            izvod = parse_statement(text, config.get("credit_type_codes"))
             uplate, preskoceno = izvod["uplate"], izvod["isplate"]
             stanje = "saldo se poklapa" if izvod["saldo_ok"] else f"NE VALJA: {izvod['poruka']}"
             print(f"  Prilog: {len(uplate)} uplata, {len(preskoceno)} isplata  ({stanje})")

@@ -183,7 +183,7 @@ def run():
 
         had_failure = False
         for attachment_text in attachments:
-            izvod = parse_statement(attachment_text)
+            izvod = parse_statement(attachment_text, config.get("credit_type_codes"))
 
             if not izvod["saldo_ok"]:
                 # Izvod nije pouzdano pročitan - ne diramo ga, jer bi kriva

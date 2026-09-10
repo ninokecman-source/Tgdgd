@@ -7,7 +7,7 @@ kodom tipa retka (900=zaglavlje, 903=račun, 905=transakcija, 907=saldo,
 
 Pozicije polja u transakcijskom (905) retku, izmjerene iz stvarnog izvoda:
 
-    [0:2]      tip transakcije (npr. "10", "20") - NE označava smjer!
+    [0:2]      tip transakcije: "20" uplata, "10" isplata
     [2:23]     IBAN druge strane
     [36:81]    ime / naziv druge strane
     [81:176]   mjesto
@@ -21,21 +21,31 @@ Pozicije polja u transakcijskom (905) retku, izmjerene iz stvarnog izvoda:
     [294:...]  opis plaćanja
     zadnji token u retku = jedinstvena referencija transakcije
 
-SMJER: određuje ga predznak iznosa ('+' uplata, '-' isplata). Dvoznamenkasti
-kod tipa transakcije NE govori ništa o smjeru - potvrđeno na stvarnom izvodu
-gdje su obje transakcije s kodom "20" bile uplate.
+SMJER: nosi ga dvoznamenkasti kod tipa transakcije - "20" je uplata,
+"10" isplata. Predznak iznosa NE nosi smjer: u stvarnim izvodima i uplate
+i isplate imaju '+'.
+
+Redak sa saldom (907) sadrži, na fiksnim pozicijama:
+
+    iznos #0  početni saldo
+    iznos #3  ukupno isplata
+    iznos #4  ukupno uplata
+    iznos #5  završni saldo
 
 Kako se smjer ne bi mogao krivo pročitati (a kriva ponuda u Solu se teško
-popravlja), svaki izvod se PROVJERAVA protiv vlastitog salda: razlika
-završnog i početnog salda iz 907 retka mora se poklopiti sa zbrojem
-pročitanih uplata umanjenim za isplate. Ako se ne poklapa, izvod se ne
-obrađuje - bolje stati i javiti nego izdati krivi dokument.
+popravlja), svaki izvod se PROVJERAVA protiv ta dva ukupna iznosa: zbroj
+pročitanih uplata mora odgovarati ukupnim uplatama, a zbroj isplata
+ukupnim isplatama. Ako se ne poklapa - npr. banka uvede novi kod tipa -
+izvod se ne obrađuje nego se javi u logu, umjesto da se nešto krivo
+proknjiži.
 """
 
 import re
 
 TRANSACTION_RE = re.compile(r"^\d{2}[A-Z]{2}\d")
 AMOUNT_RE = re.compile(r"[+-]\d{15}")
+
+DEFAULT_CREDIT_TYPE_CODES = ["20"]   # "20" = uplata, "10" = isplata
 
 POS_TYPE_CODE = (0, 2)
 POS_IBAN = (2, 23)
@@ -82,29 +92,47 @@ def _parse_transakcija(body: str) -> dict:
 
 
 def _parse_saldo(text: str):
-    """Iz 907 retka vrati (početni_saldo, završni_saldo), ili None ako ga
-    nema. Prvi iznos u retku je početni, zadnji je završni saldo."""
+    """Iz 907 retka vrati {pocetni, zavrsni, ukupno_isplata, ukupno_uplata},
+    ili None ako ga nema ili se iznosi ne slažu međusobno.
+
+    Provjera 'početni - isplate + uplate = završni' potvrđuje da su polja
+    pročitana s pravih mjesta; ako ne prolazi, raspored nije onakav kakav
+    očekujemo i bolje je reći da salda nema nego se osloniti na krive
+    brojeve."""
     for raw_line in text.splitlines():
         stripped = raw_line.rstrip()
         if not stripped.endswith("907"):
             continue
         iznosi = [int(m.group()) / 100 for m in AMOUNT_RE.finditer(stripped[:-3])]
-        if len(iznosi) >= 2:
-            return iznosi[0], iznosi[-1]
+        if len(iznosi) < 6:
+            continue
+
+        saldo = {
+            "pocetni": iznosi[0],
+            "ukupno_isplata": iznosi[3],
+            "ukupno_uplata": iznosi[4],
+            "zavrsni": iznosi[5],
+        }
+        ocekivani = saldo["pocetni"] - saldo["ukupno_isplata"] + saldo["ukupno_uplata"]
+        if abs(ocekivani - saldo["zavrsni"]) > 0.01:
+            return None
+        return saldo
     return None
 
 
-def parse_statement(text: str) -> dict:
+def parse_statement(text: str, credit_type_codes=None) -> dict:
     """Vrati dict s pročitanim izvodom:
 
-        uplate         - lista ulaznih transakcija (predznak '+')
-        isplate        - lista izlaznih transakcija (predznak '-')
-        saldo_ok       - True ako se promet poklapa sa saldom izvoda
+        uplate         - lista ulaznih transakcija
+        isplate        - lista izlaznih transakcija
+        saldo_ok       - True ako se oba zbroja poklapaju sa saldom izvoda
         poruka         - objašnjenje ako se ne poklapa (inače prazno)
 
     Kad je saldo_ok False, pozivatelj NE SMIJE obraditi uplate iz ovog
-    izvoda - znači da raspored polja ili smjer nisu ispravno pročitani.
+    izvoda - znači da smjer ili raspored polja nisu ispravno pročitani.
     """
+    credit_codes = set(credit_type_codes or DEFAULT_CREDIT_TYPE_CODES)
+
     uplate, isplate = [], []
 
     for raw_line in text.splitlines():
@@ -119,7 +147,9 @@ def parse_statement(text: str) -> dict:
         tx = _parse_transakcija(body)
         if tx is None:
             continue
-        (uplate if tx["amount"] >= 0 else isplate).append(tx)
+        # Nepoznat kod ide među isplate: tako se ne izdaje ponuda za nešto
+        # što nismo prepoznali, a provjera salda ispod to ionako uhvati.
+        (uplate if tx["type_code"] in credit_codes else isplate).append(tx)
 
     saldo = _parse_saldo(text)
     if saldo is None:
@@ -127,25 +157,32 @@ def parse_statement(text: str) -> dict:
             "uplate": uplate,
             "isplate": isplate,
             "saldo_ok": False,
-            "poruka": "u izvodu nema retka sa saldom (907) - ne mogu provjeriti "
-                      "jesu li transakcije ispravno pročitane",
+            "poruka": "u izvodu nema upotrebljivog retka sa saldom (907) - ne mogu "
+                      "provjeriti jesu li transakcije ispravno pročitane",
         }
 
-    pocetni, zavrsni = saldo
-    promet_izvoda = round(zavrsni - pocetni, 2)
-    promet_procitan = round(sum(t["amount"] for t in uplate + isplate), 2)
+    zbroj_uplata = round(sum(abs(t["amount"]) for t in uplate), 2)
+    zbroj_isplata = round(sum(abs(t["amount"]) for t in isplate), 2)
 
-    if abs(promet_izvoda - promet_procitan) > 0.01:
+    neslaganja = []
+    if abs(zbroj_uplata - saldo["ukupno_uplata"]) > 0.01:
+        neslaganja.append(
+            f"uplate: izvod kaže {saldo['ukupno_uplata']:.2f} EUR, "
+            f"a pročitao sam {zbroj_uplata:.2f} EUR ({len(uplate)} transakcija)")
+    if abs(zbroj_isplata - saldo["ukupno_isplata"]) > 0.01:
+        neslaganja.append(
+            f"isplate: izvod kaže {saldo['ukupno_isplata']:.2f} EUR, "
+            f"a pročitao sam {zbroj_isplata:.2f} EUR ({len(isplate)} transakcija)")
+
+    if neslaganja:
+        kodovi = sorted({t["type_code"] for t in uplate + isplate})
         return {
             "uplate": uplate,
             "isplate": isplate,
             "saldo_ok": False,
-            "poruka": (
-                f"promet se ne poklapa sa saldom izvoda: saldo kaže "
-                f"{promet_izvoda:.2f} EUR ({pocetni:.2f} -> {zavrsni:.2f}), a iz "
-                f"transakcija sam pročitao {promet_procitan:.2f} EUR "
-                f"({len(uplate)} uplata, {len(isplate)} isplata)"
-            ),
+            "poruka": ("ne poklapa se sa saldom izvoda - " + "; ".join(neslaganja) +
+                       f". Kodovi tipa u izvodu: {kodovi}, kao uplate se broje "
+                       f"{sorted(credit_codes)}"),
         }
 
     return {"uplate": uplate, "isplate": isplate, "saldo_ok": True, "poruka": ""}
