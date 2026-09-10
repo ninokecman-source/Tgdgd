@@ -108,17 +108,21 @@ Uz placeholdere iz automatske potvrde, ovdje su dostupni i:
 
 ### Upute za lokaciju u zasebnom dokumentu
 
-Detaljne upute (adresa, put do lokacije, parking) drže se u dokumentu uz
-tablice, imenovanom po gradu: **`lokacija Split.docx`**, `lokacija
-Zagreb.docx` i tako dalje. Podržani su `.docx`, `.doc`, `.pdf` i `.odt`;
-velika i mala slova te kvačice nisu bitni.
+Detaljne upute (adresa, put do lokacije, parking, poveznica na kartu) drže
+se u Word dokumentu uz tablice, imenovanom po gradu: **`lokacija
+Split.docx`**, `lokacija Zagreb.docx` i tako dalje. Velika i mala slova te
+kvačice nisu bitni.
 
-Pravilo koje ima `"attach_location": true` šalje taj dokument **u
-privitku**. Ako dokumenta nema, poruka se **ne šalje** — skripta javi
-koji dokument nedostaje, pa ga dodaš i podsjetnik ode sam.
+Tekst iz tog dokumenta se **ugrađuje u samu poruku** na mjesto
+`{lokacija_tekst}` — dokument se ne šalje u privitku, polaznik sve pročita
+u mailu.
 
-Tekst iz `.docx` dokumenta dostupan je i kao `{lokacija_tekst}`, ako ga
-radije želiš u samoj poruci nego u privitku.
+Podržani su `.docx` i `.odt`, jer se iz njih može izvući tekst. `.pdf` i
+stari `.doc` ne mogu se pročitati — spremi takav dokument kao `.docx`.
+
+Ako dokumenta nema ili se iz njega ne može pročitati tekst, poruka se **ne
+šalje** — skripta javi što nedostaje, pa to središ i podsjetnik ode sam.
+Slike i formatiranje iz dokumenta se gube; u poruku ide čisti tekst.
 
 Kako to radi u praksi:
 

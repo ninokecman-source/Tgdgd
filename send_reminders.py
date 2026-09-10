@@ -130,7 +130,9 @@ def iznosi_tecaja(config: dict, course_code: str) -> dict:
     }
 
 
-DOKUMENT_NASTAVCI = [".docx", ".doc", ".pdf", ".odt"]
+# Tekst se čita iz dokumenta, pa su podržani samo formati iz kojih ga
+# možemo izvući. .doc i .pdf nisu među njima - spremi takav dokument kao .docx.
+DOKUMENT_NASTAVCI = [".docx", ".odt"]
 
 
 def _bez_dijakritika(tekst: str) -> str:
@@ -153,21 +155,22 @@ def nadji_dokument_lokacije(mapa: Path, location: str):
     return None
 
 
-def procitaj_docx_tekst(put: Path) -> str:
-    """Izvuče čisti tekst iz .docx datoteke (bez vanjskih biblioteka - .docx
-    je zip s XML-om). Vrati prazan string ako to nije .docx ili se ne može
-    pročitati; dokument se svejedno šalje u privitku."""
-    if put.suffix.lower() != ".docx":
+def procitaj_tekst_dokumenta(put: Path) -> str:
+    """Izvuče čisti tekst iz .docx ili .odt datoteke. Oboje su zip s XML-om,
+    pa ne treba vanjska biblioteka. Vrati prazan string ako se ne može
+    pročitati - tada se poruka koja taj tekst treba neće poslati."""
+    import zipfile
+    unutra = {".docx": "word/document.xml", ".odt": "content.xml"}.get(put.suffix.lower())
+    if not unutra:
         return ""
     try:
-        import zipfile
         with zipfile.ZipFile(put) as z:
-            xml = z.read("word/document.xml").decode("utf-8", errors="replace")
+            xml = z.read(unutra).decode("utf-8", errors="replace")
     except Exception:
         return ""
 
-    xml = re.sub(r"</w:p>", "\n", xml)
-    xml = re.sub(r"<w:br[^>]*/>", "\n", xml)
+    xml = re.sub(r"</(w:p|text:p|text:h)>", "\n", xml)
+    xml = re.sub(r"<(w:br|text:line-break)[^>]*/>", "\n", xml)
     tekst = re.sub(r"<[^>]+>", "", xml)
     tekst = (tekst.replace("&amp;", "&").replace("&lt;", "<")
                   .replace("&gt;", ">").replace("&quot;", '"').replace("&apos;", "'"))
@@ -221,20 +224,12 @@ def render(template: str, participant: dict, info: dict) -> str:
     )
 
 
-def send_one(config: dict, to_email: str, subject: str, body: str,
-             privitak: Path = None) -> None:
+def send_one(config: dict, to_email: str, subject: str, body: str) -> None:
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = config["zoho_email"]
     msg["To"] = to_email
     msg.set_content(body)
-
-    if privitak is not None:
-        import mimetypes
-        tip, _ = mimetypes.guess_type(privitak.name)
-        glavni, _, pod = (tip or "application/octet-stream").partition("/")
-        msg.add_attachment(privitak.read_bytes(), maintype=glavni,
-                           subtype=pod or "octet-stream", filename=privitak.name)
 
     def _send():
         with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
@@ -283,10 +278,10 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
         return 0
 
     # Upute za lokaciju stoje u zasebnom dokumentu uz tablice, imenovanom po
-    # gradu ('lokacija split.docx'). Šalje se u privitku, a tekst iz njega je
-    # dostupan i kao {lokacija_tekst} ako ga želiš u samoj poruci.
+    # gradu ('lokacija split.docx'). Tekst iz njega se ugrađuje u poruku kao
+    # {lokacija_tekst} - dokument se ne šalje u privitku.
     dokument = nadji_dokument_lokacije(xlsx_path.parent, info["location"])
-    info["lokacija_tekst"] = procitaj_docx_tekst(dokument) if dokument else ""
+    info["lokacija_tekst"] = procitaj_tekst_dokumenta(dokument) if dokument else ""
 
     # Svako pravilo pokriva prozor do sljedećeg, užeg pravila: uz podsjetnike
     # na 10 i 1 dan, "10 dana prije" vrijedi za 10-2 dana, a "1 dan prije"
@@ -308,12 +303,16 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
                   f"lokaciju, a polje Venue (M5) je prazno - preskačem.")
             continue
 
-        # Bez dokumenta s uputama nema smisla slati poruku koja na njega
-        # upućuje - radije javi da fali, pa ga dodaš i poruka ode sama.
-        if rule.get("attach_location") and dokument is None:
-            print(f"[!] {xlsx_path.name}: podsjetnik {days_before} dana prije treba "
-                  f"dokument s lokacijom - nedostaje 'lokacija {info['location']}.docx' "
-                  f"u {xlsx_path.parent} - preskačem.")
+        # Poruka koja uključuje upute za lokaciju nema smisla bez njih -
+        # radije javi što fali, pa se pošalje sama kad to središ.
+        if "{lokacija_tekst}" in rule["body"] and not info["lokacija_tekst"]:
+            if dokument is None:
+                print(f"[!] {xlsx_path.name}: podsjetnik {days_before} dana prije treba "
+                      f"upute za lokaciju - nedostaje 'lokacija {info['location']}.docx' "
+                      f"u {xlsx_path.parent} - preskačem.")
+            else:
+                print(f"[!] {xlsx_path.name}: iz dokumenta {dokument.name} ne mogu "
+                      f"pročitati tekst - spremi ga kao .docx - preskačem.")
             continue
 
         key = f"{xlsx_path.name}::{days_before}"
@@ -340,8 +339,7 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
             try:
                 send_one(config, p["email"],
                          render(rule["subject"], p, info),
-                         render(rule["body"], p, info),
-                         privitak=dokument if rule.get("attach_location") else None)
+                         render(rule["body"], p, info))
                 poslano.add(p["email"].lower())
                 sent_count += 1
                 print(f"  Poslano: {p['email']}")
