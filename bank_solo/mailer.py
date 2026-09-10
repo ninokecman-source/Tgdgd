@@ -78,6 +78,27 @@ def datumi_rijecima(dates_text: str) -> str:
             f"{zadnji.day}. {MJESECI_GENITIV[zadnji.month - 1]} {zadnji.year}.")
 
 
+# Zadani tekstovi potvrde. Koriste se kad ih config.json ne navodi - tako
+# potvrde rade odmah, a tko želi drukčiji tekst, upiše svoj ključ u config
+# i on ima prednost.
+DEFAULT_SUBJECT = 'Potvrda uplate - Emmett tehnika {course_code}, {location}'
+
+DEFAULT_PARTIAL = 'Poštovani/a {first_name} {last_name},\n\nhvala vam na uplati za tečaj Emmett tehnike za ljude - {course_code}, koji će se održati {datumi_rijecima} u mjestu {location}.\n\nOvim putem potvrđujemo da smo zaprimili vašu uplatu u iznosu od {iznos} EUR.\n\nTime je vaše mjesto na tečaju rezervirano. Za podmirenje kotizacije u cijelosti preostaje još {preostalo} EUR, koje je potrebno uplatiti najkasnije tjedan dana prije početka tečaja.\n\nSve ostale informacije vezane uz lokaciju, raspored i potrebnu opremu dobit ćete pravovremeno prije početka tečaja.\n\nAko imate bilo kakvih pitanja ili vam je potrebna dodatna informacija, slobodno nam se javite.\n\nVidimo se uskoro!\n\nLijep pozdrav,\n{instructor_name}\nEMMETT Hrvatska'
+
+DEFAULT_FULL = 'Poštovani/a {first_name} {last_name},\n\nhvala vam na doplati kotizacije za tečaj Emmett tehnike za ljude - {course_code}, koji će se održati {datumi_rijecima} u mjestu {location}.\n\nOvim putem potvrđujemo da smo zaprimili vašu uplatu u iznosu od {iznos} EUR, čime je kotizacija u cijelosti podmirena (ukupno {ukupno_uplaceno} EUR).\n\nVaša prijava za tečaj je time potvrđena i veselimo se vašem dolasku.\n\nSve ostale informacije vezane uz lokaciju, raspored i potrebnu opremu dobit ćete pravovremeno prije početka tečaja.\n\nAko imate bilo kakvih pitanja ili vam je potrebna dodatna informacija, slobodno nam se javite.\n\nVidimo se uskoro!\n\nLijep pozdrav,\n{instructor_name}\nEMMETT Hrvatska'
+
+DEFAULT_MODULE = 'Poštovani/a {first_name} {last_name},\n\nhvala vam na uplati kotizacije za tečaj Emmett tehnike za ljude - {course_code}, koji će se održati {datumi_rijecima} u mjestu {location}.\n\nOvim putem potvrđujemo da smo zaprimili vašu uplatu u iznosu od {iznos} EUR, čime je kotizacija za tečaj u cijelosti podmirena.\n\nVaša prijava za tečaj je time potvrđena i veselimo se vašem dolasku.\n\nSve ostale informacije vezane uz lokaciju, raspored i potrebnu opremu dobit ćete pravovremeno prije početka tečaja.\n\nAko imate bilo kakvih pitanja ili vam je potrebna dodatna informacija, slobodno nam se javite.\n\nVidimo se uskoro!\n\nLijep pozdrav,\n{instructor_name}\nEMMETT Hrvatska'
+
+DEFAULT_COURSE = 'Poštovani/a {first_name} {last_name},\n\nhvala vam na uplati kotizacije za cijeli program Emmett tehnike za ljude.\n\nOvim putem potvrđujemo da smo zaprimili vašu uplatu u iznosu od {iznos} EUR, čime je kotizacija za sve module u cijelosti podmirena.\n\nPrvi tečaj na koji ste prijavljeni, {course_code}, održat će se {datumi_rijecima} u mjestu {location}. Za svaki sljedeći modul javit ćemo vam se s detaljima pravovremeno, pa ne morate ništa dodatno uplaćivati.\n\nVaša prijava je time potvrđena i veselimo se vašem dolasku.\n\nSve ostale informacije vezane uz lokaciju, raspored i potrebnu opremu dobit ćete pravovremeno prije početka tečaja.\n\nAko imate bilo kakvih pitanja ili vam je potrebna dodatna informacija, slobodno nam se javite.\n\nVidimo se uskoro!\n\nLijep pozdrav,\n{instructor_name}\nEMMETT Hrvatska'
+
+DEFAULT_BODIES = {
+    "payment_confirmation_body_partial": DEFAULT_PARTIAL,
+    "payment_confirmation_body_full": DEFAULT_FULL,
+    "payment_confirmation_body_module": DEFAULT_MODULE,
+    "payment_confirmation_body_course": DEFAULT_COURSE,
+}
+
+
 def send_payment_confirmation(config, registrant, iznos, ukupno_uplaceno):
     """Javi polazniku da je uplata zaprimljena. Tekst se razlikuje ovisno o
     tome je li kotizacija time podmirena u cijelosti ili još nešto preostaje
@@ -119,10 +140,8 @@ def send_payment_confirmation(config, registrant, iznos, ukupno_uplaceno):
         "instructor_name": config.get("instructor_name", ""),
     }
 
-    tijelo = config.get(kljuc)
-    naslov = config.get("payment_confirmation_subject")
-    if not tijelo or not naslov:
-        return False
+    tijelo = config.get(kljuc) or DEFAULT_BODIES[kljuc]
+    naslov = config.get("payment_confirmation_subject") or DEFAULT_SUBJECT
 
     msg = EmailMessage()
     msg["Subject"] = naslov.format(**varijable)

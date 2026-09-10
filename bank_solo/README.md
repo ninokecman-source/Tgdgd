@@ -171,6 +171,10 @@ Placeholderi: `{first_name}`, `{last_name}`, `{course_code}`, `{location}`,
 (ova uplata), `{ukupno_uplaceno}`, `{preostalo}`, `{cijena}`,
 `{cijena_tecaja}`, `{instructor_name}`.
 
+Tekstovi su ugrađeni u skriptu, pa potvrde rade i bez ijednog
+`payment_confirmation_*` ključa u `config.json`. Ako neki ključ upišeš,
+tvoja vrijednost ima prednost — tako mijenjaš samo ono što želiš.
+
 Cijene se čitaju iz `price_total` (jedan modul, 400) i `course_total_price`
 (cijeli program, 2400). Bez `price_total` se ne može znati preostaje li još
 nešto, pa se uvijek šalje tekst za podmirenu kotizaciju.
