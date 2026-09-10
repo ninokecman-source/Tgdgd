@@ -382,6 +382,15 @@ def show_overview(files: list, config: dict, state: dict, today: date) -> None:
         print(f"  Polaznika: {broj}")
         print(f"  Dvorana:   {info['venue'] or 'PRAZNO (polje M5)'}")
 
+        dokument = nadji_dokument_lokacije(xlsx_path.parent, info["location"])
+        if dokument is None:
+            print(f"  Upute:     NEMA dokumenta 'lokacija {info['location']}.docx'")
+        elif not procitaj_tekst_dokumenta(dokument):
+            print(f"  Upute:     {dokument.name} - NE MOGU pročitati tekst (spremi kao .docx)")
+        else:
+            redaka = len(procitaj_tekst_dokumenta(dokument).splitlines())
+            print(f"  Upute:     {dokument.name} ({redaka} redaka teksta)")
+
         if days_until < 1:
             print("  Status:    tečaj je prošao ili je danas - ništa se ne šalje")
             continue
