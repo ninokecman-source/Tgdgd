@@ -255,7 +255,15 @@ def main():
         description="Pošalje popunjenu tablicu Emmett centrali nakon tečaja.")
     parser.add_argument("--pregled", action="store_true",
                         help="Samo prikaži što bi poslao, bez slanja")
+    parser.add_argument("--datum", metavar="GGGG-MM-DD",
+                        help="Odradi pregled kao da je taj datum - da vidiš kako će "
+                             "mail izgledati prije nego tečaj stvarno završi "
+                             "(radi samo uz --pregled)")
     args = parser.parse_args()
+
+    if args.datum and not args.pregled:
+        sys.exit("--datum se smije koristiti samo uz --pregled, da se ne bi "
+                 "nešto poslalo prije vremena.")
 
     config = load_config()
 
@@ -267,13 +275,21 @@ def main():
     if not output_dir.exists():
         sys.exit(f"Ne postoji folder s tablicama: {output_dir}")
 
-    datoteke = sorted(p for p in output_dir.glob("*.xlsx") if not p.name.startswith("~$"))
+    datoteke = sorted(p for p in output_dir.glob("*.xlsx") if not p.name.startswith("~$")
+                      and p.name != "template_admin_sheet.xlsx")
     if not datoteke:
         print(f"Nema nijedne .xlsx tablice u {output_dir}.")
         return
 
     state = load_state()
-    danas = date.today()
+    if args.datum:
+        try:
+            danas = date.fromisoformat(args.datum)
+        except ValueError:
+            sys.exit(f"Neispravan datum: {args.datum!r} - očekujem oblik 2026-10-05.")
+        print(f"Pregled kao da je {danas.strftime('%d.%m.%Y.')}\n")
+    else:
+        danas = date.today()
     poslano = sum(obradi_tablicu(p, config, state, danas, dry_run) for p in datoteke)
 
     print()

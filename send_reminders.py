@@ -78,50 +78,25 @@ def parse_course_dates(dates_text: str):
         return None, None
 
     try:
-        return date(pocetak[2], pocetak[1], pocetak[0]), date(kraj[2], kraj[1], kraj[0])
+        prvi = date(pocetak[2], pocetak[1], pocetak[0])
+        zadnji = date(kraj[2], kraj[1], kraj[0])
     except ValueError:
         return None, None
 
+    # Kraj prije početka, ili tečaj duži od mjesec dana, znači da zapis nije
+    # pročitan kako treba (npr. '30.-01.09.2026.'). Bolje reći da datum ne
+    # valja nego na temelju njega nekome nešto poslati.
+    if zadnji < prvi or (zadnji - prvi).days > 31:
+        return None, None
+
+    return prvi, zadnji
+
 
 def parse_start_date(dates_text: str):
-    """Iz zapisa datuma tečaja izvuče datum PRVOG dana. Emmettovi mailovi
-    koriste razne oblike, pa se gleda samo niz brojeva u tekstu:
-
-        '18.-19.01.2025.'    -> [18, 19, 1, 2025]        -> 18.01.2025
-        '22-23.03.2025.'     -> [22, 23, 3, 2025]        -> 22.03.2025
-        '30.11.-01.12.2024.' -> [30, 11, 1, 12, 2024]    -> 30.11.2024
-        '18/19.01.2025.'     -> [18, 19, 1, 2025]        -> 18.01.2025
-        '03.10.2026.'        -> [3, 10, 2026]            -> 03.10.2026
-
-    Vraća None ako se datum ne može pouzdano pročitati - tada se za taj
-    tečaj ništa ne šalje (bolje ne poslati nego poslati u krivi dan)."""
-    if not dates_text:
-        return None
-
-    numbers = [int(n) for n in re.findall(r"\d+", str(dates_text))]
-    if len(numbers) < 3 or numbers[-1] < 1000:
-        return None  # bez četveroznamenkaste godine na kraju nema sigurnog čitanja
-
-    year = numbers[-1]
-    rest = numbers[:-1]
-
-    if len(rest) == 2:            # d, m
-        day, month = rest
-    elif len(rest) == 3:          # d1, d2, m  (isti mjesec)
-        day, month = rest[0], rest[2]
-    elif len(rest) == 4:          # d1, m1, d2, m2  (prelazi mjesec)
-        day, month = rest[0], rest[1]
-        # Godina u zapisu pripada drugom datumu. Ako tečaj prelazi Novu
-        # godinu (npr. '31.12.-01.01.2027.'), prvi dan je godinu ranije.
-        if month > rest[3]:
-            year -= 1
-    else:
-        return None
-
-    try:
-        return date(year, month, day)
-    except ValueError:
-        return None
+    """Datum PRVOG dana tečaja, ili None ako se zapis ne može pouzdano
+    pročitati. Koristi istu logiku kao parse_course_dates, pa vrijede iste
+    provjere (npr. odbija zapis kojem je kraj prije početka)."""
+    return parse_course_dates(dates_text)[0]
 
 
 def read_participants(ws, totals_row: int) -> list:
@@ -344,7 +319,8 @@ def main():
         sys.exit(f"Ne postoji folder s tablicama: {output_dir}")
 
     today = date.today()
-    files = sorted(p for p in output_dir.glob("*.xlsx") if not p.name.startswith("~$"))
+    files = sorted(p for p in output_dir.glob("*.xlsx") if not p.name.startswith("~$")
+                      and p.name != "template_admin_sheet.xlsx")
     if not files:
         print(f"Nema nijedne .xlsx tablice u {output_dir}.")
         return
