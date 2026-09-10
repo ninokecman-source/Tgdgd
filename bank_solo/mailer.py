@@ -12,8 +12,11 @@ def send_unmatched_notification(config, unmatched):
     lines = []
     for tx in unmatched:
         lines.append(
-            f"- {tx['amount']:.2f} EUR, datum {tx['date']}, ref {tx['ref_id']}\n"
-            f"  redak iz izvoda: {tx['raw_line'][:200]}"
+            f"- {tx['amount']:.2f} EUR, datum {tx['date']}\n"
+            f"  uplatitelj: {tx.get('name') or '(nepoznat)'}\n"
+            f"  opis:       {tx.get('description') or '(nema)'}\n"
+            f"  IBAN:       {tx.get('iban') or '(nepoznat)'}\n"
+            f"  ref:        {tx['ref_id']}"
         )
 
     body = (

@@ -75,10 +75,15 @@ def process_transaction(tx, registrants, config, solo, state, imap, registration
     if state.is_transaction_processed(tx["ref_id"]):
         return "already_done"
 
-    registrant = find_matching_registrant(tx["raw_line"], registrants)
+    # Ime polaznika se traži u imenu uplatitelja i u opisu plaćanja - tamo
+    # gdje stvarno može pisati. Prije se pretraživao cijeli redak, pa je i
+    # IBAN ili poziv na broj mogao slučajno sadržavati traženi niz.
+    tekst_za_uparivanje = f"{tx.get('name', '')} {tx.get('description', '')}".strip()
+    registrant = find_matching_registrant(tekst_za_uparivanje or tx["raw_line"], registrants)
     if registrant is None:
         print(f"[!] Neuparena uplata {tx['amount']:.2f} EUR ({tx['date']}, ref {tx['ref_id']}) "
-              f"- nijedno ime polaznika nije pronađeno u retku, treba ručna provjera.")
+              f"od {tx.get('name') or '?'} - opis: {tx.get('description') or '(nema)'} "
+              f"- nijedno ime polaznika nije pronađeno, treba ručna provjera.")
         return "unmatched"
 
     full_name = f"{registrant['first_name']} {registrant['last_name']}".strip()
@@ -178,15 +183,18 @@ def run():
 
         had_failure = False
         for attachment_text in attachments:
-            transactions, preskoceno = parse_statement(
-                attachment_text, config.get("credit_type_codes"),
-            )
-            print(f"  Pronađeno {len(transactions)} uplata u prilogu.")
-            if preskoceno:
-                print(f"  Preskočeno {len(preskoceno)} transakcija (nisu uplate):")
-                for p in preskoceno:
-                    iznos = f"{p['amount']:.2f} EUR" if p["amount"] is not None else "?"
-                    print(f"    - {iznos}, kod {p['type_code']}: {p['razlog']}")
+            izvod = parse_statement(attachment_text)
+
+            if not izvod["saldo_ok"]:
+                # Izvod nije pouzdano pročitan - ne diramo ga, jer bi kriva
+                # ponuda u Solu bila teža za popraviti od propuštene uplate.
+                print(f"  [!] IZVOD SE NE OBRAĐUJE: {izvod['poruka']}")
+                had_failure = True
+                continue
+
+            transactions = izvod["uplate"]
+            print(f"  Pronađeno {len(transactions)} uplata "
+                  f"({len(izvod['isplate'])} isplata preskočeno), saldo se poklapa.")
             for tx in transactions:
                 outcome = process_transaction(tx, registrants, config, solo, state, imap, registration_folders)
                 if outcome == "sent":

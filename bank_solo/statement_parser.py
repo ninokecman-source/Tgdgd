@@ -1,115 +1,151 @@
 """
-Parsira Erste banka dnevni izvod (fiksno-formatirani tekstualni .wri prilog)
-i vraća listu ULAZNIH (kreditnih) transakcija - dakle samo uplate, nikad
-isplate.
+Parsira Erste banka dnevni izvod (fiksno-formatirani tekstualni .wri prilog).
 
 Format je proprietaran, redak po redak, svaki redak završava 3-znamenkastim
 kodom tipa retka (900=zaglavlje, 903=račun, 905=transakcija, 907=saldo,
-909/999=kraj). Transakcijski redak počinje s dvoznamenkastim kodom tipa
-transakcije + IBAN druge strane, i sadrži iznos kao 15-znamenkasti broj s
-predznakom (u centima), dva datuma (YYYYMMDD) prije "EUR", te jedinstvenu
-referencu transakcije na kraju retka (koristi se za sprečavanje
-dupliciranja).
+909/999=kraj). Kodiranje je cp1250.
 
-Smjer transakcije (uplata vs isplata) se određuje po DVA uvjeta, i oba
-moraju vrijediti da bi se redak uzeo kao uplata:
+Pozicije polja u transakcijskom (905) retku, izmjerene iz stvarnog izvoda:
 
-1. dvoznamenkasti kod tipa transakcije mora biti među `credit_type_codes`
-   (podesivo u config.json, po defaultu samo "10"),
-2. iznos ne smije imati minus predznak.
+    [0:2]      tip transakcije (npr. "10", "20") - NE označava smjer!
+    [2:23]     IBAN druge strane
+    [36:81]    ime / naziv druge strane
+    [81:176]   mjesto
+    [176:184]  datum valute (YYYYMMDD)
+    [184:192]  datum knjiženja
+    [192:195]  "EUR"
+    [210:226]  iznos s predznakom (15 znamenki, u centima)
+    [226:242]  isti iznos, ponovljen
+    [242:268]  poziv na broj platitelja
+    [268:294]  poziv na broj primatelja
+    [294:...]  opis plaćanja
+    zadnji token u retku = jedinstvena referencija transakcije
 
-Namjerno je strogo: nepoznat kod se preskače umjesto da se pretpostavi da
-je uplata. Kriva pretpostavka ovdje znači izdanu Solo ponudu za tuđu
-isplatu, što se teško popravlja - dok preskočena uplata samo znači da će
-se izdati ručno. Sve preskočeno se vraća u `skipped` da se vidi u logu.
+SMJER: određuje ga predznak iznosa ('+' uplata, '-' isplata). Dvoznamenkasti
+kod tipa transakcije NE govori ništa o smjeru - potvrđeno na stvarnom izvodu
+gdje su obje transakcije s kodom "20" bile uplate.
 
-Ime uplatitelja i opis plaćanja NISU parsirani na točnu poziciju (format
-za to nije dovoljno pouzdano potvrđen) - umjesto toga se cijeli tekst
-retka (`raw_line`) koristi za pretragu poznatih imena polaznika.
+Kako se smjer ne bi mogao krivo pročitati (a kriva ponuda u Solu se teško
+popravlja), svaki izvod se PROVJERAVA protiv vlastitog salda: razlika
+završnog i početnog salda iz 907 retka mora se poklopiti sa zbrojem
+pročitanih uplata umanjenim za isplate. Ako se ne poklapa, izvod se ne
+obrađuje - bolje stati i javiti nego izdati krivi dokument.
 """
 
 import re
 
-TRANSACTION_RE = re.compile(r"^(?P<code>\d{2})[A-Z]{2}\d")
+TRANSACTION_RE = re.compile(r"^\d{2}[A-Z]{2}\d")
 AMOUNT_RE = re.compile(r"[+-]\d{15}")
-DATE_RE = re.compile(r"(\d{8})(\d{8})EUR")
 
-# Kod tipa transakcije koji označava odobrenje (uplatu na račun).
-DEFAULT_CREDIT_TYPE_CODES = ["10"]
+POS_TYPE_CODE = (0, 2)
+POS_IBAN = (2, 23)
+POS_NAME = (36, 81)
+POS_PLACE = (81, 176)
+POS_DATE = (176, 184)
+POS_AMOUNT = (210, 226)
+POS_REF_PAYER = (242, 268)
+POS_REF_PAYEE = (268, 294)
+POS_DESCRIPTION = 294
 
 
-def parse_statement(text: str, credit_type_codes=None) -> tuple:
-    """Vrati (uplate, preskoceno):
+def _polje(body: str, raspon: tuple) -> str:
+    start, kraj = raspon
+    return body[start:kraj].strip() if len(body) > start else ""
 
-    - `uplate`: lista dictova {amount, date, ref_id, type_code, raw_line}
-      za transakcije pozitivno prepoznate kao uplate,
-    - `preskoceno`: lista dictova {razlog, type_code, amount, raw_line} za
-      transakcijske retke koji nisu uzeti kao uplata (isplate i nepoznati
-      kodovi) - da se u logu vidi što je ispušteno i zašto.
+
+def _parse_transakcija(body: str) -> dict:
+    amount_text = _polje(body, POS_AMOUNT)
+    if not AMOUNT_RE.fullmatch(amount_text):
+        # redak ne odgovara očekivanom rasporedu - nađi prvi iznos bilo gdje
+        match = AMOUNT_RE.search(body)
+        if not match:
+            return None
+        amount_text = match.group()
+
+    opis = body[POS_DESCRIPTION:] if len(body) > POS_DESCRIPTION else ""
+    opis = re.split(r"\s{5,}", opis.strip())[0] if opis.strip() else ""
+
+    tokens = body.split()
+    return {
+        "amount": int(amount_text) / 100,
+        "type_code": _polje(body, POS_TYPE_CODE),
+        "iban": _polje(body, POS_IBAN),
+        "name": _polje(body, POS_NAME),
+        "place": _polje(body, POS_PLACE),
+        "date": _polje(body, POS_DATE),
+        "description": opis,
+        "ref_payer": _polje(body, POS_REF_PAYER),
+        "ref_payee": _polje(body, POS_REF_PAYEE),
+        "ref_id": tokens[-1] if tokens else "",
+        "raw_line": body,
+    }
+
+
+def _parse_saldo(text: str):
+    """Iz 907 retka vrati (početni_saldo, završni_saldo), ili None ako ga
+    nema. Prvi iznos u retku je početni, zadnji je završni saldo."""
+    for raw_line in text.splitlines():
+        stripped = raw_line.rstrip()
+        if not stripped.endswith("907"):
+            continue
+        iznosi = [int(m.group()) / 100 for m in AMOUNT_RE.finditer(stripped[:-3])]
+        if len(iznosi) >= 2:
+            return iznosi[0], iznosi[-1]
+    return None
+
+
+def parse_statement(text: str) -> dict:
+    """Vrati dict s pročitanim izvodom:
+
+        uplate         - lista ulaznih transakcija (predznak '+')
+        isplate        - lista izlaznih transakcija (predznak '-')
+        saldo_ok       - True ako se promet poklapa sa saldom izvoda
+        poruka         - objašnjenje ako se ne poklapa (inače prazno)
+
+    Kad je saldo_ok False, pozivatelj NE SMIJE obraditi uplate iz ovog
+    izvoda - znači da raspored polja ili smjer nisu ispravno pročitani.
     """
-    credit_codes = set(credit_type_codes or DEFAULT_CREDIT_TYPE_CODES)
-
-    uplate = []
-    preskoceno = []
+    uplate, isplate = [], []
 
     for raw_line in text.splitlines():
         stripped = raw_line.rstrip()
-        if len(stripped) < 3:
-            continue
-
-        if stripped[-3:] != "905":
+        if len(stripped) < 3 or stripped[-3:] != "905":
             continue
 
         body = stripped[:-3].rstrip()
-        match = TRANSACTION_RE.match(body)
-        if not match:
+        if not TRANSACTION_RE.match(body):
             continue
 
-        type_code = match.group("code")
-
-        amounts = AMOUNT_RE.findall(body)
-        if not amounts:
-            preskoceno.append({
-                "razlog": "iznos nije prepoznat",
-                "type_code": type_code,
-                "amount": None,
-                "raw_line": body,
-            })
+        tx = _parse_transakcija(body)
+        if tx is None:
             continue
+        (uplate if tx["amount"] >= 0 else isplate).append(tx)
 
-        first_amount = amounts[0]
-        amount = int(first_amount) / 100
+    saldo = _parse_saldo(text)
+    if saldo is None:
+        return {
+            "uplate": uplate,
+            "isplate": isplate,
+            "saldo_ok": False,
+            "poruka": "u izvodu nema retka sa saldom (907) - ne mogu provjeriti "
+                      "jesu li transakcije ispravno pročitane",
+        }
 
-        if first_amount.startswith("-"):
-            preskoceno.append({
-                "razlog": "isplata (minus predznak)",
-                "type_code": type_code,
-                "amount": amount,
-                "raw_line": body,
-            })
-            continue
+    pocetni, zavrsni = saldo
+    promet_izvoda = round(zavrsni - pocetni, 2)
+    promet_procitan = round(sum(t["amount"] for t in uplate + isplate), 2)
 
-        if type_code not in credit_codes:
-            preskoceno.append({
-                "razlog": f"kod tipa {type_code} nije među uplatama {sorted(credit_codes)}",
-                "type_code": type_code,
-                "amount": amount,
-                "raw_line": body,
-            })
-            continue
+    if abs(promet_izvoda - promet_procitan) > 0.01:
+        return {
+            "uplate": uplate,
+            "isplate": isplate,
+            "saldo_ok": False,
+            "poruka": (
+                f"promet se ne poklapa sa saldom izvoda: saldo kaže "
+                f"{promet_izvoda:.2f} EUR ({pocetni:.2f} -> {zavrsni:.2f}), a iz "
+                f"transakcija sam pročitao {promet_procitan:.2f} EUR "
+                f"({len(uplate)} uplata, {len(isplate)} isplata)"
+            ),
+        }
 
-        date_match = DATE_RE.search(body)
-        date = date_match.group(1) if date_match else ""
-
-        tokens = body.split()
-        ref_id = tokens[-1] if tokens else ""
-
-        uplate.append({
-            "amount": amount,
-            "date": date,
-            "ref_id": ref_id,
-            "type_code": type_code,
-            "raw_line": body,
-        })
-
-    return uplate, preskoceno
+    return {"uplate": uplate, "isplate": isplate, "saldo_ok": True, "poruka": ""}

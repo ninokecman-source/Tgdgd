@@ -6,10 +6,10 @@ u 'Izvodi' folderu.
 
     python3 diagnose.py
 
-S --izvod: dohvati zadnje izvode i pokaži kako se svaka transakcija
-klasificira (uplata / isplata / nepoznat kod). Time se provjerava jesu li
-`credit_type_codes` u config.json ispravno podešeni - ako neka tvoja
-stvarna uplata ovdje ispadne "nije među uplatama", treba dodati taj kod.
+S --izvod: dohvati zadnje izvode i pokaži svaku transakciju - uplate,
+isplate, ime uplatitelja i opis plaćanja - te poklapa li se promet sa
+saldom izvoda. Ako negdje piše "NE VALJA", taj izvod se ne obrađuje i
+treba pogledati zašto.
 
     python3 diagnose.py --izvod
 
@@ -88,10 +88,7 @@ def diagnose_statements(config, imap, koliko: int, puni_redak: bool, maska: bool
         print(f"Nema nijednog maila od {config['bank_sender']!r} u folderu {folder!r}.")
         return
 
-    kodovi = config.get("credit_type_codes")
-    print(f"Kodovi koji se trenutno smatraju uplatom: {kodovi or ['10 (default)']}\n")
-
-    svi_kodovi = {}
+    print("Smjer se čita iz predznaka iznosa i provjerava protiv salda izvoda.\n")
 
     for uid in uids[-koliko:]:
         status, msg_data = imap.uid("fetch", uid, "(RFC822)")
@@ -109,37 +106,28 @@ def diagnose_statements(config, imap, koliko: int, puni_redak: bool, maska: bool
             except UnicodeDecodeError:
                 text = payload.decode("cp1250", errors="replace")
 
-            uplate, preskoceno = parse_statement(text, kodovi)
-            print(f"  Prilog: {len(uplate)} uplata, {len(preskoceno)} preskočeno")
+            izvod = parse_statement(text)
+            uplate, preskoceno = izvod["uplate"], izvod["isplate"]
+            stanje = "saldo se poklapa" if izvod["saldo_ok"] else f"NE VALJA: {izvod['poruka']}"
+            print(f"  Prilog: {len(uplate)} uplata, {len(preskoceno)} isplata  ({stanje})")
 
             for t in uplate:
-                svi_kodovi.setdefault(t["type_code"], {"uplata": 0, "preskoceno": 0})
-                svi_kodovi[t["type_code"]]["uplata"] += 1
-                print(f"    UPLATA    kod {t['type_code']}  {t['amount']:10.2f} EUR  "
-                      f"{t['date']}  ref {t['ref_id']}")
+                print(f"    UPLATA    {t['amount']:10.2f} EUR  {t['date']}  "
+                      f"{t['name']}  |  {t['description'][:60]}")
                 if puni_redak:
                     print(f"      {t['raw_line']}")
                 if maska:
                     print(f"      {maskiraj(t['raw_line'])}")
 
             for p in preskoceno:
-                svi_kodovi.setdefault(p["type_code"], {"uplata": 0, "preskoceno": 0})
-                svi_kodovi[p["type_code"]]["preskoceno"] += 1
-                iznos = f"{p['amount']:10.2f} EUR" if p["amount"] is not None else "         ?"
-                print(f"    preskočeno kod {p['type_code']}  {iznos}  -> {p['razlog']}")
+                print(f"    ISPLATA   {p['amount']:10.2f} EUR  {p['date']}  "
+                      f"{p['name']}  |  {p['description'][:60]}")
                 if puni_redak:
                     print(f"      {p['raw_line']}")
                 if maska:
                     print(f"      {maskiraj(p['raw_line'])}")
         print()
 
-    if svi_kodovi:
-        print("=== Sažetak po kodu tipa transakcije ===")
-        for kod in sorted(svi_kodovi):
-            b = svi_kodovi[kod]
-            print(f"  kod {kod}: {b['uplata']} uzeto kao uplata, {b['preskoceno']} preskočeno")
-        print("\nAko je neka tvoja stvarna uplata gore označena kao preskočena,")
-        print("dodaj njezin kod u \"credit_type_codes\" u bank_solo/config.json.")
 
 
 def main():

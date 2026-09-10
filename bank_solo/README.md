@@ -123,21 +123,23 @@ uparivanja uplata.
 
 ## Uplate vs isplate
 
-S izvoda se uzimaju **samo uplate** — nikad isplate. Redak se smatra
-uplatom samo ako oba uvjeta vrijede:
+S izvoda se uzimaju **samo uplate**. Smjer se čita iz **predznaka iznosa**
+(`+` uplata, `-` isplata) — dvoznamenkasti kod tipa transakcije na početku
+retka NE označava smjer (potvrđeno na stvarnom izvodu gdje su obje
+transakcije s kodom `20` bile uplate).
 
-1. dvoznamenkasti kod tipa transakcije je među `credit_type_codes`
-   (u `config.json`, po defaultu `["10"]`),
-2. iznos nema minus predznak.
+Da se smjer ne bi mogao krivo pročitati, **svaki izvod se provjerava protiv
+vlastitog salda**: razlika završnog i početnog salda iz `907` retka mora se
+poklopiti sa zbrojem pročitanih transakcija. Ako se ne poklapa, izvod se
+**ne obrađuje** i mail se ne označava obrađenim — pokušat će se ponovno.
+Bolje stati i javiti nego izdati krivu ponudu.
 
-Namjerno je strogo: nepoznat kod se preskoči umjesto da se pretpostavi da
-je uplata, jer kriva pretpostavka znači izdanu Solo ponudu za tuđu isplatu.
-Sve preskočeno se ispisuje u logu, s razlogom, pa ništa ne nestaje nečujno.
+Iz svakog retka se čitaju i ime uplatitelja, IBAN, mjesto i opis plaćanja,
+sve s točnih pozicija u zapisu. Ime polaznika se traži u imenu uplatitelja
+i u opisu plaćanja.
 
-Ako neka tvoja stvarna uplata bude preskočena, provjeri koji kod ima:
+Što je koji izvod pročitao vidiš s:
 
 ```bash
 python3 diagnose.py --izvod
 ```
-
-pa taj kod dodaj u `credit_type_codes`.
