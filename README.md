@@ -20,13 +20,61 @@ tako da svaka izgleda identično originalu, samo popunjena podacima.
 
 Za svakog polaznika upisuje se: ime, prezime, ulica, grad, poštanski broj,
 email, mobitel (kolone iz predloška — Country se automatski postavlja na
-"Croatia", "New/Revised" na "N"). Polje **Venue** i **financijski dio**
+"Croatia", "New/Revised" na "N"). **Financijski dio**
 (Payment Received, VAT %) ostaju prazni/nepromijenjeni — te popunjavaš
 ručno. Formule za zbrajanje (Total Income, provizije) su već u tablici i
 Excel ih sam preračunava kad otvoriš datoteku.
 
 Ako neka prijava premaši 19 predviđenih redova u tablici, skripta sama
 umetne dodatni red i ispravno pomakne formule ispod.
+
+## Tekstovi poruka u Word dokumentima (`predlosci.py`)
+
+Tekst **svake** poruke koju sustav šalje stoji u svom Word dokumentu, u
+istom folderu u kojem su Excel tablice (`output_dir`) — isto pravilo koje
+već vrijedi za upute o lokaciji. Uređuješ ih u Wordu; config.json i kod se
+ne diraju.
+
+| Dokument | Poruka |
+|---|---|
+| `odgovor na prijavu.docx` | automatski odgovor na novu prijavu |
+| `odgovor uvjeti akontacija.docx` | uvjeti plaćanja za tečaj s akontacijom |
+| `odgovor uvjeti puni iznos.docx` | uvjeti plaćanja za ostale tečajeve |
+| `podsjetnik 10 dana.docx` | podsjetnik 10 dana prije tečaja |
+| `podsjetnik 1 dan.docx` | podsjetnik dan prije tečaja |
+| `blok uplate akontacija.docx` | odlomak o ostatku kotizacije |
+| `blok uplate puni iznos.docx` | odlomak o uplati punog iznosa |
+| `potvrda uplate akontacija.docx` | uplaćena akontacija, ostatak preostaje |
+| `potvrda uplate doplata.docx` | doplata kojom je kotizacija zatvorena |
+| `potvrda uplate modul.docx` | cijeli modul (400 €) uplaćen odjednom |
+| `potvrda uplate program.docx` | cijeli program (2400 €) uplaćen odjednom |
+| `izvjestaj centrali.docx` | mail uz tablicu koja ide centrali |
+| `lokacija <grad>.docx` | dvorana i upute za dolazak, po gradu |
+
+Velika i mala slova te kvačice u nazivu nisu bitni. Podržani su `.docx`,
+`.odt`, `.txt` i `.md`; `.pdf` i stari `.doc` ne mogu se pročitati.
+
+**Naslov maila:** ako prvi redak dokumenta glasi `Naslov: …` (prolazi i
+`Subject:`), taj redak postaje naslov poruke, a ostatak je tijelo.
+
+**Podaci u vitičastim zagradama** (`{first_name}`, `{course_code}`,
+`{iznos}` …) popunjavaju se sami — koji su gdje dostupni, piše uz svaku
+poruku niže.
+
+### Napravi ih jednom naredbom
+
+```bash
+python3 napravi_predloske.py --pregled    # pokaži što bi napravio
+python3 napravi_predloske.py              # napravi ono što fali
+```
+
+Dokumenti se izrađuju od tekstova koji su dosad stajali u `config.json`,
+pa ti ništa ne treba prepisivati. **Postojeći dokument se nikad ne mijenja
+ni ne briše.** Jedini koji moraš napisati sam je `lokacija <grad>.docx`.
+
+Ako dokumenta nema, tekst se i dalje uzima iz `config.json`, a ako ni tamo
+nije upisan, koristi se ugrađeni zadani tekst — tako ništa ne stane dok
+dokument ne napišeš. U logu uvijek piše odakle je tekst uzet.
 
 ## Automatska potvrda polazniku (opcionalno)
 
@@ -98,7 +146,7 @@ Uz placeholdere iz automatske potvrde, ovdje su dostupni i:
 
 | Placeholder | Odakle |
 |---|---|
-| `{venue}` | polje Venue (M5), upisuješ ručno |
+| `{venue}` | naziv dvorane iz dokumenta o lokaciji (redak `Dvorana: …`) |
 | `{days_until}` | stvaran broj dana do tečaja |
 | `{prvi_dan}` | prvi dan riječima — „3. listopada" |
 | `{rok_uplate}` | tjedan dana prije početka (`payment_due_days_before`) |
@@ -117,6 +165,20 @@ Tekst iz tog dokumenta se **ugrađuje u samu poruku** na mjesto
 `{lokacija_tekst}` — dokument se ne šalje u privitku, polaznik sve pročita
 u mailu.
 
+Ako **prvi redak** dokumenta glasi `Dvorana: …` (prolazi i `Venue:`,
+`Adresa:`, `Lokacija:`, `Mjesto:`), taj se redak čita kao naziv dvorane i
+dostupan je kao `{venue}`, a iz `{lokacija_tekst}` se izbacuje — pa se
+adresa u poruci ne ponovi dvaput. Primjer:
+
+```
+Dvorana: Sportski centar Gripe, dvorana 2, Osmih mediteranskih igara 2, Split
+Ulaz je sa zapadne strane, pored kavane.
+Parking ispred dvorane je besplatan vikendom.
+```
+
+Dvorana se **ne čita iz tablice** (polje M5) — stoji samo ovdje, uz ostale
+upute, pa se mijenja na jednom mjestu.
+
 Podržani su `.docx` i `.odt`, jer se iz njih može izvući tekst. `.pdf` i
 stari `.doc` ne mogu se pročitati — spremi takav dokument kao `.docx`.
 
@@ -130,8 +192,9 @@ Kako to radi u praksi:
   dan, "10 dana prije" vrijedi za 10–2 dana, a "1 dan prije" samo za točno
   1 dan. Tako netko tko se prijavi 3 dana prije tečaja dobije informativnu
   poruku (s točnim brojem dana u naslovu), a ne obje odjednom.
-- Poruka koja spominje `{venue}` **neće se poslati** ako je polje Venue u
-  tablici prazno — skripta to javi u logu da znaš popuniti dvoranu.
+- Poruka koja spominje `{venue}` ili `{lokacija_tekst}` **neće se poslati**
+  ako dokumenta o lokaciji nema — skripta to javi u logu. Polje Venue (M5)
+  u tablici se **ne koristi**; dvorana se upisuje samo u taj dokument.
 - Tečajevi koji su danas ili su prošli se preskaču, kao i tablice s
   datumom koji se ne može pouzdano pročitati.
 - U `sent_reminders.json` se pamti kome je koji podsjetnik poslan, pa se
@@ -169,7 +232,6 @@ Prije slanja se provjerava je li tablica popunjena. Ako nešto nedostaje,
 centrali **ne ide ništa** — umjesto toga tebi stigne mail s popisom što
 fali. Provjerava se ono što skripte same ne upisuju, pa lako ostane prazno:
 
-- dvorana (Venue, M5)
 - Payment Received za svakog polaznika
 - PDV % (nula je valjana vrijednost, prazno nije)
 - zaglavlje tečaja: kod, mjesto, datumi, instruktor
@@ -177,7 +239,7 @@ fali. Provjerava se ono što skripte same ne upisuju, pa lako ostane prazno:
 
 Kad to popuniš, tablica ode sama pri sljedećem prolasku. Obavijest o
 nepotpunoj tablici ne dolazi svaki dan iznova — samo kad se popis
-nedostataka promijeni (npr. popunio si dvoranu, a uplate još fale).
+nedostataka promijeni (npr. upisao si PDV, a uplate još fale).
 
 Kada se **ne** šalje: dok tečaj još traje, ako je tablica prazna (nema
 nijednog polaznika), ako je nepotpuna, ako se datum ne može pročitati, i

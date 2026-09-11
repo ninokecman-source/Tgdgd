@@ -156,12 +156,16 @@ Uključuje se s `"send_payment_confirmation": true`.
 
 Tekst se bira prema tome **što je ta uplata pokrila**:
 
-| Uplata | Koji tekst ide |
+| Uplata | Dokument s tekstom |
 |---|---|
-| 2400 € (`course_total_price`) | `..._body_course` — cijeli program, svi moduli |
-| 400 € (`price_total`) odjednom | `..._body_module` — kotizacija za tečaj podmirena |
-| 300 € nakon akontacije (ukupno 400) | `..._body_full` — doplata, kotizacija podmirena |
-| 100 € akontacija | `..._body_partial` — potvrda + koliko preostaje |
+| 2400 € (`course_total_price`) | `potvrda uplate program.docx` — cijeli program, svi moduli |
+| 400 € (`price_total`) odjednom | `potvrda uplate modul.docx` — kotizacija za tečaj podmirena |
+| 300 € nakon akontacije (ukupno 400) | `potvrda uplate doplata.docx` — doplata, kotizacija podmirena |
+| 100 € akontacija | `potvrda uplate akontacija.docx` — potvrda + koliko preostaje |
+
+Dokumenti stoje uz Excel tablice (`excel_dir`), isto kao podsjetnici —
+uređuju se u Wordu, vidi „Tekstovi poruka u Word dokumentima" u glavnom
+READMEu. Ako prvi redak glasi `Naslov: …`, to je naslov maila.
 
 Redoslijed provjere je odozgo prema dolje, pa uplata cijelog programa ne
 završi kao „kotizacija za tečaj podmirena".
@@ -171,9 +175,10 @@ Placeholderi: `{first_name}`, `{last_name}`, `{course_code}`, `{location}`,
 (ova uplata), `{ukupno_uplaceno}`, `{preostalo}`, `{cijena}`,
 `{cijena_tecaja}`, `{instructor_name}`.
 
-Tekstovi su ugrađeni u skriptu, pa potvrde rade i bez ijednog
-`payment_confirmation_*` ključa u `config.json`. Ako neki ključ upišeš,
-tvoja vrijednost ima prednost — tako mijenjaš samo ono što želiš.
+Redoslijed je: **dokument → `config.json` → ugrađeni tekst**. Tekstovi su
+ugrađeni u skriptu, pa potvrde rade i prije nego napišeš ijedan dokument;
+`python3 napravi_predloske.py` ti ih izradi od postojećih tekstova. U logu
+uz svaku potvrdu piše odakle je tekst uzet.
 
 Cijene se čitaju iz `price_total` (jedan modul, 400) i `course_total_price`
 (cijeli program, 2400). Bez `price_total` se ne može znati preostaje li još

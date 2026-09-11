@@ -1,4 +1,9 @@
-"""Slanje mail obavijesti o neuparenim bankovnim uplatama."""
+"""Mail obavijesti iz bankovnog dijela: potvrda uplate polazniku i
+obavijest tebi o uplati koja se nije dala upariti.
+
+Tekst potvrda stoji u dokumentima uz Excel tablice ('potvrda uplate
+akontacija.docx', '... doplata', '... modul', '... program') - isti princip
+kao podsjetnici, vidi predlosci.py u glavnom folderu."""
 
 import smtplib
 from email.message import EmailMessage
@@ -51,21 +56,32 @@ MJESECI_GENITIV = [
 ]
 
 
+def _iz_glavnog_foldera(naziv):
+    """Uvezi modul iz glavnog foldera projekta (predlosci, send_reminders) -
+    bank_solo je podmapa, pa put treba dodati ručno. Vrati None ako ne ide."""
+    try:
+        import importlib
+        import sys
+        from pathlib import Path as _Path
+        koren = str(_Path(__file__).resolve().parent.parent)
+        if koren not in sys.path:
+            sys.path.insert(0, koren)
+        return importlib.import_module(naziv)
+    except Exception:
+        return None
+
+
 def datumi_rijecima(dates_text: str) -> str:
     """'03.-04.10.2026.' -> '3. i 4. listopada 2026.'
 
     Za čitanje datuma koristi parser iz send_reminders.py (jedan izvor
     istine za sve oblike koje Emmett koristi). Ako se do njega ne može doći
     ili se datum ne može pročitati, vraća zapis kakav je u tablici."""
-    try:
-        import sys
-        from pathlib import Path
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-        from send_reminders import parse_course_dates
-    except Exception:
+    modul = _iz_glavnog_foldera("send_reminders")
+    if modul is None:
         return dates_text
 
-    prvi, zadnji = parse_course_dates(dates_text)
+    prvi, zadnji = modul.parse_course_dates(dates_text)
     if prvi is None:
         return dates_text
 
@@ -96,6 +112,15 @@ DEFAULT_BODIES = {
     "payment_confirmation_body_full": DEFAULT_FULL,
     "payment_confirmation_body_module": DEFAULT_MODULE,
     "payment_confirmation_body_course": DEFAULT_COURSE,
+}
+
+# Svaka potvrda ima svoj dokument uz Excel tablice - isto kao podsjetnici.
+# Uredi ga u Wordu i sljedeća potvrda ide s novim tekstom.
+DOKUMENTI = {
+    "payment_confirmation_body_partial": "potvrda uplate akontacija",
+    "payment_confirmation_body_full": "potvrda uplate doplata",
+    "payment_confirmation_body_module": "potvrda uplate modul",
+    "payment_confirmation_body_course": "potvrda uplate program",
 }
 
 
@@ -140,8 +165,18 @@ def send_payment_confirmation(config, registrant, iznos, ukupno_uplaceno):
         "instructor_name": config.get("instructor_name", ""),
     }
 
-    tijelo = config.get(kljuc) or DEFAULT_BODIES[kljuc]
-    naslov = config.get("payment_confirmation_subject") or DEFAULT_SUBJECT
+    # Tekst: dokument uz tablice -> config.json -> ugrađeni tekst.
+    predlosci = _iz_glavnog_foldera("predlosci")
+    if predlosci is not None:
+        from pathlib import Path
+        naslov, tijelo, izvor = predlosci.dohvati(
+            Path(config["excel_dir"]), DOKUMENTI[kljuc], config=config,
+            kljuc_naslov="payment_confirmation_subject", kljuc_tijela=kljuc,
+            zadani_naslov=DEFAULT_SUBJECT, zadano_tijelo=DEFAULT_BODIES[kljuc])
+        print(f"  (tekst potvrde: {izvor})")
+    else:
+        tijelo = config.get(kljuc) or DEFAULT_BODIES[kljuc]
+        naslov = config.get("payment_confirmation_subject") or DEFAULT_SUBJECT
 
     msg = EmailMessage()
     msg["Subject"] = naslov.format(**varijable)

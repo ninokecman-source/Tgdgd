@@ -12,10 +12,17 @@ Pokreće se iz crona jednom dnevno, uz zoho_to_excel.py:
 Prije nego pustiš da šalje stvarno, provjeri što bi poslao:
     python send_reminders.py --pregled
 
-Poruke i rokovi se podešavaju u config.json (polje "reminders"), a slanje
-se uključuje s "send_reminders": true. Skripta pamti kome je koji
-podsjetnik poslala (sent_reminders.json), pa nitko ne dobiva istu poruku
-dvaput, koliko god puta se skripta pokrenula.
+Tekst svakog podsjetnika stoji u svom dokumentu uz Excel tablice -
+'podsjetnik 10 dana.docx' i 'podsjetnik 1 dan.docx' - isto kao upute o
+lokaciji ('lokacija split.docx'). Uređuje se u Wordu, bez diranja configa;
+detalji su u predlosci.py. U config.json ostaju samo rokovi (polje
+"reminders": days_before), a slanje se uključuje s "send_reminders": true.
+
+Naziv dvorane se NE čita iz tablice - uzima se iz dokumenta o lokaciji
+(redak 'Dvorana: ...', ili prvi redak dokumenta).
+
+Skripta pamti kome je koji podsjetnik poslala (sent_reminders.json), pa
+nitko ne dobiva istu poruku dvaput, koliko god puta se skripta pokrenula.
 """
 
 import argparse
@@ -29,6 +36,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+import predlosci
 from zoho_to_excel import (
     FIRST_PARTICIPANT_ROW,
     find_totals_row,
@@ -42,12 +50,13 @@ COL_FIRST_NAME = 2
 COL_LAST_NAME = 3
 COL_EMAIL = 8
 
-# Zaglavlje tablice: kod tečaja, mjesto, datumi, instruktor, dvorana
+# Zaglavlje tablice: kod tečaja, mjesto, datumi, instruktor.
+# Dvorana (M5) se namjerno NE čita - naziv dvorane dolazi iz dokumenta o
+# lokaciji, zajedno s ostalim uputama, pa se upisuje na jednom mjestu.
 CELL_COURSE_CODE = "C4"
 CELL_LOCATION = "C5"
 CELL_DATES = "C6"
 CELL_INSTRUCTOR = "M4"
-CELL_VENUE = "M5"
 
 
 def parse_course_dates(dates_text: str):
@@ -130,51 +139,54 @@ def iznosi_tecaja(config: dict, course_code: str) -> dict:
     }
 
 
-# Tekst se čita iz dokumenta, pa su podržani samo formati iz kojih ga
-# možemo izvući. .doc i .pdf nisu među njima - spremi takav dokument kao .docx.
-DOKUMENT_NASTAVCI = [".docx", ".odt"]
-
-
-def _bez_dijakritika(tekst: str) -> str:
-    zamjene = str.maketrans("čćžšđČĆŽŠĐ", "cczsdCCZSD")
-    return tekst.translate(zamjene).lower().strip()
+# Čitanje dokumenata (lokacija, tekstovi poruka) živi u predlosci.py - ovdje
+# su samo imena pod kojima ga ostatak skripte zove.
+DOKUMENT_NASTAVCI = predlosci.NASTAVCI
+procitaj_tekst_dokumenta = predlosci.procitaj_tekst
 
 
 def nadji_dokument_lokacije(mapa: Path, location: str):
-    """Nađi dokument s uputama za lokaciju - 'lokacija split.docx' za tečaj u
-    Splitu. Ne pazi na velika/mala slova ni na kvačice, pa 'Lokacija Split'
-    i 'lokacija split' rade jednako."""
-    if not location:
-        return None
-    trazeno = f"lokacija {_bez_dijakritika(location)}"
-    for put in sorted(mapa.iterdir()):
-        if put.suffix.lower() not in DOKUMENT_NASTAVCI:
-            continue
-        if _bez_dijakritika(put.stem) == trazeno:
-            return put
-    return None
+    """Dokument s uputama za lokaciju - 'lokacija split.docx' za tečaj u
+    Splitu."""
+    return predlosci.dokument_lokacije(mapa, location)
 
 
-def procitaj_tekst_dokumenta(put: Path) -> str:
-    """Izvuče čisti tekst iz .docx ili .odt datoteke. Oboje su zip s XML-om,
-    pa ne treba vanjska biblioteka. Vrati prazan string ako se ne može
-    pročitati - tada se poruka koja taj tekst treba neće poslati."""
-    import zipfile
-    unutra = {".docx": "word/document.xml", ".odt": "content.xml"}.get(put.suffix.lower())
-    if not unutra:
-        return ""
-    try:
-        with zipfile.ZipFile(put) as z:
-            xml = z.read(unutra).decode("utf-8", errors="replace")
-    except Exception:
-        return ""
+def nazivi_podsjetnika(rule: dict) -> list:
+    """Pod kojim se nazivom traži dokument s tekstom ovog podsjetnika.
+    Može se zadati izrijekom ("predlozak" u pravilu), inače se izvodi iz
+    roka: 10 -> 'podsjetnik 10 dana', 1 -> 'podsjetnik 1 dan'."""
+    if rule.get("predlozak"):
+        return [rule["predlozak"]]
+    dana = rule["days_before"]
+    jedinica = "dan" if dana == 1 else "dana"
+    return [f"podsjetnik {dana} {jedinica}",
+            f"podsjetnik {dana} {jedinica} prije"]
 
-    xml = re.sub(r"</(w:p|text:p|text:h)>", "\n", xml)
-    xml = re.sub(r"<(w:br|text:line-break)[^>]*/>", "\n", xml)
-    tekst = re.sub(r"<[^>]+>", "", xml)
-    tekst = (tekst.replace("&amp;", "&").replace("&lt;", "<")
-                  .replace("&gt;", ">").replace("&quot;", '"').replace("&apos;", "'"))
-    return "\n".join(r.rstrip() for r in tekst.splitlines() if r.strip())
+
+ZADANI_NASLOV = "Emmett tehnika - {course_code}, {location} ({dates})"
+
+
+def blok_uplate(mapa: Path, config: dict, course_code: str):
+    """(naslov, tijelo, izvor) za odlomak o uplati koji se uvrštava u
+    podsjetnik kao {blok_uplate}. Tečajevi s akontacijom dobivaju tekst o
+    ostatku kotizacije, ostali o punom iznosu."""
+    if course_code in config.get("deposit_course_codes", []):
+        nazivi, kljuc = ["blok uplate akontacija"], "reminder_deposit_block"
+    else:
+        nazivi, kljuc = ["blok uplate puni iznos"], "reminder_no_deposit_block"
+    return predlosci.dohvati(mapa, nazivi, config=config, kljuc_tijela=kljuc)
+
+
+
+def tekst_podsjetnika(mapa: Path, rule: dict, config: dict):
+    """(naslov, tijelo, izvor) za jedan podsjetnik: dokument uz tablice ima
+    prednost, a ako ga nema, uzima se tekst upisan u config.json."""
+    return predlosci.dohvati(
+        mapa, nazivi_podsjetnika(rule),
+        config={"subject": rule.get("subject"), "body": rule.get("body")},
+        kljuc_naslov="subject", kljuc_tijela="body",
+        zadani_naslov=config.get("reminder_subject") or ZADANI_NASLOV,
+    )
 
 
 def read_participants(ws, totals_row: int) -> list:
@@ -199,7 +211,7 @@ def course_info(ws, config: dict) -> dict:
         "course_code": cell(CELL_COURSE_CODE),
         "location": cell(CELL_LOCATION),
         "dates": cell(CELL_DATES),
-        "venue": cell(CELL_VENUE),
+        "venue": "",   # popunjava se iz dokumenta o lokaciji, ne iz tablice
         "instructor_name": cell(CELL_INSTRUCTOR) or config["instructor_name"],
     }
 
@@ -265,13 +277,15 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
     info["rok_uplate"] = rok.strftime("%d.%m.%Y.")
     info.update(iznosi_tecaja(config, info["course_code"]))
 
+    mapa = xlsx_path.parent
+
     # Dio o uplati se razlikuje: kod tečaja s akontacijom preostaje razlika,
-    # kod ostalih se plaća puni iznos.
-    if info["course_code"] in config.get("deposit_course_codes", []):
-        blok = config.get("reminder_deposit_block", "")
-    else:
-        blok = config.get("reminder_no_deposit_block", "")
-    info["blok_uplate"] = blok.format(**info) if blok else ""
+    # kod ostalih se plaća puni iznos. Tekst stoji u svom dokumentu
+    # ('blok uplate akontacija' / 'blok uplate puni iznos'), kao i sve ostalo.
+    _, blok, _ = blok_uplate(mapa, config, info["course_code"])
+    # Blok uvijek zavrsava praznim retkom, pa se ne slijepi s tekstom
+    # koji u podsjetniku dolazi iza njega.
+    info["blok_uplate"] = (blok.format(**info).rstrip("\n") + "\n\n") if blok else ""
 
     participants = read_participants(ws, find_totals_row(ws))
     if not participants:
@@ -279,9 +293,11 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
 
     # Upute za lokaciju stoje u zasebnom dokumentu uz tablice, imenovanom po
     # gradu ('lokacija split.docx'). Tekst iz njega se ugrađuje u poruku kao
-    # {lokacija_tekst} - dokument se ne šalje u privitku.
-    dokument = nadji_dokument_lokacije(xlsx_path.parent, info["location"])
-    info["lokacija_tekst"] = procitaj_tekst_dokumenta(dokument) if dokument else ""
+    # {lokacija_tekst} - dokument se ne šalje u privitku. Iz istog dokumenta
+    # dolazi i naziv dvorane ({venue}).
+    dokument = nadji_dokument_lokacije(mapa, info["location"])
+    tekst_lokacije = procitaj_tekst_dokumenta(dokument) if dokument else ""
+    info["venue"], info["lokacija_tekst"] = predlosci.rastavi_lokaciju(tekst_lokacije)
 
     # Svako pravilo pokriva prozor do sljedećeg, užeg pravila: uz podsjetnike
     # na 10 i 1 dan, "10 dana prije" vrijedi za 10-2 dana, a "1 dan prije"
@@ -296,23 +312,30 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
         if not (donja_granica < days_until <= days_before):
             continue  # tečaj nije u prozoru ovog podsjetnika
 
-        # Lokacija se upisuje ručno u tablicu; bez nje ne šaljemo poruku
-        # koja je baš o lokaciji - radije javi da fali.
-        if "{venue}" in rule["body"] and not info["venue"]:
-            print(f"[!] {xlsx_path.name}: podsjetnik {days_before} dana prije traži "
-                  f"lokaciju, a polje Venue (M5) je prazno - preskačem.")
+        naslov_predloska, tijelo, izvor = tekst_podsjetnika(mapa, rule, config)
+        if not tijelo:
+            print(f"[!] {xlsx_path.name}: za podsjetnik {days_before} dana prije nema "
+                  f"teksta - napravi dokument '{nazivi_podsjetnika(rule)[0]}.docx' u "
+                  f"{mapa} - preskačem.")
             continue
 
-        # Poruka koja uključuje upute za lokaciju nema smisla bez njih -
-        # radije javi što fali, pa se pošalje sama kad to središ.
-        if "{lokacija_tekst}" in rule["body"] and not info["lokacija_tekst"]:
+        # Poruka koja uključuje upute za lokaciju (ili naziv dvorane) nema
+        # smisla bez njih - radije javi što fali, pa se pošalje sama kad to
+        # središ. Oboje dolazi iz istog dokumenta.
+        if ("{lokacija_tekst}" in tijelo or "{venue}" in tijelo) and not info["lokacija_tekst"]:
             if dokument is None:
                 print(f"[!] {xlsx_path.name}: podsjetnik {days_before} dana prije treba "
                       f"upute za lokaciju - nedostaje 'lokacija {info['location']}.docx' "
-                      f"u {xlsx_path.parent} - preskačem.")
+                      f"u {mapa} - preskačem.")
             else:
                 print(f"[!] {xlsx_path.name}: iz dokumenta {dokument.name} ne mogu "
                       f"pročitati tekst - spremi ga kao .docx - preskačem.")
+            continue
+
+        if "{venue}" in tijelo and not info["venue"]:
+            print(f"[!] {xlsx_path.name}: podsjetnik {days_before} dana prije traži naziv "
+                  f"dvorane, a u dokumentu {dokument.name} nema retka 'Dvorana: ...' "
+                  f"- preskačem.")
             continue
 
         key = f"{xlsx_path.name}::{days_before}"
@@ -323,14 +346,14 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
 
         print(f"\n{info['course_code']} / {info['location']} ({info['dates']}) - "
               f"tečaj za {days_until} dana, podsjetnik '{days_before} dana prije': "
-              f"{len(primatelji)} primatelja")
+              f"{len(primatelji)} primatelja (tekst: {izvor})")
 
         if dry_run:
             for p in primatelji:
                 print(f"  - {p['first_name']} {p['last_name']} <{p['email']}>")
             print("  --- poruka ---")
-            print("  Naslov:", render(rule["subject"], primatelji[0], info))
-            for line in render(rule["body"], primatelji[0], info).splitlines():
+            print("  Naslov:", render(naslov_predloska, primatelji[0], info))
+            for line in render(tijelo, primatelji[0], info).splitlines():
                 print("  " + line)
             continue
 
@@ -338,8 +361,8 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
         for p in primatelji:
             try:
                 send_one(config, p["email"],
-                         render(rule["subject"], p, info),
-                         render(rule["body"], p, info))
+                         render(naslov_predloska, p, info),
+                         render(tijelo, p, info))
                 poslano.add(p["email"].lower())
                 sent_count += 1
                 print(f"  Poslano: {p['email']}")
@@ -380,16 +403,21 @@ def show_overview(files: list, config: dict, state: dict, today: date) -> None:
         days_until = (start - today).days
         print(f"  -> počinje {start.strftime('%d.%m.%Y')} ({days_until} dana)")
         print(f"  Polaznika: {broj}")
-        print(f"  Dvorana:   {info['venue'] or 'PRAZNO (polje M5)'}")
 
-        dokument = nadji_dokument_lokacije(xlsx_path.parent, info["location"])
+        mapa = xlsx_path.parent
+        dokument = nadji_dokument_lokacije(mapa, info["location"])
+        tekst_lokacije = procitaj_tekst_dokumenta(dokument) if dokument else ""
+        info["venue"] = predlosci.dvorana_iz_teksta(tekst_lokacije)
+        info["lokacija_tekst"] = tekst_lokacije
+
         if dokument is None:
             print(f"  Upute:     NEMA dokumenta 'lokacija {info['location']}.docx'")
-        elif not procitaj_tekst_dokumenta(dokument):
+        elif not tekst_lokacije:
             print(f"  Upute:     {dokument.name} - NE MOGU pročitati tekst (spremi kao .docx)")
         else:
-            redaka = len(procitaj_tekst_dokumenta(dokument).splitlines())
-            print(f"  Upute:     {dokument.name} ({redaka} redaka teksta)")
+            print(f"  Upute:     {dokument.name} "
+                  f"({len(tekst_lokacije.splitlines())} redaka teksta)")
+        print(f"  Dvorana:   {info['venue'] or 'nema je u dokumentu o lokaciji'}")
 
         if days_until < 1:
             print("  Status:    tečaj je prošao ili je danas - ništa se ne šalje")
@@ -408,10 +436,19 @@ def show_overview(files: list, config: dict, state: dict, today: date) -> None:
                 stanje = f"još nije vrijeme (kreće na {dana} dana)"
             elif days_until <= donja:
                 stanje = "prozor je prošao"
-            elif "{venue}" in rule["body"] and not info["venue"]:
-                stanje = "SPREMNO, ali čeka da upišeš dvoranu u M5"
             else:
-                stanje = f"ŠALJE SE ({broj} polaznika)"
+                _, tijelo, izvor = tekst_podsjetnika(mapa, rule, config)
+                if not tijelo:
+                    stanje = (f"NEMA TEKSTA - napravi "
+                              f"'{nazivi_podsjetnika(rule)[0]}.docx'")
+                elif ("{lokacija_tekst}" in tijelo or "{venue}" in tijelo) \
+                        and not tekst_lokacije:
+                    stanje = "SPREMNO, ali čeka dokument o lokaciji"
+                elif "{venue}" in tijelo and not info["venue"]:
+                    stanje = ("SPREMNO, ali u dokumentu o lokaciji nema "
+                              "retka 'Dvorana: ...'")
+                else:
+                    stanje = f"ŠALJE SE ({broj} polaznika, tekst: {izvor})"
             print(f"  {dana:>2} dana prije: {stanje}")
 
 
@@ -426,8 +463,12 @@ def main():
 
     config = load_config()
 
+    # Rokovi se mogu podesiti u configu; ako ih nema, vrijede uobičajena dva
+    # (10 dana i 1 dan prije), a tekst im dolazi iz dokumenata uz tablice.
     if not config.get("reminders"):
-        sys.exit("U config.json nema podešenih podsjetnika (polje 'reminders').")
+        config["reminders"] = [{"days_before": 10}, {"days_before": 1}]
+        print("U config.json nema polja 'reminders' - koristim rokove 10 i 1 dan "
+              "prije, a tekst čitam iz dokumenata uz tablice.\n")
 
     dry_run = args.pregled or not config.get("send_reminders")
     if dry_run and not args.pregled:

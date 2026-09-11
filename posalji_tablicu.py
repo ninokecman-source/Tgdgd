@@ -10,6 +10,8 @@ pogledaj što bi poslao:
 
     python3 posalji_tablicu.py --pregled
 
+Tekst maila stoji u dokumentu 'izvjestaj centrali.docx' uz tablice (isto
+kao podsjetnici); ako ga nema, koristi se tekst iz configa odnosno ugrađeni.
 Uključuje se u config.json s "send_course_report": true. Skripta pamti koje
 je tablice već poslala (sent_reports.json), pa se ista ne šalje dvaput.
 
@@ -28,6 +30,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+import predlosci
 from send_reminders import (
     FIRST_PARTICIPANT_ROW,
     course_info,
@@ -60,8 +63,9 @@ XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 def provjeri_potpunost(ws, info: dict, polaznici: list) -> list:
     """Vrati popis onoga što u tablici nedostaje. Provjerava se ono što se
-    popunjava ručno (dvorana, uplate, PDV) i zaglavlje tečaja - dakle sve
-    što skripte same ne upišu, pa lako ostane prazno."""
+    popunjava ručno (uplate, PDV) i zaglavlje tečaja - dakle sve što
+    skripte same ne upišu, pa lako ostane prazno. Dvorana se ne gleda: ona
+    stoji u dokumentu o lokaciji, ne u tablici."""
     fali = []
 
     for oznaka, polje in [("Kod tečaja (C4)", "course_code"),
@@ -70,9 +74,6 @@ def provjeri_potpunost(ws, info: dict, polaznici: list) -> list:
                           ("Instruktor (M4)", "instructor_name")]:
         if not info.get(polje):
             fali.append(f"{oznaka} je prazno")
-
-    if not info.get("venue"):
-        fali.append("Dvorana / Venue (M5) je prazna")
 
     totals_row = find_totals_row(ws)
     pdv = ws.cell(row=totals_row + 2, column=11).value
@@ -222,13 +223,18 @@ def obradi_tablicu(xlsx_path: Path, config: dict, state: dict, danas: date,
         return False
 
     varijable = dict(info, broj_polaznika=len(polaznici))
-    naslov = config.get("course_report_subject", DEFAULT_SUBJECT).format(**varijable)
-    tijelo = config.get("course_report_body", DEFAULT_BODY).format(**varijable)
+    naslov, tijelo, izvor = predlosci.dohvati(
+        xlsx_path.parent, "izvjestaj centrali", config=config,
+        kljuc_naslov="course_report_subject", kljuc_tijela="course_report_body",
+        zadani_naslov=DEFAULT_SUBJECT, zadano_tijelo=DEFAULT_BODY)
+    naslov = naslov.format(**varijable)
+    tijelo = tijelo.format(**varijable)
 
     print(f"\n{info['course_code']} / {info['location']} ({info['dates']}) - "
           f"završio prije {proslo} dana, {len(polaznici)} polaznika")
     print(f"  za: {', '.join(primatelji)}")
     print(f"  privitak: {xlsx_path.name}")
+    print(f"  tekst: {izvor}")
 
     if dry_run:
         print("  --- poruka ---")

@@ -27,6 +27,8 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
+import predlosci
+
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
 # --- Predložak: struktura Emmett administrativne tablice -------------------
@@ -347,17 +349,35 @@ def send_confirmation_email(config: dict, data: dict, course_code: str,
         "instructor_name": config["instructor_name"],
     }
 
+    # Tekst odgovora stoji u dokumentu 'odgovor na prijavu.docx' uz Excel
+    # tablice; ako ga nema, uzima se tekst iz config.json.
+    mapa = Path(config["output_dir"])
+
     # Uvjeti plaćanja se razlikuju po tečaju: akontacija (i s njom vezani
     # uvjeti otkazivanja) vrijedi samo za tečajeve navedene u
-    # deposit_course_codes, za ostale ide reply_no_deposit_section.
+    # deposit_course_codes, za ostale idu uvjeti za puni iznos.
     if course_code in config.get("deposit_course_codes", []):
-        section = config.get("reply_deposit_section", "")
+        nazivi_uvjeta, kljuc_uvjeta = "odgovor uvjeti akontacija", "reply_deposit_section"
     else:
-        section = config.get("reply_no_deposit_section", "")
-    template_vars["deposit_section"] = section.format(**template_vars)
+        nazivi_uvjeta, kljuc_uvjeta = "odgovor uvjeti puni iznos", "reply_no_deposit_section"
+    _, section, _ = predlosci.dohvati(mapa, nazivi_uvjeta, config=config,
+                                      kljuc_tijela=kljuc_uvjeta)
+    # Odlomak zavrsava prijelomom retka, pa ga predlozak odvaja praznim
+    # retkom od onoga sto slijedi (Word ne pamti prazan redak na kraju).
+    template_vars["deposit_section"] = (
+        section.format(**template_vars).rstrip("\n") + "\n") if section else ""
 
-    subject = config["reply_subject"].format(**template_vars)
-    body = config["reply_body"].format(**template_vars)
+    subject, body, izvor = predlosci.dohvati(
+        mapa, "odgovor na prijavu", config=config,
+        kljuc_naslov="reply_subject", kljuc_tijela="reply_body")
+    if not body:
+        print("[!] Nema teksta za odgovor na prijavu - napravi dokument "
+              f"'odgovor na prijavu.docx' u {mapa}. Odgovor nije poslan.")
+        return False
+
+    subject = (subject or "Potvrda prijave - Emmett tehnika {course_code} ({dates})")
+    subject = subject.format(**template_vars)
+    body = body.format(**template_vars)
 
     msg = EmailMessage()
     msg["Subject"] = subject
