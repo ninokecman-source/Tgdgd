@@ -78,6 +78,9 @@ Popuni u `config.json`:
 - `solo_nacin_placanja_item_codes` + `solo_nacin_placanja_default` – kako
   skripta bira kartice (3) / gotovinu (2) / transakcijski (1), po
   računu, vidi "Kako se određuje način plaćanja" niže
+- `solo_default_service_description` – opis koji se stavlja na Solo stavku
+  **samo ako** stavka na Cliniko računu nema naziv; inače se prenosi stvarni
+  naziv usluge (vidi "Što ide na Solo račun" niže)
 - `solo_tip_usluge` – ID usluge iz tvog Solo računa. Prijavi se u Solo ->
   **Usluge -> Tipovi usluga**, otvori uslugu koju koristiš za naplatu
   (npr. "Fizioterapija") i uzmi njen ID (vidljiv u URL-u ili detaljima
@@ -246,6 +249,36 @@ samo jedan (provjereno s 8 paralelnih procesa nad istim računom).
 na dva različita servera s istim Solo tokenom — npr. stari server ostane
 raditi nakon preseljenja — ovo ju neće zaustaviti. Kod preseljenja obavezno
 ugasi servis na starom stroju.
+
+## Što ide na Solo račun
+
+U Solo idu **stvarne stavke Cliniko računa**, svaka kao zaseban redak s
+vlastitim nazivom, cijenom i količinom. Račun s dva tretmana po 70 € u Solu
+ima dva retka, ne jedan zbirni od 140 €.
+
+Pri prijenosu:
+
+- **oznaka načina plaćanja se izbacuje** — ona je pomoćna stavka od 0 €, na
+  fiskalnom računu nema što tražiti
+- **cijena se pretvara u neto** jer Solo sam dodaje porez (uz stopu 0 to je
+  isti iznos)
+- **popust se ugrađuje u cijenu** umjesto da se prenosi kao zaseban podatak:
+  Solo popust računa u postocima, a Cliniko ga dopušta i u eurima, pa bi
+  pretvaranje zbog zaokruživanja lako promijenilo ukupan iznos
+
+  stavka nema naziv
+
+**Iznos se provjerava prije slanja.** Zbroj stavki mora ispasti točno isti
+kao ukupan iznos Cliniko računa; ako ne ispadne (izgubljen popust, koncesija,
+cent na zaokruživanju), račun se **ne šalje** nego ide među neuspjele i javlja
+se mailom. Bolje ne fiskalizirati ništa nego fiskalizirati krivi iznos.
+
+Račun na kojem nakon izbacivanja oznake ne ostane nijedna stavka (npr. netko
+je otvorio račun i dodao samo "Gotovinsko plaćanje") označava se kao
+**preskočen** — nema se što fiskalizirati, pa se ne ponavlja.
+
+Solo prima najviše **36 stavki** po računu; veći račun se odbija prije slanja,
+uz jasnu poruku umjesto Solo-ove šifre greške.
 
 ## Obavijesti kad nešto zapne
 
@@ -482,10 +515,8 @@ Otkriveno testiranjem na živom Solo računu, ugrađeno u `solo_client.py`:
 
 ## Napomena o privatnosti
 
-Skripta iz Clinika u Solo šalje samo ono što je potrebno za račun (ime
-pacijenta, email, iznos, PDV, način plaćanja). Stavke računa
-(`invoice_items`) se dohvaćaju samo da se pronađe marker načina plaćanja
-(`code` polje) — sadržaj/naziv stvarnih usluga se ne prosljeđuje u Solo,
-tamo ide `solo_default_service_description` iz configa. Dijagnoze,
-bilješke terapeuta i ostali medicinski podaci se nikad ne dohvaćaju ni ne
-šalju.
+Skripta iz Clinika u Solo šalje samo ono što je potrebno za račun: ime i
+adresu pacijenta, OIB ako postoji, te **nazive, cijene i količine usluga s
+tog računa** (npr. "Fizioterapijski tretman", 60,00 x 1) — dakle isto ono
+što bi pisalo na računu koji pacijent ionako dobiva. Dijagnoze, bilješke
+terapeuta i ostali medicinski podaci se nikad ne dohvaćaju ni ne šalju.

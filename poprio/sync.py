@@ -36,6 +36,9 @@ ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 # obično prolazan (mreža, Solo 502) i ne treba buditi nikoga.
 FAILED_PASSES_BEFORE_ALERT = 3
 
+# Solo prima najviše 36 stavki po računu (greška 107).
+SOLO_MAX_STAVKI = 36
+
 
 def load_config():
     if not CONFIG_PATH.exists():
@@ -91,6 +94,82 @@ def detect_nacin_placanja(invoice_id, invoice_items, config):
         f"odgovara poznatoj šifri načina plaćanja, koristim zadani ({default})."
     )
     return default
+
+
+class NothingToInvoice(Exception):
+    """Na računu nema nijedne stvarne stavke - nema se što fiskalizirati."""
+
+
+def line_total(item):
+    """Iznos retka koji je pacijent stvarno platio - nakon popusta, s porezom."""
+    total = item.get("total_including_tax")
+    if total is not None:
+        return float(total)
+    # Rezerva ako Cliniko ne pošalje izračunat iznos retka.
+    gross = float(item.get("unit_price") or 0) * float(item.get("quantity") or 1)
+    return gross - float(item.get("discounted_amount") or 0)
+
+
+def build_stavke(config, invoice, invoice_items):
+    """Pretvara stvarne stavke Cliniko računa u stavke za Solo.
+
+    Na fiskalni račun moraju ići stvarne usluge, ne jedna zbirna stavka. Solo
+    očekuje NETO cijenu po jedinici i sam dodaje porez, a Cliniko daje iznos
+    retka s porezom i nakon popusta - pa se računa unatrag.
+
+    Popust se ne prenosi kao zaseban podatak nego je već sadržan u cijeni
+    (`popust_x` u Solu je postotak, a Cliniko popust može biti i u eurima;
+    pretvaranje bi zbog zaokruživanja lako promijenilo ukupan iznos).
+
+    Diže iznimku ako se zbroj stavki ne poklapa s ukupnim iznosom računa -
+    bolje ne fiskalizirati ništa nego fiskalizirati krivi iznos."""
+    marker_codes = {
+        str(code).strip().upper()
+        for code in config["solo_nacin_placanja_item_codes"].values()
+    }
+    tax_rate = config["solo_default_tax_rate"]
+    fallback_opis = config["solo_default_service_description"]
+
+    stavke = []
+    for item in invoice_items:
+        # Oznaka načina plaćanja je pomoćna stavka od 0 EUR - služi samo za
+        # prepoznavanje, na računu u Solu nema što tražiti.
+        if (item.get("code") or "").strip().upper() in marker_codes:
+            continue
+
+        quantity = float(item.get("quantity") or 1)
+        if quantity <= 0:
+            raise ValueError(f"stavka '{item.get('name')}' ima količinu {quantity}")
+
+        net_line = line_total(item) / (1 + tax_rate / 100)
+        stavke.append({
+            "opis": (item.get("name") or fallback_opis)[:500],
+            "cijena": round(net_line / quantity, 2),
+            "kolicina": quantity,
+            "porez_stopa": tax_rate,
+        })
+
+    if not stavke:
+        raise NothingToInvoice("račun nema nijednu stavku osim oznake načina plaćanja")
+
+    if len(stavke) > SOLO_MAX_STAVKI:
+        raise ValueError(
+            f"račun ima {len(stavke)} stavki, Solo prima najviše {SOLO_MAX_STAVKI}"
+        )
+
+    # Ono što će Solo izračunati mora biti isto što je pacijent platio u Clinku.
+    # Ako nije, negdje se izgubio popust, koncesija ili cent na zaokruživanju -
+    # i taj račun ne smije ići u fiskalizaciju dok se ne pogleda.
+    expected = float(invoice.get("total_amount"))
+    computed = round(
+        sum(s["cijena"] * s["kolicina"] for s in stavke) * (1 + tax_rate / 100), 2
+    )
+    if abs(computed - expected) >= 0.005:
+        raise ValueError(
+            f"zbroj stavki ({computed:.2f}) ne odgovara iznosu računa ({expected:.2f})"
+        )
+
+    return stavke
 
 
 def format_address(patient):
@@ -194,21 +273,9 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
         patient_oib = extract_oib(patient)
         patient_address = format_address(patient)
 
-        # Cliniko total_amount je iznos koji je pacijent stvarno platio (bruto,
-        # s PDV-om). Solo traži cijenu BEZ PDV-a i sam ga dodaje, pa moramo
-        # računati unatrag da bruto_suma u Solo-u ispadne isti iznos.
-        gross_amount = float(invoice.get("total_amount"))
-        tax_rate = config["solo_default_tax_rate"]
-        net_amount = round(gross_amount / (1 + tax_rate / 100), 2)
-
-        stavke = [{
-            "opis": config["solo_default_service_description"],
-            "cijena": net_amount,
-            "kolicina": 1,
-            "porez_stopa": tax_rate,
-        }]
         invoice_items = cliniko.get_invoice_items(cliniko_id)
         nacin_placanja = detect_nacin_placanja(cliniko_id, invoice_items, config)
+        stavke = build_stavke(config, invoice, invoice_items)
 
         # Oznaka izvornog Cliniko računa ostaje zapisana na samom Solo dokumentu
         # (vidljiva je i na PDF-u). Ako lokalna baza ikad zakaže, po njoj se
@@ -238,6 +305,12 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
                 napomene=napomene,
                 stavke=stavke,
             )
+    except NothingToInvoice as e:
+        # Nije greška nego račun bez sadržaja (npr. samo oznaka načina plaćanja).
+        # Ponavljanje ne bi ništa promijenilo, pa se zatvara kao preskočen.
+        state.mark_skipped(cliniko_id, e)
+        print(f"[PRESKOČENO] Cliniko račun {cliniko_id}: {e}")
+        return False
     except Exception as e:
         report_failure(config, state, cliniko_id, e, alerter)
         return False
@@ -245,7 +318,8 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
     broj = racun.get("broj_racuna") or racun.get("broj_ponude")
     state.mark_done(cliniko_id, racun)
     print(f"Cliniko #{cliniko_id} -> Solo {document_type} {broj} "
-          f"(način plaćanja {nacin_placanja}, JIR {racun.get('jir', '-')})")
+          f"({len(stavke)} stavki, način plaćanja {nacin_placanja}, "
+          f"JIR {racun.get('jir', '-')})")
 
     # Ponuda nije fiskalni dokument (nema JIR/ZKI) - pacijentu se šalje samo
     # kad je stvarno kreiran fiskalizirani racun, da slučajno ne dobije

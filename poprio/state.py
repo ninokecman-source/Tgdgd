@@ -123,6 +123,18 @@ class StateStore:
         ).fetchone()
         return row[0] if row else 0
 
+    def mark_skipped(self, cliniko_invoice_id, reason):
+        """Račun na kojem nema ničega za fiskalizirati (npr. sadrži samo oznaku
+        načina plaćanja od 0 EUR). Nije greška, ali ni dokument ne nastaje - pa
+        se ne ponavlja, a ostaje vidljiv u bazi."""
+        with self.conn:
+            self.conn.execute(
+                """UPDATE processed_invoices
+                   SET status = 'skipped', last_error = ?, processed_at = datetime('now')
+                   WHERE cliniko_invoice_id = ?""",
+                (str(reason)[:500], str(cliniko_invoice_id)),
+            )
+
     def failed_for_retry(self, max_attempts):
         return [
             row[0]
