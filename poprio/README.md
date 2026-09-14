@@ -221,6 +221,52 @@ lokalnoj SQLite bazi.
 Oznaka se postavlja u `sync.py`, u varijabli `napomene` — ako je ikad ne
 želiš na PDF-u, ondje se uklanja (uz gubitak te mogućnosti provjere).
 
+## Samo jedna instanca odjednom
+
+Skripta pri pokretanju uzima zaključavanje na datoteci pored baze
+(`state.lock`). Ako je već drži drugi proces, druga kopija ispiše poruku i
+ne radi ništa — tako systemd servis uz zaboravljen cron unos, dva
+`docker run` ili ručno pokretanje "samo da provjerim" ne mogu poslati isti
+račun dvaput.
+
+Uz to se svaki račun **zauzima u bazi prije** slanja u Solo, pa čak i da
+dva procesa nekako prođu kroz zaključavanje, kroz zauzimanje može proći
+samo jedan (provjereno s 8 paralelnih procesa nad istim računom).
+
+**Zaključavanje vrijedi samo unutar jednog stroja.** Ako se skripta pokrene
+na dva različita servera s istim Solo tokenom — npr. stari server ostane
+raditi nakon preseljenja — ovo ju neće zaustaviti. Kod preseljenja obavezno
+ugasi servis na starom stroju.
+
+## Zaustavljeni računi
+
+Ako proces bude prekinut (reboot, OOM, `kill`) točno između zauzimanja
+računa i potvrde da je dokument nastao, zapis ostane u stanju `pending`.
+Tada se **stvarno ne zna** je li dokument u Solu nastao ili nije, pa ga
+skripta neće sama ponoviti (mogao bi nastati duplikat fiskalnog računa)
+nego to javi pri svakom pokretanju.
+
+Razrješava se ručno — provjeri postoji li u Solu dokument s napomenom
+`Cliniko #<id>`:
+
+```bash
+# koji su zaustavljeni
+sudo -u poprio sqlite3 /var/lib/poprio/state.sqlite3 \
+  "SELECT cliniko_invoice_id FROM processed_invoices WHERE status='pending';"
+
+# dokument POSTOJI u Solu -> račun je fiskaliziran, označi zapis gotovim
+sudo -u poprio sqlite3 /var/lib/poprio/state.sqlite3 \
+  "UPDATE processed_invoices SET status='done' WHERE cliniko_invoice_id='<id>';"
+
+# dokumenta NEMA u Solu -> obriši zapis, sljedeći prolaz će ga poslati
+sudo -u poprio sqlite3 /var/lib/poprio/state.sqlite3 \
+  "DELETE FROM processed_invoices WHERE cliniko_invoice_id='<id>' AND status='pending';"
+```
+
+**Razriješi to isti dan.** Ako obrišeš zapis, a oznaka "obrađeno do" je u
+međuvremenu odmakla preko tog računa, sljedeći prolaz ga više neće vidjeti
+i račun ostaje nefiskaliziran.
+
 ## Kako se određuje način plaćanja
 
 Cliniko-ov javni API **ne šalje** način plaćanja kao posebno polje na

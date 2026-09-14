@@ -23,6 +23,7 @@ from pathlib import Path
 import requests
 
 from cliniko_client import ClinikoClient
+from lock import AlreadyRunning, single_instance
 from solo_client import SoloClient, SoloAPIError
 from state import StateStore
 from mailer import send_invoice_pdf
@@ -153,7 +154,9 @@ def run_once(config, cliniko, solo, state):
         if updated_at > latest_updated_at:
             latest_updated_at = updated_at
 
-        if state.is_processed(cliniko_id):
+        # Zauzmi račun prije slanja - vidi state.py za razlog. Ako ga je netko
+        # već zauzeo ili obradio, preskačemo.
+        if not state.claim(cliniko_id):
             continue
 
         patient_id = extract_patient_id(invoice)
@@ -215,12 +218,12 @@ def run_once(config, cliniko, solo, state):
             # requests.exceptions.RequestException hvata i prolazne mrežne/HTTP
             # greške (npr. Solo 502/503, timeout) - ne samo Solo-ove aplikacijske
             # greške - da jedan neuspjeh ne prekine obradu ostalih računa u istom
-            # prolazu. Račun ostaje neobrađen u state bazi, pa se ponovno
-            # pokušava sljedeći put kad skripta prođe kroz njega.
+            # prolazu. Zauzimanje se otpušta pa se račun pokušava ponovno.
+            state.release(cliniko_id)
             print(f"[GREŠKA] Cliniko račun {cliniko_id}: {e}", file=sys.stderr)
             continue
 
-        state.mark_processed(cliniko_id, racun)
+        state.mark_done(cliniko_id, racun)
         processed_count += 1
         print(f"Cliniko #{cliniko_id} -> Solo {document_type} {broj} "
               f"(način plaćanja {nacin_placanja}, JIR {racun.get('jir', '-')})")
@@ -242,6 +245,54 @@ def run_once(config, cliniko, solo, state):
     return processed_count
 
 
+def report_pending_claims(state):
+    """Zapisi zaustavljeni u `pending` znače da je proces prekinut usred slanja
+    - ne zna se je li dokument u Solu nastao. Automatsko ponavljanje bi moglo
+    stvoriti duplikat, pa se traži ljudska provjera."""
+    pending = state.pending_claims()
+    if not pending:
+        return
+
+    print(
+        "[UPOZORENJE] Računi zaustavljeni usred slanja: " + ", ".join(pending) + "\n"
+        "  Proces je prekinut nakon što je račun zauzet, a prije potvrde da je\n"
+        "  dokument nastao - ne zna se je li u Solu nastao ili nije. Neću ih\n"
+        "  ponavljati sam jer bi mogao nastati duplikat fiskalnog računa.\n"
+        "  Provjeri u Solu postoji li dokument s napomenom \"Cliniko #<id>\" i\n"
+        "  razriješi prema uputama u README-u (sekcija \"Zaustavljeni računi\").",
+        file=sys.stderr,
+    )
+
+
+def run_with_lock(config, args):
+    cliniko = ClinikoClient(
+        api_key=config["cliniko_api_key"],
+        user_agent=config["cliniko_user_agent"],
+    )
+    solo = SoloClient(api_token=config["solo_api_token"])
+    state = StateStore(config["state_db_path"])
+
+    if not initialize_watermark(state, args):
+        state.close()
+        sys.exit(1)
+
+    report_pending_claims(state)
+
+    if not args.loop:
+        run_once(config, cliniko, solo, state)
+        state.close()
+        return
+
+    interval = config.get("poll_interval_seconds", 60)
+    print(f"Poprio pokrenut u --loop modu, provjera svakih {interval}s. Ctrl+C za izlaz.")
+    while True:
+        try:
+            run_once(config, cliniko, solo, state)
+        except Exception as e:
+            print(f"[GREŠKA] Prolaz sinkronizacije nije uspio: {e}", file=sys.stderr)
+        time.sleep(interval)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Sinkronizira plaćene Cliniko račune u Solo.")
     parser.add_argument(
@@ -259,30 +310,16 @@ def main():
     args = parser.parse_args()
 
     config = load_config()
-    cliniko = ClinikoClient(
-        api_key=config["cliniko_api_key"],
-        user_agent=config["cliniko_user_agent"],
-    )
-    solo = SoloClient(api_token=config["solo_api_token"])
-    state = StateStore(config["state_db_path"])
+    lock_path = Path(config["state_db_path"]).with_suffix(".lock")
 
-    if not initialize_watermark(state, args):
-        state.close()
-        sys.exit(1)
-
-    if not args.loop:
-        run_once(config, cliniko, solo, state)
-        state.close()
-        return
-
-    interval = config.get("poll_interval_seconds", 60)
-    print(f"Poprio pokrenut u --loop modu, provjera svakih {interval}s. Ctrl+C za izlaz.")
-    while True:
-        try:
-            run_once(config, cliniko, solo, state)
-        except Exception as e:
-            print(f"[GREŠKA] Prolaz sinkronizacije nije uspio: {e}", file=sys.stderr)
-        time.sleep(interval)
+    try:
+        with single_instance(lock_path):
+            run_with_lock(config, args)
+    except AlreadyRunning:
+        print(
+            f"Poprio već radi (zaključano {lock_path}) - ovaj pokušaj ne radi ništa.\n"
+            "Ako ovo nije očekivano, provjeri imaš li i systemd servis i cron unos."
+        )
 
 
 if __name__ == "__main__":
