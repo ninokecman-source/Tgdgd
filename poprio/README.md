@@ -184,6 +184,8 @@ cd /opt/poprio && cp config.example.json config.json   # pa popuni config.json
 sudo useradd --system --home /opt/poprio --shell /usr/sbin/nologin poprio
 sudo chown -R poprio:poprio /opt/poprio
 sudo pip install -r requirements.txt   # sustavski, da ga vidi i korisnik poprio
+# (alternativa: virtualenv u /opt/poprio/venv pa u poprio.service
+#  ExecStart=/opt/poprio/venv/bin/python /opt/poprio/sync.py --loop)
 sudo cp poprio.service /etc/systemd/system/poprio.service
 sudo systemctl daemon-reload
 
@@ -219,6 +221,10 @@ docker logs -f poprio
 
 Imenovani volumen `poprio_state` **mora** biti montiran u oba poziva — bez
 njega baza obrađenih računa nestaje sa svakim restartom kontejnera.
+
+`config.json` se **montira**, ne ugrađuje u image — `.dockerignore` ga
+izričito isključuje, jer bi inače ključevi ostali zapečeni u imageu i procurili
+svakome tko do njega dođe (npr. push u registry).
 
 ### c) cron (alternativa, bez trajnog procesa)
 
@@ -623,6 +629,26 @@ Otkriveno testiranjem na živom Solo računu, ugrađeno u `solo_client.py`:
   neto iznos i sam dodaje PDV, pa `sync.py` računa unatrag
   (`net = gross / (1 + porez/100)`) da bruto iznos u Solo-u ispadne isti
   kao plaćeni iznos u Clinku
+
+## Poznata ograničenja
+
+Stvari koje su svjesno ostavljene ovakve — nisu kvarovi, ali je dobro znati za
+njih prije nego iznenade:
+
+- **Zaokruživanje kad se uključi PDV.** Uz stopu 0 (trenutno) ne može se
+  dogoditi. Uz stopu različitu od nule, kod količine veće od 1 i iznosa koji se
+  ne dijeli čisto, cijena po jedinici zaokružena na dvije decimale može dati
+  ukupan iznos koji odstupa za cent. Takav račun **neće biti fiskaliziran** —
+  provjera iznosa ga odbije i javi, pa se pogleda ručno.
+- **Više poslovnica u Clinku.** Ako klinika ikad ima više „businessa", svi
+  njihovi računi fiskaliziraju se u isti Solo račun, bez razlikovanja.
+  Postaje bitno tek kad se otvori druga lokacija.
+- **Ispravak u Clinku nakon fiskalizacije.** Ako se račun u Clinku izmijeni
+  ili obriše *nakon* što je već poslan u Solo, skripta to ne prati — Solo
+  zadržava stari podatak. Fiskalni dokument se ionako ispravlja samo stornom,
+  pa se to radi u Solu.
+- **Podijeljeno plaćanje** (dio gotovinom, dio karticom) nije podržano; na
+  računu smije biti samo jedna oznaka načina plaćanja.
 
 ## Napomena o privatnosti
 

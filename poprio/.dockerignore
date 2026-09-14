@@ -1,0 +1,13 @@
+# config.json sadrži API ključeve. Bez ovoga bi ga `COPY . .` zapekao u image,
+# pa bi ključevi procurili svakome tko dođe do imagea (npr. push u registry).
+# Config se u kontejner montira u trenutku pokretanja, ne ugrađuje.
+config.json
+
+# Baza obrađenih računa ide u imenovani volumen, ne u image.
+state/
+*.sqlite3
+*.lock
+
+__pycache__/
+*.pyc
+.git/

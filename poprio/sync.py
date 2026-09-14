@@ -43,12 +43,65 @@ SOLO_MAX_STAVKI = 36
 KUPAC_BEZ_IMENA = "Klijent"
 
 
+OBAVEZNI_KLJUCEVI = (
+    "cliniko_api_key",
+    "cliniko_user_agent",
+    "solo_api_token",
+    "solo_tip_usluge",
+    "solo_nacin_placanja_item_ids",
+    "solo_default_tax_rate",
+    "solo_default_service_description",
+    "state_db_path",
+)
+
+
 def load_config():
+    """Učitava i provjerava config prije nego išta krene.
+
+    Bez ove provjere nedostajući ključ izađe kao KeyError usred obrade - u
+    --loop modu svakih 15 sekundi iznova, bez naznake što zapravo nedostaje."""
     if not CONFIG_PATH.exists():
         sys.exit(
             f"Nema {CONFIG_PATH}. Kopiraj config.example.json u config.json i popuni podatke."
         )
-    return json.loads(CONFIG_PATH.read_text())
+    try:
+        config = json.loads(CONFIG_PATH.read_text())
+    except json.JSONDecodeError as e:
+        sys.exit(f"{CONFIG_PATH} nije ispravan JSON: {e}")
+
+    # Pazi: `not config.get(k)` bi odbio i posve valjanu nulu - a upravo je
+    # solo_default_tax_rate = 0 (bez PDV-a) normalna postavka.
+    nedostaju = [k for k in OBAVEZNI_KLJUCEVI if config.get(k) in (None, "", {}, [])]
+    if nedostaju:
+        sys.exit(
+            "U config.json nedostaju (ili su prazni) ovi obavezni ključevi:\n"
+            + "\n".join(f"  {k}" for k in nedostaju)
+            + "\n\nUsporedi s config.example.json."
+        )
+
+    if config.get("solo_document_type", "racun") not in ("racun", "ponuda"):
+        sys.exit(
+            f"solo_document_type smije biti 'racun' ili 'ponuda', "
+            f"a nije {config['solo_document_type']!r}."
+        )
+
+    if config["solo_default_tax_rate"] not in (0, 5, 13, 25):
+        sys.exit(
+            f"solo_default_tax_rate smije biti 0, 5, 13 ili 25 (Solo ne prima druge "
+            f"stope), a nije {config['solo_default_tax_rate']!r}."
+        )
+
+    return config
+
+
+def parse_cliniko_time(stamp):
+    """Vrijeme iz Clinika u datetime, tolerantno na format.
+
+    Cliniko trenutno šalje '2026-09-14T10:00:00Z', ali fiksni uzorak bi puknuo
+    na bilo kojoj varijanti (npr. decimalne sekunde) - i to usred prolaza, pa
+    bi se skripta rušila svakih 15 sekundi."""
+    tekst = stamp.strip().replace("Z", "+00:00")
+    return datetime.fromisoformat(tekst).astimezone(timezone.utc)
 
 
 def extract_patient_id(invoice):
@@ -212,6 +265,14 @@ def build_stavke(config, invoice, invoice_items):
         if quantity <= 0:
             raise ValueError(f"stavka '{item.get('name')}' ima količinu {quantity}")
 
+        # Solo odbija cijenu 0 (greška 110), a negativan iznos znači odobrenje -
+        # to se u Hrvatskoj rješava stornom, ne računom s minusom.
+        if line_total(item) <= 0:
+            raise ValueError(
+                f"stavka '{item.get('name')}' ima iznos {line_total(item):.2f} - "
+                f"račun s nultom ili negativnom stavkom se ne fiskalizira"
+            )
+
         net_line = line_total(item) / (1 + tax_rate / 100)
         stavke.append({
             "opis": (item.get("name") or fallback_opis)[:500],
@@ -231,7 +292,14 @@ def build_stavke(config, invoice, invoice_items):
     # Ono što će Solo izračunati mora biti isto što je pacijent platio u Clinku.
     # Ako nije, negdje se izgubio popust, koncesija ili cent na zaokruživanju -
     # i taj račun ne smije ići u fiskalizaciju dok se ne pogleda.
-    expected = float(invoice.get("total_amount"))
+    if invoice.get("total_amount") is None:
+        raise ValueError("račun nema iznos (total_amount)")
+    expected = float(invoice["total_amount"])
+    if expected <= 0:
+        raise ValueError(
+            f"ukupan iznos računa je {expected:.2f} - ne fiskalizira se "
+            f"(odobrenje se rješava stornom)"
+        )
     computed = round(
         sum(s["cijena"] * s["kolicina"] for s in stavke) * (1 + tax_rate / 100), 2
     )
@@ -434,7 +502,21 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
         try:
             send_invoice_pdf(config, patient_email, patient_name, racun["pdf"], broj)
         except Exception as e:
-            print(f"[UPOZORENJE] Račun {broj} kreiran, ali mail nije poslan: {e}", file=sys.stderr)
+            # Račun JE fiskaliziran - samo ga pacijent nije dobio. Ne ponavlja se
+            # samo (to bi tražilo vlastiti red čekanja), nego se javi da se može
+            # poslati ručno iz Sola.
+            print(f"[UPOZORENJE] Račun {broj} kreiran, ali mail nije poslan: {e}",
+                  file=sys.stderr)
+            if alerter:
+                alerter.problem(
+                    "mail_failed",
+                    "Pacijent nije dobio račun mailom",
+                    f"Račun {broj} je uredno fiskaliziran, ali slanje PDF-a "
+                    f"pacijentu ({patient_email}) nije uspjelo.\n\n"
+                    f"Greška: {e}\n\n"
+                    f"Pošalji ga ručno iz Sola. Ako se ponavlja, provjeri SMTP "
+                    f"podatke u config.json (app-specific lozinka zna isteći).",
+                )
 
     return True
 
@@ -467,7 +549,7 @@ def advance_watermark(state, previous, latest_seen, config):
     i tako svaki prolaz iznova (u --loop modu 180s svakih 15s). Zato uzimamo
     kasniji od dvaju datuma."""
     overlap = config.get("lookback_overlap_seconds", 180)
-    candidate = datetime.strptime(latest_seen, ISO_FORMAT) - timedelta(seconds=overlap)
+    candidate = parse_cliniko_time(latest_seen) - timedelta(seconds=overlap)
     state.set_watermark(max(candidate.strftime(ISO_FORMAT), previous))
 
 
