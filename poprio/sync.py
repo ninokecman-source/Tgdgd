@@ -97,13 +97,50 @@ def format_address(patient):
     return ", ".join(p for p in (street, city_line) if p) or None
 
 
-def run_once(config, cliniko, solo, state, backfill_days=None):
-    watermark = state.get_watermark()
-    if not watermark:
-        lookback = timedelta(days=backfill_days) if backfill_days else timedelta(minutes=10)
-        watermark = (datetime.now(timezone.utc) - lookback).strftime("%Y-%m-%dT%H:%M:%SZ")
-        print(f"Prvo pokretanje, gledam račune ažurirane nakon {watermark}")
+def initialize_watermark(state, args):
+    """Bez zapisa dokle je obrađeno skripta NE SMIJE ništa poslati.
 
+    Prazna baza (nova instalacija, preseljen server, izgubljen Docker volumen)
+    izgleda potpuno isto kao "ništa još nije fiskalizirano" - pa bi tiho poslala
+    već fiskalizirane račune u Solo drugi put. Duplikat fiskalnog računa
+    ispravlja se samo stornom, zato ovdje tražimo svjesnu odluku operatera
+    umjesto da pretpostavimo bilo što."""
+    if state.get_watermark():
+        return True
+
+    if args.init_from_now and args.backfill_days:
+        print("[GREŠKA] Odaberi ili --init-from-now ili --backfill-days, ne oboje.", file=sys.stderr)
+        return False
+
+    if args.init_from_now:
+        start = datetime.now(timezone.utc)
+    elif args.backfill_days:
+        start = datetime.now(timezone.utc) - timedelta(days=args.backfill_days)
+    else:
+        print(
+            "[GREŠKA] Baza obrađenih računa je prazna - ne znam što je već poslano u Solo.\n"
+            "\n"
+            "Ako je baza izgubljena (preseljen server, Docker bez trajnog volumena), a ja\n"
+            "krenem slati, već fiskalizirani računi otišli bi u Solo drugi put - a duplikat\n"
+            "fiskalnog računa ispravlja se samo stornom. Zato stajem i pitam.\n"
+            "\n"
+            "Odaberi:\n"
+            "  python sync.py --init-from-now     kreni od sada, ne diraj starije račune\n"
+            "                                     (nakon preseljenja ili gubitka baze)\n"
+            "  python sync.py --backfill-days 7   obradi i račune plaćene zadnjih 7 dana\n"
+            "                                     (prva instalacija)\n",
+            file=sys.stderr,
+        )
+        return False
+
+    stamp = start.strftime("%Y-%m-%dT%H:%M:%SZ")
+    state.set_watermark(stamp)
+    print(f"Inicijalizirano: obrađujem račune ažurirane nakon {stamp}")
+    return True
+
+
+def run_once(config, cliniko, solo, state):
+    watermark = state.get_watermark()
     invoices = cliniko.get_paid_invoices(updated_since=watermark)
     print(f"Pronađeno {len(invoices)} plaćenih računa od {watermark}")
 
@@ -143,6 +180,11 @@ def run_once(config, cliniko, solo, state, backfill_days=None):
         invoice_items = cliniko.get_invoice_items(cliniko_id)
         nacin_placanja = detect_nacin_placanja(cliniko_id, invoice_items, config)
 
+        # Oznaka izvornog Cliniko računa ostaje zapisana na samom Solo dokumentu
+        # (vidljiva je i na PDF-u). Ako lokalna baza ikad zakaže, po njoj se
+        # ručno vidi je li neki Cliniko račun već fiskaliziran.
+        napomene = f"Cliniko #{cliniko_id}"
+
         try:
             if document_type == "ponuda":
                 racun = solo.create_ponuda(
@@ -152,6 +194,7 @@ def run_once(config, cliniko, solo, state, backfill_days=None):
                     kupac_naziv=patient_name or "Kupac",
                     kupac_oib=patient_oib,
                     kupac_adresa=patient_address,
+                    napomene=napomene,
                     stavke=stavke,
                 )
                 broj = racun.get("broj_ponude")
@@ -164,6 +207,7 @@ def run_once(config, cliniko, solo, state, backfill_days=None):
                     kupac_naziv=patient_name or "Kupac",
                     kupac_oib=patient_oib,
                     kupac_adresa=patient_address,
+                    napomene=napomene,
                     stavke=stavke,
                 )
                 broj = racun.get("broj_racuna")
@@ -202,7 +246,11 @@ def main():
     parser = argparse.ArgumentParser(description="Sinkronizira plaćene Cliniko račune u Solo.")
     parser.add_argument(
         "--backfill-days", type=int, default=None,
-        help="Samo kod prvog pokretanja: koliko dana unatrag gledati plaćene račune.",
+        help="Kod inicijalizacije prazne baze: obradi i račune plaćene zadnjih N dana.",
+    )
+    parser.add_argument(
+        "--init-from-now", action="store_true",
+        help="Kod inicijalizacije prazne baze: kreni od sada, bez obrade ijednog starijeg računa.",
     )
     parser.add_argument(
         "--loop", action="store_true",
@@ -218,20 +266,22 @@ def main():
     solo = SoloClient(api_token=config["solo_api_token"])
     state = StateStore(config["state_db_path"])
 
+    if not initialize_watermark(state, args):
+        state.close()
+        sys.exit(1)
+
     if not args.loop:
-        run_once(config, cliniko, solo, state, backfill_days=args.backfill_days)
+        run_once(config, cliniko, solo, state)
         state.close()
         return
 
     interval = config.get("poll_interval_seconds", 60)
     print(f"Poprio pokrenut u --loop modu, provjera svakih {interval}s. Ctrl+C za izlaz.")
-    backfill_days = args.backfill_days
     while True:
         try:
-            run_once(config, cliniko, solo, state, backfill_days=backfill_days)
+            run_once(config, cliniko, solo, state)
         except Exception as e:
             print(f"[GREŠKA] Prolaz sinkronizacije nije uspio: {e}", file=sys.stderr)
-        backfill_days = None  # backfill se primjenjuje samo na prvi prolaz
         time.sleep(interval)
 
 

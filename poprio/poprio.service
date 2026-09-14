@@ -6,8 +6,16 @@
 #   3. sudo cp poprio.service /etc/systemd/system/poprio.service
 #   4. Prilagodi WorkingDirectory/ExecStart ako folder nije /opt/poprio
 #   5. sudo systemctl daemon-reload
-#   6. sudo systemctl enable --now poprio
-#   7. Prati log: journalctl -u poprio -f
+#   6. Inicijaliziraj bazu obrađenih računa (jednom, svjesan odabir):
+#        sudo -u poprio /usr/bin/python3 /opt/poprio/sync.py --init-from-now
+#      ili --backfill-days N ako želiš obraditi i starije plaćene račune
+#   7. sudo systemctl enable --now poprio
+#   8. Prati log: journalctl -u poprio -f
+#
+# StateDirectory=poprio znači da systemd sam kreira i održava /var/lib/poprio
+# (vlasništvo korisnika servisa) te da taj folder preživi restart, reboot i
+# ponovni deploy koda - baza obrađenih računa ne smije živjeti u /opt/poprio,
+# jer bi se s njim izgubila pri sljedećem kopiranju koda.
 
 [Unit]
 Description=Poprio - Cliniko to Solo fiskalizacija
@@ -21,6 +29,7 @@ ExecStart=/usr/bin/python3 /opt/poprio/sync.py --loop
 Restart=always
 RestartSec=15
 User=poprio
+StateDirectory=poprio
 
 [Install]
 WantedBy=multi-user.target

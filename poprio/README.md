@@ -86,7 +86,11 @@ Popuni u `config.json`:
   kao za glavnu Zoho skriptu u ovom repou. Ako koristiš neki drugi mail
   servis, promijeni `smtp_host`/`smtp_port` (465 = SSL, 587 = STARTTLS —
   oboje je podržano).
-- `state_db_path` – gdje se sprema baza obrađenih računa (ne treba dirati)
+- `state_db_path` – gdje se sprema baza obrađenih računa. **Mora biti izvan
+  foldera s kodom** (zadano `/var/lib/poprio/state.sqlite3`), jer bi se inače
+  izgubila pri sljedećem kopiranju/redeployu koda — a ta baza je jedini zapis
+  o tome što je već poslano u Solo. Za lokalno testiranje stavi relativnu
+  putanju (npr. `state/test.sqlite3`).
 
 **Napomena:** `config.json` sadrži tajne podatke i nikad se ne smije
 commitati (već je u `.gitignore`).
@@ -112,20 +116,36 @@ sigurnija alternativa (ponuda se nikad ne fiskalizira, pa netočan
 `nacin_placanja` na njoj nema fiskalne posljedice; ti/osoblje je onda
 ručno pretvorite u Solo sučelju, birajući tad stvarni način plaćanja).
 
-## 6. Prvo pokretanje
+## 6. Prvo pokretanje (inicijalizacija)
 
-Kod prvog pokretanja skripta po defaultu gleda samo račune plaćene u
-zadnjih 10 minuta (da se slučajno ne fiskaliziraju stari računi). Ako želiš
-obraditi i starije plaćene račune kod prvog pokretanja:
+Skripta **odbija raditi dok joj se ne kaže odakle kreće**. Dok je baza
+obrađenih računa prazna, svako pokretanje bez zastavice staje uz jasnu
+poruku i ne šalje ništa.
+
+To nije gnjavaža nego zaštita: prazna baza izgleda potpuno isto bez obzira
+je li ovo prva instalacija ili je baza izgubljena (preseljen server, Docker
+bez trajnog volumena, obrisan folder). Kad bi skripta u toj situaciji sama
+pretpostavila "ništa još nije fiskalizirano", već fiskalizirane račune
+poslala bi u Solo drugi put — a duplikat fiskalnog računa ispravlja se samo
+stornom.
+
+Zato jednom, svjesno, odaberi jedno od dvoje:
 
 ```bash
-python sync.py --backfill-days 7
+python sync.py --init-from-now      # kreni od sada, ne diraj starije račune
+python sync.py --backfill-days 7    # obradi i račune plaćene zadnjih 7 dana
 ```
 
-Za ručnu provjeru jednog prolaza (npr. kroz cron):
+`--init-from-now` je pravi odabir nakon preseljenja servera ili gubitka
+baze. `--backfill-days` je za prvu instalaciju, kad stvarno želiš da se
+obradi i nešto unatrag — **provjeri prije toga koliko plaćenih računa je u
+tom prozoru**, jer će za svaki nastati dokument u Solu.
+
+Nakon inicijalizacije, redovni rad je bez zastavica:
 
 ```bash
-python sync.py
+python sync.py          # jedan prolaz (za cron)
+python sync.py --loop   # trajno (za systemd/Docker)
 ```
 
 ## 7. Pokretanje na vanjskom serveru
@@ -144,29 +164,62 @@ ssh korisnik@server
 cd /opt/poprio && cp config.example.json config.json   # pa popuni config.json
 sudo useradd --system --home /opt/poprio --shell /usr/sbin/nologin poprio
 sudo chown -R poprio:poprio /opt/poprio
-pip install -r requirements.txt   # ili u virtualenv, prilagodi ExecStart u poprio.service
+sudo pip install -r requirements.txt   # sustavski, da ga vidi i korisnik poprio
 sudo cp poprio.service /etc/systemd/system/poprio.service
 sudo systemctl daemon-reload
+
+# jednokratna inicijalizacija (vidi korak 6) - servis se bez nje neće pokrenuti
+sudo -u poprio /usr/bin/python3 /opt/poprio/sync.py --init-from-now
+
 sudo systemctl enable --now poprio
 journalctl -u poprio -f   # praćenje logova
 ```
+
+Baza obrađenih računa živi u `/var/lib/poprio/` — systemd ju kreira i
+održava preko `StateDirectory=poprio`, pa preživi restart, reboot i ponovni
+deploy koda. **Nemoj ju premještati u `/opt/poprio`**: taj folder se prepiše
+pri svakom `scp`-u nove verzije koda.
 
 ### b) Docker (ako server već ima Docker, ništa drugo se ne instalira)
 
 ```bash
 docker build -t poprio .
+
+# jednokratna inicijalizacija (vidi korak 6)
+docker run --rm \
+    -v $(pwd)/config.json:/app/config.json:ro \
+    -v poprio_state:/var/lib/poprio \
+    poprio python sync.py --init-from-now
+
 docker run -d --name poprio --restart unless-stopped \
-    -v $(pwd)/config.json:/app/config.json \
-    -v poprio_state:/app/state \
+    -v $(pwd)/config.json:/app/config.json:ro \
+    -v poprio_state:/var/lib/poprio \
     poprio
 docker logs -f poprio
 ```
+
+Imenovani volumen `poprio_state` **mora** biti montiran u oba poziva — bez
+njega baza obrađenih računa nestaje sa svakim restartom kontejnera.
 
 ### c) cron (alternativa, bez trajnog procesa)
 
 ```
 * * * * * cd /putanja/do/poprio && /usr/bin/python3 sync.py >> sync.log 2>&1
 ```
+
+## Oznaka izvornog Cliniko računa
+
+Svaki dokument koji skripta kreira u Solu nosi u napomeni oznaku
+`Cliniko #<id>` — npr. `Cliniko #2018168603207010009`. Napomena se
+**ispisuje na PDF-u** koji pacijent dobije.
+
+Svrha je mogućnost ručne provjere: ako lokalna baza ikad zakaže ili se
+posumnja u duplikat, u Solu se po toj oznaci vidi iz kojeg je Cliniko
+računa svaki dokument nastao. Bez nje ta veza ne postoji nigdje osim u
+lokalnoj SQLite bazi.
+
+Oznaka se postavlja u `sync.py`, u varijabli `napomene` — ako je ikad ne
+želiš na PDF-u, ondje se uklanja (uz gubitak te mogućnosti provjere).
 
 ## Kako se određuje način plaćanja
 
