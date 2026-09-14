@@ -19,6 +19,9 @@
   "solo_default_tax_rate": 0,
   "solo_default_service_description": "Fizioterapija",
 
+  "alert_email": "tvoj_mail@primjer.com",
+  "healthcheck_url": "",
+
   "send_pdf_email": true,
   "smtp_host": "smtppro.zoho.com",
   "smtp_port": 465,

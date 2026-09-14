@@ -20,6 +20,9 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import requests
+
+from alerts import Alerter
 from cliniko_client import ClinikoClient
 from lock import AlreadyRunning, single_instance
 from solo_client import SoloClient
@@ -28,6 +31,10 @@ from mailer import send_invoice_pdf
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
+# Koliko prolaza zaredom smije pasti prije nego se javi mailom. Jedan pad je
+# obično prolazan (mreža, Solo 502) i ne treba buditi nikoga.
+FAILED_PASSES_BEFORE_ALERT = 3
 
 
 def load_config():
@@ -139,7 +146,7 @@ def initialize_watermark(state, args):
     return True
 
 
-def report_failure(config, state, cliniko_id, error):
+def report_failure(config, state, cliniko_id, error, alerter=None):
     """Bilježi neuspjeh i javlja ga - glasnije kad su pokušaji potrošeni."""
     max_attempts = config.get("max_retry_attempts", 5)
     attempts = state.mark_failed(cliniko_id, error)
@@ -153,6 +160,16 @@ def report_failure(config, state, cliniko_id, error):
             f"  omogući pokušaje (README, sekcija \"Zaglavljeni računi\").",
             file=sys.stderr,
         )
+        if alerter:
+            alerter.problem(
+                f"exhausted:{cliniko_id}",
+                f"Račun nije fiskaliziran ({cliniko_id})",
+                f"Cliniko račun {cliniko_id} nije uspio otići u Solo ni nakon "
+                f"{attempts} pokušaja, pa sam prestao pokušavati.\n\n"
+                f"Greška: {error}\n\n"
+                f"Taj račun NIJE fiskaliziran. Riješi uzrok pa ga vrati u red za "
+                f"slanje prema uputama u README-u (sekcija \"Zaglavljeni računi\").",
+            )
     else:
         print(
             f"[GREŠKA] Cliniko račun {cliniko_id} (pokušaj {attempts}/{max_attempts}): {error}",
@@ -160,7 +177,7 @@ def report_failure(config, state, cliniko_id, error):
         )
 
 
-def process_invoice(config, cliniko, solo, state, invoice):
+def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
     """Šalje jedan već zauzet račun u Solo. Vraća True ako je dokument nastao.
 
     Račun je u ovom trenutku zauzet (status `pending`), pa SVAKI izlaz odavde
@@ -222,7 +239,7 @@ def process_invoice(config, cliniko, solo, state, invoice):
                 stavke=stavke,
             )
     except Exception as e:
-        report_failure(config, state, cliniko_id, e)
+        report_failure(config, state, cliniko_id, e, alerter)
         return False
 
     broj = racun.get("broj_racuna") or racun.get("broj_ponude")
@@ -242,7 +259,7 @@ def process_invoice(config, cliniko, solo, state, invoice):
     return True
 
 
-def retry_failed(config, cliniko, solo, state):
+def retry_failed(config, cliniko, solo, state, alerter=None):
     """Ponovno pokušava ranije neuspjele račune - po ID-u, neovisno o tome jesu
     li još unutar vremenskog prozora upita prema Clinku. Bez ovoga bi račun koji
     padne dok je Solo nedostupan tiho ispao čim oznaka odmakne preko njega."""
@@ -253,9 +270,9 @@ def retry_failed(config, cliniko, solo, state):
         try:
             invoice = cliniko.get_invoice(cliniko_id)
         except Exception as e:
-            report_failure(config, state, cliniko_id, e)
+            report_failure(config, state, cliniko_id, e, alerter)
             continue
-        if process_invoice(config, cliniko, solo, state, invoice):
+        if process_invoice(config, cliniko, solo, state, invoice, alerter):
             processed += 1
     return processed
 
@@ -274,8 +291,8 @@ def advance_watermark(state, previous, latest_seen, config):
     state.set_watermark(max(candidate.strftime(ISO_FORMAT), previous))
 
 
-def run_once(config, cliniko, solo, state):
-    processed_count = retry_failed(config, cliniko, solo, state)
+def run_once(config, cliniko, solo, state, alerter=None):
+    processed_count = retry_failed(config, cliniko, solo, state, alerter)
 
     watermark = state.get_watermark()
     invoices = cliniko.get_paid_invoices(updated_since=watermark)
@@ -294,7 +311,7 @@ def run_once(config, cliniko, solo, state):
         if not state.claim(invoice["id"]):
             continue
 
-        if process_invoice(config, cliniko, solo, state, invoice):
+        if process_invoice(config, cliniko, solo, state, invoice, alerter):
             processed_count += 1
 
     advance_watermark(state, watermark, latest_updated_at, config)
@@ -311,10 +328,69 @@ def run_once(config, cliniko, solo, state):
     return processed_count
 
 
-def report_stuck_invoices(state, config):
+def ping_healthcheck(config):
+    """Javlja vanjskom nadzoru da je prolaz prošao.
+
+    Ovo je jedino što može otkriti da je sama skripta prestala raditi - mrtav
+    proces, ugašen server ili pukla mreža ne mogu poslati mail o sebi. Servis
+    poput healthchecks.io šalje obavijest kad ovi javljanja prestanu stizati."""
+    url = (config.get("healthcheck_url") or "").strip()
+    if not url:
+        return
+    try:
+        requests.get(url, timeout=10)
+    except requests.exceptions.RequestException as e:
+        print(f"[UPOZORENJE] Javljanje vanjskom nadzoru nije prošlo: {e}", file=sys.stderr)
+
+
+def run_pass(config, cliniko, solo, state, alerter):
+    """Jedan prolaz sa svime što ide oko njega: brojanje uzastopnih kvarova,
+    obavijesti i javljanje vanjskom nadzoru."""
+    try:
+        run_once(config, cliniko, solo, state, alerter)
+    except Exception as e:
+        failures = state.get_int("consecutive_failures") + 1
+        state.set_int("consecutive_failures", failures)
+        print(f"[GREŠKA] Prolaz sinkronizacije nije uspio ({failures}. zaredom): {e}",
+              file=sys.stderr)
+        if failures >= FAILED_PASSES_BEFORE_ALERT:
+            alerter.problem(
+                "sync_failure",
+                "Fiskalizacija ne radi",
+                f"Sinkronizacija Cliniko -> Solo nije uspjela {failures} puta zaredom.\n\n"
+                f"Zadnja greška: {e}\n\n"
+                f"Dok ovo traje, plaćeni računi se NE fiskaliziraju. Računi se ne gube - "
+                f"poslat će se kad veza proradi - ali provjeri uzrok (istekao API ključ, "
+                f"Solo nedostupan, pukla mreža).",
+            )
+        return False
+
+    if state.get_int("consecutive_failures"):
+        state.set_int("consecutive_failures", 0)
+        alerter.resolved(
+            "sync_failure",
+            "Fiskalizacija ponovno radi",
+            "Sinkronizacija Cliniko -> Solo je ponovno uspjela. Računi koji su čekali "
+            "su u međuvremenu poslani.",
+        )
+    ping_healthcheck(config)
+    return True
+
+
+def report_stuck_invoices(state, config, alerter):
     """Računi koji traže ljudsku pažnju - javljaju se pri svakom pokretanju."""
     pending = state.pending_claims()
     if pending:
+        alerter.problem(
+            "pending:" + ",".join(pending),
+            "Računi zaustavljeni usred slanja",
+            "Ovi Cliniko računi zaustavljeni su usred slanja u Solo:\n\n"
+            + "\n".join(f"  {p}" for p in pending)
+            + "\n\nNe zna se je li dokument u Solu nastao ili nije, pa ih ne ponavljam "
+              "sam (mogao bi nastati duplikat fiskalnog računa). Provjeri u Solu postoji "
+              "li dokument s napomenom \"Cliniko #<id>\" i razriješi prema README-u "
+              "(sekcija \"Zaustavljeni računi\").",
+        )
         print(
             "[UPOZORENJE] Računi zaustavljeni usred slanja: " + ", ".join(pending) + "\n"
             "  Proces je prekinut nakon što je račun zauzet, a prije potvrde da je\n"
@@ -346,25 +422,27 @@ def run_with_lock(config, args):
     )
     solo = SoloClient(api_token=config["solo_api_token"])
     state = StateStore(config["state_db_path"])
+    alerter = Alerter(config, state)
+
+    if not alerter.enabled:
+        print("[UPOZORENJE] `alert_email` nije postavljen - ako fiskalizacija stane, "
+              "nitko o tome neće biti obaviješten.", file=sys.stderr)
 
     if not initialize_watermark(state, args):
         state.close()
         sys.exit(1)
 
-    report_stuck_invoices(state, config)
+    report_stuck_invoices(state, config, alerter)
 
     if not args.loop:
-        run_once(config, cliniko, solo, state)
+        run_pass(config, cliniko, solo, state, alerter)
         state.close()
         return
 
     interval = config.get("poll_interval_seconds", 60)
     print(f"Poprio pokrenut u --loop modu, provjera svakih {interval}s. Ctrl+C za izlaz.")
     while True:
-        try:
-            run_once(config, cliniko, solo, state)
-        except Exception as e:
-            print(f"[GREŠKA] Prolaz sinkronizacije nije uspio: {e}", file=sys.stderr)
+        run_pass(config, cliniko, solo, state, alerter)
         time.sleep(interval)
 
 

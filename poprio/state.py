@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS sync_state (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS alerts (
+    alert_key    TEXT PRIMARY KEY,
+    last_sent_at TEXT NOT NULL
+);
 """
 
 
@@ -149,6 +154,45 @@ class StateStore:
                 "SELECT cliniko_invoice_id FROM processed_invoices WHERE status = 'pending'"
             )
         ]
+
+    def alert_due(self, alert_key, min_interval_hours):
+        """True ako za taj problem još nije poslana obavijest ili je prošlo
+        dovoljno vremena od zadnje. Odmah bilježi slanje, pa isti kvar koji se
+        ponavlja svakih 15 sekundi ne pošalje stotine mailova."""
+        row = self.conn.execute(
+            "SELECT last_sent_at FROM alerts WHERE alert_key = ?", (alert_key,)
+        ).fetchone()
+        if row:
+            due = self.conn.execute(
+                "SELECT ? < datetime('now', ?)", (row[0], f"-{int(min_interval_hours)} hours")
+            ).fetchone()[0]
+            if not due:
+                return False
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO alerts (alert_key, last_sent_at) VALUES (?, datetime('now'))",
+                (alert_key,),
+            )
+        return True
+
+    def alert_was_sent(self, alert_key):
+        return self.conn.execute(
+            "SELECT 1 FROM alerts WHERE alert_key = ?", (alert_key,)
+        ).fetchone() is not None
+
+    def clear_alert(self, alert_key):
+        with self.conn:
+            self.conn.execute("DELETE FROM alerts WHERE alert_key = ?", (alert_key,))
+
+    def get_int(self, key, default=0):
+        row = self.conn.execute("SELECT value FROM sync_state WHERE key = ?", (key,)).fetchone()
+        return int(row[0]) if row else default
+
+    def set_int(self, key, value):
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO sync_state (key, value) VALUES (?, ?)", (key, str(value))
+            )
 
     def get_watermark(self):
         cur = self.conn.execute("SELECT value FROM sync_state WHERE key = 'last_updated_at'")

@@ -82,6 +82,12 @@ Popuni u `config.json`:
   **Usluge -> Tipovi usluga**, otvori uslugu koju koristiš za naplatu
   (npr. "Fizioterapija") i uzmi njen ID (vidljiv u URL-u ili detaljima
   usluge). Ako još nemaš definiranu uslugu, prvo je kreiraj tamo.
+- `alert_email` – adresa na koju stižu obavijesti kad nešto zapne; vidi
+  "Obavijesti kad nešto zapne" niže. Ostaviš li prazno, nitko neće biti
+  obaviješten ako fiskalizacija stane.
+- `healthcheck_url` – URL vanjskog nadzora koji skripta poziva nakon svakog
+  uspješnog prolaza (npr. healthchecks.io). Jedino to može otkriti da je
+  server ugašen ili proces mrtav.
 - `send_pdf_email` + `smtp_*` – podaci za slanje PDF računa pacijentu; ako
   `send_pdf_email` postaviš na `false`, mail se ne šalje (samo fiskalizacija).
   Zadano je postavljeno za Zoho Mail Pro (`smtppro.zoho.com`, port 465,
@@ -240,6 +246,47 @@ samo jedan (provjereno s 8 paralelnih procesa nad istim računom).
 na dva različita servera s istim Solo tokenom — npr. stari server ostane
 raditi nakon preseljenja — ovo ju neće zaustaviti. Kod preseljenja obavezno
 ugasi servis na starom stroju.
+
+## Obavijesti kad nešto zapne
+
+Bez ovoga sve završava u logu koji nitko ne gleda — računi se tiho prestanu
+fiskalizirati, a otkrije se tek kad knjigovođa usporedi promet. Zato postoje
+dvije odvojene stvari, jer pokrivaju različite kvarove:
+
+### 1. Mail obavijesti (`alert_email`)
+
+Skripta šalje mail kad:
+
+- sinkronizacija padne **tri prolaza zaredom** (istekao API ključ, Solo
+  nedostupan, pukla mreža) — jedan pad je obično prolazan i ne budi nikoga
+- neki račun potroši sve pokušaje i ostane nefiskaliziran
+- postoje računi zaustavljeni usred slanja
+
+Isti problem javlja se najviše **jednom u 6 sati**, pa kvar koji traje ne
+pošalje stotine mailova. Kad sinkronizacija proradi, stiže jedna obavijest o
+oporavku. Koriste se isti `smtp_*` podaci kao za slanje računa pacijentima —
+za Zoho treba app-specific lozinka.
+
+Ako `alert_email` ostaviš prazan, skripta pri pokretanju upozori da nitko
+neće biti obaviješten ako fiskalizacija stane.
+
+### 2. Vanjski nadzor (`healthcheck_url`)
+
+**Mail ne može javiti da je skripta mrtva** — ugašen server, ubijen proces
+ili pukla mreža ne šalju mailove o sebi. Za to treba netko izvana tko
+primijeti da se skripta prestala javljati.
+
+Nakon svakog uspješnog prolaza skripta pozove `healthcheck_url`. Besplatan
+servis poput [healthchecks.io](https://healthchecks.io) pošalje ti mail kad
+ta javljanja prestanu stizati:
+
+1. otvori račun i kreiraj novu provjeru ("check")
+2. postavi period na npr. 1 sat uz 30 minuta tolerancije (skripta se javlja
+   puno češće, pa to znači "ako se ne javi cijeli sat, nešto ne valja")
+3. kopiraj ping URL u `healthcheck_url` u `config.json`
+
+Ako ostaviš prazno, javljanje se preskače — ali tad ništa neće primijetiti
+da je server ugašen.
 
 ## Što se događa kad slanje ne uspije
 
