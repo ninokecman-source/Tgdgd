@@ -39,6 +39,9 @@ FAILED_PASSES_BEFORE_ALERT = 3
 # Solo prima najviše 36 stavki po računu (greška 107).
 SOLO_MAX_STAVKI = 36
 
+# Što piše kao kupac kad pacijent u Clinku nema upisano ime.
+KUPAC_BEZ_IMENA = "Klijent"
+
 
 def load_config():
     if not CONFIG_PATH.exists():
@@ -314,6 +317,16 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
         patient_oib = extract_oib(patient, config)
         patient_address = format_address(patient)
 
+        # Ime kupca nije obavezno na računu fizičkoj osobi, ali polje mora biti
+        # popunjeno - pa ide neutralno "Klijent" ako pacijent nema upisano ime.
+        kupac_naziv = patient_name or KUPAC_BEZ_IMENA
+        if not patient_name:
+            print(
+                f"[UPOZORENJE] Cliniko račun #{invoice.get('number')}: pacijent nema "
+                f"upisano ime, na računu će pisati {KUPAC_BEZ_IMENA!r}.",
+                file=sys.stderr,
+            )
+
         invoice_items = cliniko.get_invoice_items(cliniko_id)
         nacin_placanja = detect_nacin_placanja(cliniko_id, invoice_items, config)
         stavke = build_stavke(config, invoice, invoice_items)
@@ -328,7 +341,7 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
                 tip_kupca=config["solo_tip_kupca"],
                 tip_usluge=config["solo_tip_usluge"],
                 nacin_placanja=nacin_placanja,
-                kupac_naziv=patient_name or "Kupac",
+                kupac_naziv=kupac_naziv,
                 kupac_oib=patient_oib,
                 kupac_adresa=patient_address,
                 napomene=napomene,
@@ -340,7 +353,7 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
                 tip_kupca=config["solo_tip_kupca"],
                 tip_usluge=config["solo_tip_usluge"],
                 nacin_placanja=nacin_placanja,
-                kupac_naziv=patient_name or "Kupac",
+                kupac_naziv=kupac_naziv,
                 kupac_oib=patient_oib,
                 kupac_adresa=patient_address,
                 napomene=napomene,

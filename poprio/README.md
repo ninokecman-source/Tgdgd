@@ -521,6 +521,10 @@ Clinikovog popisa usluga, ne slobodan upis teksta.
 
 ## OIB i adresa kupca na računu
 
+**Ime** dolazi iz imena i prezimena pacijenta. Ako pacijent u Clinku nema
+upisano ime, na računu piše **"Klijent"** i to se javlja u logu — ime kupca
+nije obavezno na računu fizičkoj osobi, ali polje mora biti popunjeno.
+
 **Adresa** dolazi iz standardnih Cliniko polja na kartici pacijenta
 (Address 1/2, Post code, City) — ništa se ne treba podešavati.
 
