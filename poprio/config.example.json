@@ -5,6 +5,9 @@
   "lookback_overlap_seconds": 180,
   "max_retry_attempts": 5,
 
+  "cliniko_oib_section": "Fiskalizacija",
+  "cliniko_oib_field": "OIB",
+
   "solo_api_token": "tvoj_solo_api_token",
   "solo_document_type": "racun",
   "solo_tip_racuna": 3,

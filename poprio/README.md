@@ -65,6 +65,10 @@ Popuni u `config.json`:
 - `max_retry_attempts` – koliko puta ponoviti račun čije slanje nije uspjelo
   prije nego se odustane i javi (zadano 5); vidi "Što se događa kad slanje
   ne uspije" niže
+- `cliniko_oib_section` + `cliniko_oib_field` – naziv sekcije i polja na
+  kartici pacijenta u kojem klinika drži OIB (zadano "Fiskalizacija" / "OIB");
+  vidi "OIB i adresa kupca na računu" niže. Ako to polje ne postoji, OIB se
+  nikad ne šalje i skripta radi normalno.
 - `solo_api_token` – Solo API token (korak 3)
 - `solo_document_type` – `"racun"` (zadano) kreira odmah fiskalizirani
   račun; `"ponuda"` kreira nefiskalni nacrt koji se ručno pretvara u Solo
@@ -474,10 +478,15 @@ skripta u logu ispravno prijavi odgovarajući način plaćanja — pogrešan
 `nacin_placanja` na stvarnom `racun`-u znači formalni storno + novi račun,
 ne tihu ispravku.
 
-**Provjeri i da se oznaka može dodati na već plaćen račun** u Clinku. Ako
-Cliniko to ne dopušta bez uklanjanja plaćanja, osoblje mora dodati oznaku
-*prije* nego račun označi plaćenim — inače ispravak nije moguć i račun
-ostaje zauvijek u čekanju.
+### Tijek ispravka u praksi
+
+Osoblje propust primijeti **u Solu** — računa jednostavno nema. Tada otvore
+taj račun u Clinku i dodaju stavku načina plaćanja; skripta ga pri sljedećem
+prolazu fiskalizira sama. Mail s popisom računa koji čekaju je drugi kanal za
+isto, koristan kad nitko ne gleda Solo.
+
+Oznaka se može dodati i na račun koji je **već označen plaćenim** — to je
+ustaljena praksa i ispravak je moguć naknadno.
 
 **Napomena o vidljivosti:** ta stavka od 0 EUR pojavljuje se i na
 Clinikovom vlastitom PDF računu koji pacijent može zatražiti (kao redak
@@ -512,22 +521,34 @@ Clinikovog popisa usluga, ne slobodan upis teksta.
 
 ## OIB i adresa kupca na računu
 
-Skripta automatski šalje u Solo i OIB i adresu pacijenta, ako postoje:
+**Adresa** dolazi iz standardnih Cliniko polja na kartici pacijenta
+(Address 1/2, Post code, City) — ništa se ne treba podešavati.
 
-- **Adresa** dolazi iz standardnih Cliniko polja na kartici pacijenta
-  (Address 1/2, Post code, City) — ništa dodatno ne treba podesiti.
-- **OIB** dolazi iz custom field sekcije **"Fiskalizacija"**, polje
-  **"OIB"**, na kartici pacijenta u Clinku (to polje se u Clinku prikazuje
-  samo kad je ispunjeno). Ako pacijent nema upisan OIB, račun se svejedno
-  šalje — samo bez tog podatka.
+**OIB nije obavezan** na računu fizičkoj osobi i većina pacijenata ga neće
+imati upisanog. Popunjava se samo kad pacijent traži OIB na računu (npr. za
+dopunsko osiguranje ili poreznu olakšicu). Račun bez OIB-a je posve uredan.
 
-**Napomena:** Cliniko javno ne dokumentira točan naziv JSON ključeva unutar
-custom field zapisa (`label` vs `name`, `response` vs `value`) — kod u
-`sync.py::extract_oib` provjerava obje varijante, ali svakako **testiraj na
-jednom stvarnom pacijentu s upisanim OIB-om** prije nego se osloniš na ovo.
-Ako OIB ne stigne u Solo, ispiši `patient["custom_fields"]` za tog
-pacijenta (u `run_once()`, odmah nakon `cliniko.get_patient(...)`) i
-prilagodi ključeve u `extract_oib`.
+### Postavljanje polja za OIB u Clinku
+
+Cliniko nema ugrađeno polje za OIB, pa se koristi vlastito polje na kartici
+pacijenta. U Clinku pod **Settings → Patient details / Custom fields**
+kreiraj sekciju **"Fiskalizacija"** s tekstualnim poljem **"OIB"**. Ako ih
+nazoveš drugačije, uskladi `cliniko_oib_section` i `cliniko_oib_field` u
+`config.json`.
+
+Dok to polje ne postoji, OIB se jednostavno nikad ne šalje — skripta radi
+normalno.
+
+### Provjera ispravnosti
+
+Upisani OIB se prije slanja provjerava kontrolnom znamenkom (ISO 7064,
+MOD 11,10). Ako ne prođe — tipfeler, zamijenjene znamenke, kriva duljina —
+**račun se svejedno fiskalizira, ali bez OIB-a**, uz upozorenje u logu koje
+imenuje pacijenta i spornu vrijednost.
+
+Razlog: krivi OIB na fiskalnom računu ispravlja se stornom, dok je račun bez
+OIB-a za fizičku osobu uredan. Blokirati fiskalizaciju zbog tipfelera bilo bi
+skuplje od izostavljanja podatka.
 
 ## Poznata svojstva Solo API-ja
 

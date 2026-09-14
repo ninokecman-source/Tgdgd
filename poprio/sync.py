@@ -54,22 +54,50 @@ def extract_patient_id(invoice):
     return match.group(1) if match else None
 
 
-def extract_oib(patient, section_name="Fiskalizacija", field_label="OIB"):
-    """Cliniko nema ugrađeno polje za OIB - klinika ga drži kao custom field
-    (sekcija "Fiskalizacija", polje "OIB"). Cliniko-ova javna dokumentacija ne
-    navodi točan naziv ključeva unutar `fields[]`, pa ova funkcija provjerava
-    oba plauzibilna varijantna naziva (`label`/`name` i `response`/`value`).
-    Provjeri na jednom stvarnom pacijentu s upisanim OIB-om prije nego se
-    osloniš na ovo u produkciji - ako ne vrati ništa, ispiši
-    `patient["custom_fields"]` i prilagodi ključeve."""
-    sections = (patient.get("custom_fields") or {}).get("sections") or []
-    for section in sections:
+def valid_oib(oib):
+    """Provjera kontrolne znamenke OIB-a (ISO 7064, MOD 11,10).
+
+    Krivo prepisan OIB na fiskalnom računu gori je od nikakvog - ispravlja se
+    stornom, dok je račun bez OIB-a za fizičku osobu posve uredan."""
+    if not (oib.isdigit() and len(oib) == 11):
+        return False
+    ostatak = 10
+    for znamenka in oib[:10]:
+        ostatak = (ostatak + int(znamenka)) % 10 or 10
+        ostatak = (ostatak * 2) % 11
+    kontrolna = (11 - ostatak) % 10
+    return kontrolna == int(oib[10])
+
+
+def extract_oib(patient, config):
+    """OIB pacijenta iz custom fielda na kartici u Clinku.
+
+    Cliniko nema ugrađeno polje za OIB pa ga klinika drži kao vlastito polje
+    (zadano: sekcija "Fiskalizacija", polje "OIB"). Za fizičke osobe OIB nije
+    obavezan, pa je uredno da ga većina pacijenata nema - popunjava se samo
+    kad pacijent traži OIB na računu.
+
+    Vraća None ako polje ne postoji, prazno je ili sadrži neispravan OIB."""
+    section_name = config.get("cliniko_oib_section", "Fiskalizacija")
+    field_name = config.get("cliniko_oib_field", "OIB")
+
+    for section in (patient.get("custom_fields") or {}).get("sections") or []:
         if section.get("name") != section_name:
             continue
         for field in section.get("fields") or []:
-            label = field.get("label") or field.get("name")
-            if label == field_label:
-                return field.get("response") or field.get("value") or None
+            if field.get("name") != field_name:
+                continue
+            oib = (field.get("value") or "").strip()
+            if not oib:
+                return None
+            if not valid_oib(oib):
+                print(
+                    f"[UPOZORENJE] Pacijent {patient.get('id')}: OIB {oib!r} nije "
+                    f"ispravan (kontrolna znamenka) - šaljem račun bez OIB-a.",
+                    file=sys.stderr,
+                )
+                return None
+            return oib
     return None
 
 
@@ -283,7 +311,7 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
         patient = cliniko.get_patient(patient_id) if patient_id else {}
         patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip()
         patient_email = patient.get("email")
-        patient_oib = extract_oib(patient)
+        patient_oib = extract_oib(patient, config)
         patient_address = format_address(patient)
 
         invoice_items = cliniko.get_invoice_items(cliniko_id)
