@@ -42,6 +42,11 @@ SOLO_MAX_STAVKI = 36
 # Što piše kao kupac kad pacijent u Clinku nema upisano ime.
 KUPAC_BEZ_IMENA = "Klijent"
 
+# Način plaćanja na R1 ponudi kad na računu nema oznake: tvrtke redovito plaćaju
+# po ponudi, transakcijski. Ponuda nije fiskalni dokument pa vrijednost nema
+# posljedica, a osoblje je potvrđuje pri pretvaranju u račun.
+R1_NACIN_PLACANJA = 1
+
 
 OBAVEZNI_KLJUCEVI = (
     "cliniko_api_key",
@@ -165,7 +170,13 @@ def extract_billable_item_id(item):
 
 
 def marker_item_ids(config):
-    return {str(v).strip() for v in config["solo_nacin_placanja_item_ids"].values()}
+    """Sve pomoćne oznake od 0 EUR - načini plaćanja i R1. Nijedna ne ide na
+    dokument u Solu, služe samo za prepoznavanje."""
+    return {
+        str(v).strip() for v in config["solo_nacin_placanja_item_ids"].values()
+    } | {
+        str(v).strip() for v in config.get("cliniko_r1_item_ids", {}).values()
+    }
 
 
 class MissingPaymentMarker(Exception):
@@ -200,31 +211,23 @@ class NothingToInvoice(Exception):
     """Na računu nema nijedne stvarne stavke - nema se što fiskalizirati."""
 
 
-class DeliberatelySkipped(Exception):
-    """Račun je u Clinku označen da ga skripta ne dira (npr. R1 na tvrtku)."""
+def r1_marker_name(invoice_items, config):
+    """Naziv oznake ako je račun označen kao R1 (na tvrtku), inače None.
 
-
-def skip_item_ids(config):
-    return {str(v).strip() for v in config.get("cliniko_skip_item_ids", {}).values()}
-
-
-def check_skip_marker(invoice_items, config):
-    """Račun s oznakom za preskakanje ne ide u Solo uopće.
-
-    Služi za račune na tvrtku (R1): Solo za B2B traži naziv i OIB tvrtke te
-    KPD šifru po stavci, a ništa od toga ne postoji u Clinku - pa se takav
-    račun izdaje ručno u Solu. Oznaka je obična stavka od 0 EUR, ista mehanika
-    kao kod načina plaćanja."""
-    skip = skip_item_ids(config)
-    if not skip:
-        return
-    nazivi = {str(v).strip(): k for k, v in config.get("cliniko_skip_item_ids", {}).items()}
+    Za B2B račun Solo traži naziv i OIB tvrtke te KPD šifru po stavci, a ništa
+    od toga ne postoji u Clinku. Zato se takav račun ne fiskalizira nego se u
+    Solo šalje kao **ponuda**: svi podaci (kupac, stavke, iznosi) su prenijeti,
+    a osoblje u Solu samo dopuni podatke tvrtke i pretvori je u R1 račun."""
+    oznake = {
+        str(v).strip(): k for k, v in config.get("cliniko_r1_item_ids", {}).items()
+    }
+    if not oznake:
+        return None
     for item in invoice_items:
-        item_id = extract_billable_item_id(item)
-        if item_id in skip:
-            raise DeliberatelySkipped(
-                f"označen kao '{nazivi.get(item_id, 'preskoči')}' - izdaje se ručno u Solu"
-            )
+        naziv = oznake.get(extract_billable_item_id(item))
+        if naziv:
+            return naziv
+    return None
 
 
 def line_total(item):
@@ -423,10 +426,24 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
             )
 
         invoice_items = cliniko.get_invoice_items(cliniko_id)
-        # Provjera preskakanja ide PRVA - račun na tvrtku nema ni oznaku načina
-        # plaćanja, pa bi inače završio u čekanju na ispravak koji nikad ne dolazi.
-        check_skip_marker(invoice_items, config)
-        nacin_placanja = detect_nacin_placanja(cliniko_id, invoice_items, config)
+
+        # Račun na tvrtku (R1) nikad se ne fiskalizira - ide kao ponuda, bez
+        # obzira na solo_document_type.
+        r1 = r1_marker_name(invoice_items, config)
+        if r1:
+            document_type = "ponuda"
+
+        try:
+            nacin_placanja = detect_nacin_placanja(cliniko_id, invoice_items, config)
+        except MissingPaymentMarker:
+            # Račun na tvrtku obično nema oznaku načina plaćanja - tvrtka plaća
+            # naknadno, po ponudi. Ponuda nije fiskalni dokument pa vrijednost
+            # nema posljedica, a osoblje je ionako potvrđuje pri pretvaranju u
+            # račun. Kod običnog računa se i dalje čeka ispravak.
+            if not r1:
+                raise
+            nacin_placanja = R1_NACIN_PLACANJA
+
         stavke = build_stavke(config, invoice, invoice_items)
 
         # Oznaka izvornog Cliniko računa ostaje zapisana na samom Solo dokumentu
@@ -457,22 +474,6 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
                 napomene=napomene,
                 stavke=stavke,
             )
-    except DeliberatelySkipped as e:
-        # Namjerna odluka osoblja, ne greška. Zatvara se trajno - nikad se ne
-        # ponavlja - ali se jednom javi mailom, jer osoba koja doda oznaku u
-        # Clinku nije nužno ona koja izdaje račun u Solu.
-        state.mark_skipped(cliniko_id, e)
-        print(f"[PRESKOČENO] Cliniko račun #{invoice.get('number')}: {e}")
-        if alerter:
-            alerter.problem(
-                f"skipped:{cliniko_id}",
-                f"Račun #{invoice.get('number')} treba ručno izdati u Solu",
-                f"Cliniko račun #{invoice.get('number')} "
-                f"({invoice.get('total_amount')} EUR) {e}.\n\n"
-                f"Skripta ga namjerno nije prenijela u Solo. Provjeri je li izdan "
-                f"ručno — ovo je jedina obavijest, neće se ponavljati.",
-            )
-        return False
     except MissingPaymentMarker as e:
         # Nije greška nego nedovršen posao u Clinku. Ne troši pokušaje i
         # ponavlja se neograničeno - čim netko doda oznaku, račun prođe sam.
@@ -492,8 +493,22 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
     broj = racun.get("broj_racuna") or racun.get("broj_ponude")
     state.mark_done(cliniko_id, racun)
     print(f"Cliniko #{cliniko_id} -> Solo {document_type} {broj} "
-          f"({len(stavke)} stavki, način plaćanja {nacin_placanja}, "
-          f"JIR {racun.get('jir', '-')})")
+          f"({len(stavke)} stavki, način plaćanja {nacin_placanja}"
+          f"{', R1' if r1 else ''}, JIR {racun.get('jir', '-')})")
+
+    if r1 and alerter:
+        # Javlja se jednom po računu: osoba koja u Clinku doda oznaku R1 nije
+        # nužno ona koja u Solu dovršava račun za tvrtku.
+        alerter.problem(
+            f"r1:{cliniko_id}",
+            f"Ponuda {broj} čeka pretvaranje u R1 račun",
+            f"Cliniko račun #{invoice.get('number')} označen je kao "
+            f"'{r1}' pa je u Solo prenesen kao ponuda {broj} "
+            f"({invoice.get('total_amount')} EUR), a ne kao fiskalizirani račun.\n\n"
+            f"U Solu otvori tu ponudu, dopuni naziv tvrtke, OIB i KPD šifru, i "
+            f"pretvori je u R1 račun.\n\n"
+            f"Ovo je jedina obavijest za taj račun, neće se ponavljati.",
+        )
 
     # Ponuda nije fiskalni dokument (nema JIR/ZKI) - pacijentu se šalje samo
     # kad je stvarno kreiran fiskalizirani racun, da slučajno ne dobije
@@ -609,8 +624,8 @@ def verify_payment_markers(config, cliniko, alerter):
         (naziv_koda.get(int(code), code), item_id)
         for code, item_id in config["solo_nacin_placanja_item_ids"].items()
     ] + [
-        (f"preskoči: {naziv}", item_id)
-        for naziv, item_id in config.get("cliniko_skip_item_ids", {}).items()
+        (f"R1: {naziv}", item_id)
+        for naziv, item_id in config.get("cliniko_r1_item_ids", {}).items()
     ]
 
     nedostaju = []
@@ -628,8 +643,8 @@ def verify_payment_markers(config, cliniko, alerter):
             "Ove oznake načina plaćanja iz config.json ne postoje u Clinku:\n\n"
             + "\n".join(f"  {n}" for n in nedostaju)
             + "\n\nRačuni s tim načinom plaćanja neće se moći fiskalizirati nego "
-              "će čekati ispravak, a račun označen za preskakanje (npr. R1 na "
-              "tvrtku) mogao bi biti poslan u Solo kao da je za fizičku osobu. "
+              "će čekati ispravak, a račun na tvrtku bio bi fiskaliziran kao da "
+              "je za fizičku osobu umjesto da ode kao ponuda. "
               "Provjeri ID-eve naredbom:\n"
               "  python sync.py --list-billable-items"
         )

@@ -7,7 +7,7 @@
 
   "cliniko_oib_section": "Fiskalizacija",
   "cliniko_oib_field": "OIB",
-  "cliniko_skip_item_ids": {
+  "cliniko_r1_item_ids": {
     "R1 račun": "ID_STAVKE_IZ_--list-billable-items"
   },
 
