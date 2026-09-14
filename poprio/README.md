@@ -75,10 +75,10 @@ Popuni u `config.json`:
   `tip_kupca=1` znači B2C/fizička osoba, a `solo_default_tax_rate=0` znači
   bez PDV-a (Solo API prihvaća 0/5/13/25 kao stopu). Ako si ipak u sustavu
   PDV-a, promijeni na stvarnu stopu (npr. 25).
-- `solo_nacin_placanja_item_ids` + `solo_nacin_placanja_default` – kako
-  skripta bira kartice (3) / gotovinu (2) / transakcijski (1), po
-  računu, vidi "Kako se određuje način plaćanja" niže. ID-eve dobiješ
-  naredbom `python sync.py --list-billable-items`.
+- `solo_nacin_placanja_item_ids` – kataloške stavke po kojima skripta
+  prepoznaje kartice (3) / gotovinu (2) / transakcijski (1); vidi "Kako se
+  određuje način plaćanja" niže. ID-eve dobiješ naredbom
+  `python sync.py --list-billable-items`.
 - `solo_default_service_description` – opis koji se stavlja na Solo stavku
   **samo ako** stavka na Cliniko računu nema naziv; inače se prenosi stvarni
   naziv usluge (vidi "Što ide na Solo račun" niže)
@@ -336,6 +336,8 @@ Svaki račun je u jednom od stanja:
 | `done` | dokument u Solu postoji | ništa više |
 | `failed`, pokušaji < `max_retry_attempts` | slanje palo, npr. Solo nedostupan | ponavlja u svakom prolazu |
 | `failed`, pokušaji potrošeni | ne ide ni nakon više pokušaja | staje i javlja pri svakom pokretanju |
+| `waiting` | nema oznake načina plaćanja | ponavlja neograničeno, javlja mailom |
+| `skipped` | nema nijedne stavke osim oznake | ništa — nema se što fiskalizirati |
 | `pending` | proces prekinut **usred** slanja | ne dira — traži ljudsku provjeru |
 
 ### Zaglavljeni računi (potrošeni pokušaji)
@@ -447,16 +449,35 @@ plaćanja: Gotovina"). Skripta dohvaća stavke računa
 kataloške stavke iz configa. Oznaka **ne ide** na Solo dokument i ne utječe
 na iznos.
 
-Ako nijedna stavka na računu nije oznaka, koristi se
-`solo_nacin_placanja_default`, uz upozorenje u ispisu (`journalctl -u
-poprio` ili `sync.log`) — to je znak da je osoblje zaboravilo dodati
-stavku na taj račun.
+### Kad oznake nema
+
+Račun bez oznake se **ne fiskalizira** — skripta ne pogađa način plaćanja.
+Pogrešan način plaćanja na fiskalnom računu ispravlja se samo stornom, pa je
+čekanje jeftinije od nagađanja.
+
+Takav račun ide u stanje `waiting` i:
+
+- **ponavlja se neograničeno**, bez trošenja pokušaja — ispravak radi čovjek
+  i može potrajati danima
+- **čim netko u Clinku doda oznaku, račun se fiskalizira sam** pri sljedećem
+  prolazu, s ispravnim načinom plaćanja; ništa se ne mora ručno pokretati
+- javlja se **mailom s popisom brojeva računa** koje treba ispraviti (npr.
+  „račun #87, čeka od 2026-09-14"), najviše jednom dnevno za isti popis —
+  novi račun na popisu javlja se odmah
+
+Bez tog maila osoblje ne bi imalo kako saznati: skripta ne može ništa
+upisati natrag u Cliniko, a log nitko ne gleda.
 
 **Prije puštanja u pogon (posebno ako je `solo_document_type: "racun"`):**
 napravi par test računa u Clinku sa svakom od tri stavke i provjeri da
 skripta u logu ispravno prijavi odgovarajući način plaćanja — pogrešan
 `nacin_placanja` na stvarnom `racun`-u znači formalni storno + novi račun,
 ne tihu ispravku.
+
+**Provjeri i da se oznaka može dodati na već plaćen račun** u Clinku. Ako
+Cliniko to ne dopušta bez uklanjanja plaćanja, osoblje mora dodati oznaku
+*prije* nego račun označi plaćenim — inače ispravak nije moguć i račun
+ostaje zauvijek u čekanju.
 
 **Napomena o vidljivosti:** ta stavka od 0 EUR pojavljuje se i na
 Clinikovom vlastitom PDF računu koji pacijent može zatražiti (kao redak

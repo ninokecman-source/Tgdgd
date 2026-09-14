@@ -84,6 +84,10 @@ def marker_item_ids(config):
     return {str(v).strip() for v in config["solo_nacin_placanja_item_ids"].values()}
 
 
+class MissingPaymentMarker(Exception):
+    """Na računu nema oznake načina plaćanja - čeka ispravak u Clinku."""
+
+
 def detect_nacin_placanja(invoice_id, invoice_items, config):
     """Cliniko API ne šalje način plaćanja kao posebno polje na računu, ali ga
     osoblje označava dodavanjem posebne stavke od 0 EUR na račun (npr. "Način
@@ -94,19 +98,18 @@ def detect_nacin_placanja(invoice_id, invoice_items, config):
     usluge, pa bi se buduća usluga mogla sudariti s oznakom - a ID je trajan i
     jedinstven i preživi preimenovanje stavke.
 
-    Ako nijedna stavka na računu ne odgovara, vraća `solo_nacin_placanja_default`
-    i to jasno ispisuje u logu."""
+    Ako oznake nema, NE pogađa se - diže se MissingPaymentMarker, račun ostaje
+    nefiskaliziran i čeka da ga netko ispravi u Clinku. Pogrešan način plaćanja
+    na fiskalnom računu ispravlja se samo stornom, pa je čekanje jeftinije od
+    nagađanja."""
     present = {extract_billable_item_id(item) for item in invoice_items}
     for solo_code, billable_item_id in config["solo_nacin_placanja_item_ids"].items():
         if str(billable_item_id).strip() in present:
             return int(solo_code)
 
-    default = config["solo_nacin_placanja_default"]
-    print(
-        f"[UPOZORENJE] Cliniko račun {invoice_id}: nijedna stavka računa nije "
-        f"oznaka načina plaćanja, koristim zadani ({default})."
+    raise MissingPaymentMarker(
+        "nema stavke načina plaćanja - dodaj je na račun u Clinku"
     )
-    return default
 
 
 class NothingToInvoice(Exception):
@@ -315,6 +318,12 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
                 napomene=napomene,
                 stavke=stavke,
             )
+    except MissingPaymentMarker as e:
+        # Nije greška nego nedovršen posao u Clinku. Ne troši pokušaje i
+        # ponavlja se neograničeno - čim netko doda oznaku, račun prođe sam.
+        state.mark_waiting(cliniko_id, invoice.get("number"), e)
+        print(f"[ČEKA] Cliniko račun #{invoice.get('number')}: {e}")
+        return False
     except NothingToInvoice as e:
         # Nije greška nego račun bez sadržaja (npr. samo oznaka načina plaćanja).
         # Ponavljanje ne bi ništa promijenilo, pa se zatvara kao preskočen.
@@ -402,10 +411,10 @@ def run_once(config, cliniko, solo, state, alerter=None):
 
     max_attempts = config.get("max_retry_attempts", 5)
     summary = f"Gotovo. Novo poslano: {processed_count}."
-    waiting = len(state.failed_for_retry(max_attempts))
+    ceka_oznaku = len(state.waiting_invoices())
     stuck = len(state.exhausted_failures(max_attempts))
-    if waiting:
-        summary += f" Čeka ponovni pokušaj: {waiting}."
+    if ceka_oznaku:
+        summary += f" Čeka oznaku plaćanja: {ceka_oznaku}."
     if stuck:
         summary += f" Zaglavljeno: {stuck}."
     print(summary)
@@ -442,8 +451,8 @@ def verify_payment_markers(config, cliniko, alerter):
         poruka = (
             "Ove oznake načina plaćanja iz config.json ne postoje u Clinku:\n\n"
             + "\n".join(f"  {n}" for n in nedostaju)
-            + "\n\nRačuni s tim načinom plaćanja bit će fiskalizirani sa zadanim "
-              "načinom, što je kriv podatak. Provjeri ID-eve naredbom:\n"
+            + "\n\nRačuni s tim načinom plaćanja neće se moći fiskalizirati nego "
+              "će čekati ispravak. Provjeri ID-eve naredbom:\n"
               "  python sync.py --list-billable-items"
         )
         print(f"[UPOZORENJE] {poruka}", file=sys.stderr)
@@ -507,6 +516,10 @@ def run_pass(config, cliniko, solo, state, alerter):
             )
         return False
 
+    # I u --loop modu, koji radi tjednima: novi račun bez oznake mora se javiti
+    # odmah, ne tek pri sljedećem pokretanju.
+    report_waiting_invoices(state, alerter)
+
     if state.get_int("consecutive_failures"):
         state.set_int("consecutive_failures", 0)
         alerter.resolved(
@@ -519,8 +532,42 @@ def run_pass(config, cliniko, solo, state, alerter):
     return True
 
 
+def report_waiting_invoices(state, alerter):
+    """Računi koji čekaju da im netko doda oznaku načina plaćanja.
+
+    Skripta ne može ništa upisati natrag u Cliniko, a log nitko ne gleda - pa
+    je mail jedini način da osoblje sazna koje račune treba ispraviti. Ključ
+    obavijesti sadrži popis računa, pa novi račun na popisu javlja odmah, a
+    nepromijenjen popis najviše jednom dnevno."""
+    waiting = state.waiting_invoices()
+    if not waiting:
+        return
+
+    redci = [
+        f"  račun #{broj or '?'}  (čeka od {od})"
+        for _, broj, od in waiting
+    ]
+    print(f"[ČEKA] {len(waiting)} računa čeka oznaku načina plaćanja:", file=sys.stderr)
+    for r in redci:
+        print(r, file=sys.stderr)
+
+    alerter.problem(
+        "waiting:" + ",".join(sorted(str(w[0]) for w in waiting)),
+        f"{len(waiting)} računa čeka oznaku načina plaćanja",
+        "Ovi Cliniko računi nisu fiskalizirani jer im nedostaje stavka načina "
+        "plaćanja:\n\n" + "\n".join(redci) + "\n\n"
+        "Otvori svaki u Clinku i dodaj odgovarajuću stavku (Kartično / Gotovinsko "
+        "/ Transkacijsko plaćanje). Čim je dodaš, račun se fiskalizira sam - ništa "
+        "drugo ne treba.\n\n"
+        "Dok oznake nema, račun se namjerno ne fiskalizira: pogrešan način "
+        "plaćanja na fiskalnom računu ispravlja se samo stornom.",
+        min_interval_hours=24,
+    )
+
+
 def report_stuck_invoices(state, config, alerter):
     """Računi koji traže ljudsku pažnju - javljaju se pri svakom pokretanju."""
+    report_waiting_invoices(state, alerter)
     pending = state.pending_claims()
     if pending:
         alerter.problem(

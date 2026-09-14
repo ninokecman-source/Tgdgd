@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS processed_invoices (
     processed_at        TEXT NOT NULL DEFAULT (datetime('now')),
     status              TEXT NOT NULL DEFAULT 'done',
     attempts            INTEGER NOT NULL DEFAULT 0,
-    last_error          TEXT
+    last_error          TEXT,
+    cliniko_number      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sync_state (
@@ -61,6 +62,7 @@ class StateStore:
             ("status", "TEXT NOT NULL DEFAULT 'done'"),
             ("attempts", "INTEGER NOT NULL DEFAULT 0"),
             ("last_error", "TEXT"),
+            ("cliniko_number", "TEXT"),
         ):
             if name not in existing:
                 self.conn.execute(f"ALTER TABLE processed_invoices ADD COLUMN {name} {definition}")
@@ -94,15 +96,41 @@ class StateStore:
             )
 
     def claim_retry(self, cliniko_invoice_id):
-        """Zauzima ranije neuspjeli račun za ponovni pokušaj. Kao i `claim`,
-        kroz ovo može proći samo jedan proces."""
+        """Zauzima račun koji čeka ponovni pokušaj - bilo da je ranije pao, bilo
+        da čeka oznaku načina plaćanja. Kao i `claim`, kroz ovo može proći samo
+        jedan proces."""
         with self.conn:
             cur = self.conn.execute(
                 """UPDATE processed_invoices SET status = 'pending'
-                   WHERE cliniko_invoice_id = ? AND status = 'failed'""",
+                   WHERE cliniko_invoice_id = ? AND status IN ('failed', 'waiting')""",
                 (str(cliniko_invoice_id),),
             )
         return cur.rowcount == 1
+
+    def mark_waiting(self, cliniko_invoice_id, cliniko_number, reason):
+        """Račun koji se NE smije fiskalizirati dok ga netko ne ispravi u Clinku
+        (nema oznaku načina plaćanja).
+
+        Za razliku od neuspjeha, ovo ne troši pokušaje: ispravak radi čovjek i
+        može potrajati danima, a čim se oznaka doda račun prolazi sam."""
+        with self.conn:
+            self.conn.execute(
+                """UPDATE processed_invoices
+                   SET status = 'waiting', last_error = ?, cliniko_number = ?,
+                       processed_at = datetime('now')
+                   WHERE cliniko_invoice_id = ?""",
+                (str(reason)[:500], str(cliniko_number), str(cliniko_invoice_id)),
+            )
+
+    def waiting_invoices(self):
+        """Računi koji čekaju ispravak u Clinku, najstariji prvi."""
+        return list(
+            self.conn.execute(
+                """SELECT cliniko_invoice_id, cliniko_number, processed_at
+                   FROM processed_invoices WHERE status = 'waiting'
+                   ORDER BY processed_at"""
+            )
+        )
 
     def mark_failed(self, cliniko_invoice_id, error):
         """Bilježi neuspjeh i broji pokušaje. Zapis OSTAJE u bazi - tako račun
@@ -136,11 +164,13 @@ class StateStore:
             )
 
     def failed_for_retry(self, max_attempts):
+        """Računi za ponovni pokušaj: oni koji su pali i još imaju pokušaja, te
+        oni koji čekaju oznaku (njih se pokušava neograničeno)."""
         return [
             row[0]
             for row in self.conn.execute(
                 """SELECT cliniko_invoice_id FROM processed_invoices
-                   WHERE status = 'failed' AND attempts < ?
+                   WHERE (status = 'failed' AND attempts < ?) OR status = 'waiting'
                    ORDER BY processed_at""",
                 (max_attempts,),
             )
