@@ -62,6 +62,9 @@ Popuni u `config.json`:
 - `poll_interval_seconds` – koliko često (u sekundama) skripta u `--loop`
   modu provjerava Cliniko za nove plaćene račune (zadano 15; može i niže,
   vidi gore)
+- `max_retry_attempts` – koliko puta ponoviti račun čije slanje nije uspjelo
+  prije nego se odustane i javi (zadano 5); vidi "Što se događa kad slanje
+  ne uspije" niže
 - `solo_api_token` – Solo API token (korak 3)
 - `solo_document_type` – `"racun"` (zadano) kreira odmah fiskalizirani
   račun; `"ponuda"` kreira nefiskalni nacrt koji se ručno pretvara u Solo
@@ -238,7 +241,38 @@ na dva različita servera s istim Solo tokenom — npr. stari server ostane
 raditi nakon preseljenja — ovo ju neće zaustaviti. Kod preseljenja obavezno
 ugasi servis na starom stroju.
 
-## Zaustavljeni računi
+## Što se događa kad slanje ne uspije
+
+Neuspjeli račun **ne ovisi o vremenskom prozoru upita**. Zapisuje se u bazu
+i ponavlja po ID-u, pa ga skripta neće izgubiti ni kad oznaka "obrađeno do"
+odmakne preko njega (npr. Solo bude nedostupan pola sata, a u međuvremenu
+stignu noviji računi).
+
+Svaki račun je u jednom od stanja:
+
+| Stanje | Značenje | Što skripta radi |
+|---|---|---|
+| `done` | dokument u Solu postoji | ništa više |
+| `failed`, pokušaji < `max_retry_attempts` | slanje palo, npr. Solo nedostupan | ponavlja u svakom prolazu |
+| `failed`, pokušaji potrošeni | ne ide ni nakon više pokušaja | staje i javlja pri svakom pokretanju |
+| `pending` | proces prekinut **usred** slanja | ne dira — traži ljudsku provjeru |
+
+### Zaglavljeni računi (potrošeni pokušaji)
+
+Skripta ih više ne pokušava sama jer uzrok očito nije prolazan. Log kaže
+koja je greška. Kad ukloniš uzrok, vrati ih u red za ponovni pokušaj tako
+da im poništiš brojač:
+
+```bash
+sudo -u poprio sqlite3 /var/lib/poprio/state.sqlite3 \
+  "SELECT cliniko_invoice_id, attempts, last_error FROM processed_invoices WHERE status='failed';"
+
+# nakon što je uzrok riješen - vrati u red
+sudo -u poprio sqlite3 /var/lib/poprio/state.sqlite3 \
+  "UPDATE processed_invoices SET attempts=0 WHERE cliniko_invoice_id='<id>';"
+```
+
+### Zaustavljeni računi (prekid usred slanja)
 
 Ako proces bude prekinut (reboot, OOM, `kill`) točno između zauzimanja
 računa i potvrde da je dokument nastao, zapis ostane u stanju `pending`.
@@ -258,14 +292,16 @@ sudo -u poprio sqlite3 /var/lib/poprio/state.sqlite3 \
 sudo -u poprio sqlite3 /var/lib/poprio/state.sqlite3 \
   "UPDATE processed_invoices SET status='done' WHERE cliniko_invoice_id='<id>';"
 
-# dokumenta NEMA u Solu -> obriši zapis, sljedeći prolaz će ga poslati
+# dokumenta NEMA u Solu -> vrati ga u red za slanje
 sudo -u poprio sqlite3 /var/lib/poprio/state.sqlite3 \
-  "DELETE FROM processed_invoices WHERE cliniko_invoice_id='<id>' AND status='pending';"
+  "UPDATE processed_invoices SET status='failed', attempts=0
+   WHERE cliniko_invoice_id='<id>' AND status='pending';"
 ```
 
-**Razriješi to isti dan.** Ako obrišeš zapis, a oznaka "obrađeno do" je u
-međuvremenu odmakla preko tog računa, sljedeći prolaz ga više neće vidjeti
-i račun ostaje nefiskaliziran.
+Zapis se vraća u stanje `failed` s poništenim brojačem, **ne briše se** —
+tako ga sljedeći prolaz dohvaća po ID-u kroz mehanizam ponovnih pokušaja,
+neovisno o tome je li oznaka "obrađeno do" već odmakla preko njega. Obrisan
+zapis bi se mogao poslati samo ako je račun još unutar vremenskog prozora.
 
 ## Kako se određuje način plaćanja
 

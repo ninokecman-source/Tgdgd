@@ -20,15 +20,14 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import requests
-
 from cliniko_client import ClinikoClient
 from lock import AlreadyRunning, single_instance
-from solo_client import SoloClient, SoloAPIError
+from solo_client import SoloClient
 from state import StateStore
 from mailer import send_invoice_pdf
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
+ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 
 def load_config():
@@ -134,31 +133,43 @@ def initialize_watermark(state, args):
         )
         return False
 
-    stamp = start.strftime("%Y-%m-%dT%H:%M:%SZ")
+    stamp = start.strftime(ISO_FORMAT)
     state.set_watermark(stamp)
     print(f"Inicijalizirano: obrađujem račune ažurirane nakon {stamp}")
     return True
 
 
-def run_once(config, cliniko, solo, state):
-    watermark = state.get_watermark()
-    invoices = cliniko.get_paid_invoices(updated_since=watermark)
-    print(f"Pronađeno {len(invoices)} plaćenih računa od {watermark}")
+def report_failure(config, state, cliniko_id, error):
+    """Bilježi neuspjeh i javlja ga - glasnije kad su pokušaji potrošeni."""
+    max_attempts = config.get("max_retry_attempts", 5)
+    attempts = state.mark_failed(cliniko_id, error)
 
-    latest_updated_at = watermark
-    processed_count = 0
+    if attempts >= max_attempts:
+        print(
+            f"[PAŽNJA] Cliniko račun {cliniko_id}: neuspjeh {attempts}/{max_attempts} - "
+            f"prestajem pokušavati.\n"
+            f"  Greška: {error}\n"
+            f"  Račun NIJE fiskaliziran i neće se ponoviti sam. Riješi uzrok pa ponovno\n"
+            f"  omogući pokušaje (README, sekcija \"Zaglavljeni računi\").",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"[GREŠKA] Cliniko račun {cliniko_id} (pokušaj {attempts}/{max_attempts}): {error}",
+            file=sys.stderr,
+        )
 
-    for invoice in invoices:
-        cliniko_id = invoice["id"]
-        updated_at = invoice.get("updated_at", latest_updated_at)
-        if updated_at > latest_updated_at:
-            latest_updated_at = updated_at
 
-        # Zauzmi račun prije slanja - vidi state.py za razlog. Ako ga je netko
-        # već zauzeo ili obradio, preskačemo.
-        if not state.claim(cliniko_id):
-            continue
+def process_invoice(config, cliniko, solo, state, invoice):
+    """Šalje jedan već zauzet račun u Solo. Vraća True ako je dokument nastao.
 
+    Račun je u ovom trenutku zauzet (status `pending`), pa SVAKI izlaz odavde
+    mora taj status razriješiti - inače ostaje zaglavljen i traži ručnu
+    intervenciju. Zato je hvatanje grešaka namjerno široko."""
+    cliniko_id = invoice["id"]
+    document_type = config.get("solo_document_type", "racun")
+
+    try:
         patient_id = extract_patient_id(invoice)
         patient = cliniko.get_patient(patient_id) if patient_id else {}
         patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip()
@@ -179,7 +190,6 @@ def run_once(config, cliniko, solo, state):
             "kolicina": 1,
             "porez_stopa": tax_rate,
         }]
-        document_type = config.get("solo_document_type", "racun")
         invoice_items = cliniko.get_invoice_items(cliniko_id)
         nacin_placanja = detect_nacin_placanja(cliniko_id, invoice_items, config)
 
@@ -188,80 +198,145 @@ def run_once(config, cliniko, solo, state):
         # ručno vidi je li neki Cliniko račun već fiskaliziran.
         napomene = f"Cliniko #{cliniko_id}"
 
+        if document_type == "ponuda":
+            racun = solo.create_ponuda(
+                tip_kupca=config["solo_tip_kupca"],
+                tip_usluge=config["solo_tip_usluge"],
+                nacin_placanja=nacin_placanja,
+                kupac_naziv=patient_name or "Kupac",
+                kupac_oib=patient_oib,
+                kupac_adresa=patient_address,
+                napomene=napomene,
+                stavke=stavke,
+            )
+        else:
+            racun = solo.create_invoice(
+                tip_racuna=config["solo_tip_racuna"],
+                tip_kupca=config["solo_tip_kupca"],
+                tip_usluge=config["solo_tip_usluge"],
+                nacin_placanja=nacin_placanja,
+                kupac_naziv=patient_name or "Kupac",
+                kupac_oib=patient_oib,
+                kupac_adresa=patient_address,
+                napomene=napomene,
+                stavke=stavke,
+            )
+    except Exception as e:
+        report_failure(config, state, cliniko_id, e)
+        return False
+
+    broj = racun.get("broj_racuna") or racun.get("broj_ponude")
+    state.mark_done(cliniko_id, racun)
+    print(f"Cliniko #{cliniko_id} -> Solo {document_type} {broj} "
+          f"(način plaćanja {nacin_placanja}, JIR {racun.get('jir', '-')})")
+
+    # Ponuda nije fiskalni dokument (nema JIR/ZKI) - pacijentu se šalje samo
+    # kad je stvarno kreiran fiskalizirani racun, da slučajno ne dobije
+    # nešto što izgleda kao račun, a nije.
+    if document_type == "racun" and config.get("send_pdf_email") and patient_email and racun.get("pdf"):
         try:
-            if document_type == "ponuda":
-                racun = solo.create_ponuda(
-                    tip_kupca=config["solo_tip_kupca"],
-                    tip_usluge=config["solo_tip_usluge"],
-                    nacin_placanja=nacin_placanja,
-                    kupac_naziv=patient_name or "Kupac",
-                    kupac_oib=patient_oib,
-                    kupac_adresa=patient_address,
-                    napomene=napomene,
-                    stavke=stavke,
-                )
-                broj = racun.get("broj_ponude")
-            else:
-                racun = solo.create_invoice(
-                    tip_racuna=config["solo_tip_racuna"],
-                    tip_kupca=config["solo_tip_kupca"],
-                    tip_usluge=config["solo_tip_usluge"],
-                    nacin_placanja=nacin_placanja,
-                    kupac_naziv=patient_name or "Kupac",
-                    kupac_oib=patient_oib,
-                    kupac_adresa=patient_address,
-                    napomene=napomene,
-                    stavke=stavke,
-                )
-                broj = racun.get("broj_racuna")
-        except (SoloAPIError, requests.exceptions.RequestException) as e:
-            # requests.exceptions.RequestException hvata i prolazne mrežne/HTTP
-            # greške (npr. Solo 502/503, timeout) - ne samo Solo-ove aplikacijske
-            # greške - da jedan neuspjeh ne prekine obradu ostalih računa u istom
-            # prolazu. Zauzimanje se otpušta pa se račun pokušava ponovno.
-            state.release(cliniko_id)
-            print(f"[GREŠKA] Cliniko račun {cliniko_id}: {e}", file=sys.stderr)
+            send_invoice_pdf(config, patient_email, patient_name, racun["pdf"], broj)
+        except Exception as e:
+            print(f"[UPOZORENJE] Račun {broj} kreiran, ali mail nije poslan: {e}", file=sys.stderr)
+
+    return True
+
+
+def retry_failed(config, cliniko, solo, state):
+    """Ponovno pokušava ranije neuspjele račune - po ID-u, neovisno o tome jesu
+    li još unutar vremenskog prozora upita prema Clinku. Bez ovoga bi račun koji
+    padne dok je Solo nedostupan tiho ispao čim oznaka odmakne preko njega."""
+    processed = 0
+    for cliniko_id in state.failed_for_retry(config.get("max_retry_attempts", 5)):
+        if not state.claim_retry(cliniko_id):
+            continue
+        try:
+            invoice = cliniko.get_invoice(cliniko_id)
+        except Exception as e:
+            report_failure(config, state, cliniko_id, e)
+            continue
+        if process_invoice(config, cliniko, solo, state, invoice):
+            processed += 1
+    return processed
+
+
+def advance_watermark(state, previous, latest_seen, config):
+    """Pomiče oznaku "obrađeno do", ali NIKAD unatrag.
+
+    Preklapanje (`lookback_overlap_seconds`) namjerno vraća oznaku malo iza
+    najnovijeg viđenog računa, da se ne propusti račun koji stigne s malim
+    zakašnjenjem. Ali kad u prolazu nema nijednog računa, najnoviji viđeni je
+    sama dosadašnja oznaka - pa bi oduzimanje preklapanja gurnulo oznaku unatrag,
+    i tako svaki prolaz iznova (u --loop modu 180s svakih 15s). Zato uzimamo
+    kasniji od dvaju datuma."""
+    overlap = config.get("lookback_overlap_seconds", 180)
+    candidate = datetime.strptime(latest_seen, ISO_FORMAT) - timedelta(seconds=overlap)
+    state.set_watermark(max(candidate.strftime(ISO_FORMAT), previous))
+
+
+def run_once(config, cliniko, solo, state):
+    processed_count = retry_failed(config, cliniko, solo, state)
+
+    watermark = state.get_watermark()
+    invoices = cliniko.get_paid_invoices(updated_since=watermark)
+    print(f"Pronađeno {len(invoices)} plaćenih računa od {watermark}")
+
+    latest_updated_at = watermark
+
+    for invoice in invoices:
+        updated_at = invoice.get("updated_at", latest_updated_at)
+        if updated_at > latest_updated_at:
+            latest_updated_at = updated_at
+
+        # Zauzmi račun prije slanja - vidi state.py za razlog. Ako ga je netko
+        # već zauzeo, obradio ili je ranije pao (pa ide kroz retry_failed),
+        # preskačemo.
+        if not state.claim(invoice["id"]):
             continue
 
-        state.mark_done(cliniko_id, racun)
-        processed_count += 1
-        print(f"Cliniko #{cliniko_id} -> Solo {document_type} {broj} "
-              f"(način plaćanja {nacin_placanja}, JIR {racun.get('jir', '-')})")
+        if process_invoice(config, cliniko, solo, state, invoice):
+            processed_count += 1
 
-        # Ponuda nije fiskalni dokument (nema JIR/ZKI) - pacijentu se šalje samo
-        # kad je stvarno kreiran fiskalizirani racun, da slučajno ne dobije
-        # nešto što izgleda kao račun, a nije.
-        if document_type == "racun" and config.get("send_pdf_email") and patient_email and racun.get("pdf"):
-            try:
-                send_invoice_pdf(config, patient_email, patient_name, racun["pdf"], broj)
-            except Exception as e:
-                print(f"[UPOZORENJE] Račun {broj} kreiran, ali mail nije poslan: {e}", file=sys.stderr)
+    advance_watermark(state, watermark, latest_updated_at, config)
 
-    overlap = config.get("lookback_overlap_seconds", 180)
-    new_watermark_dt = datetime.strptime(latest_updated_at, "%Y-%m-%dT%H:%M:%SZ") - timedelta(seconds=overlap)
-    state.set_watermark(new_watermark_dt.strftime("%Y-%m-%dT%H:%M:%SZ"))
-
-    print(f"Gotovo. Novo fiskalizirano: {processed_count}.")
+    max_attempts = config.get("max_retry_attempts", 5)
+    summary = f"Gotovo. Novo poslano: {processed_count}."
+    waiting = len(state.failed_for_retry(max_attempts))
+    stuck = len(state.exhausted_failures(max_attempts))
+    if waiting:
+        summary += f" Čeka ponovni pokušaj: {waiting}."
+    if stuck:
+        summary += f" Zaglavljeno: {stuck}."
+    print(summary)
     return processed_count
 
 
-def report_pending_claims(state):
-    """Zapisi zaustavljeni u `pending` znače da je proces prekinut usred slanja
-    - ne zna se je li dokument u Solu nastao. Automatsko ponavljanje bi moglo
-    stvoriti duplikat, pa se traži ljudska provjera."""
+def report_stuck_invoices(state, config):
+    """Računi koji traže ljudsku pažnju - javljaju se pri svakom pokretanju."""
     pending = state.pending_claims()
-    if not pending:
-        return
+    if pending:
+        print(
+            "[UPOZORENJE] Računi zaustavljeni usred slanja: " + ", ".join(pending) + "\n"
+            "  Proces je prekinut nakon što je račun zauzet, a prije potvrde da je\n"
+            "  dokument nastao - ne zna se je li u Solu nastao ili nije. Neću ih\n"
+            "  ponavljati sam jer bi mogao nastati duplikat fiskalnog računa.\n"
+            "  Provjeri u Solu postoji li dokument s napomenom \"Cliniko #<id>\" i\n"
+            "  razriješi prema uputama u README-u (sekcija \"Zaustavljeni računi\").",
+            file=sys.stderr,
+        )
 
-    print(
-        "[UPOZORENJE] Računi zaustavljeni usred slanja: " + ", ".join(pending) + "\n"
-        "  Proces je prekinut nakon što je račun zauzet, a prije potvrde da je\n"
-        "  dokument nastao - ne zna se je li u Solu nastao ili nije. Neću ih\n"
-        "  ponavljati sam jer bi mogao nastati duplikat fiskalnog računa.\n"
-        "  Provjeri u Solu postoji li dokument s napomenom \"Cliniko #<id>\" i\n"
-        "  razriješi prema uputama u README-u (sekcija \"Zaustavljeni računi\").",
-        file=sys.stderr,
-    )
+    exhausted = state.exhausted_failures(config.get("max_retry_attempts", 5))
+    if exhausted:
+        print(
+            "[UPOZORENJE] Računi koji su potrošili sve pokušaje i NISU fiskalizirani:",
+            file=sys.stderr,
+        )
+        for cliniko_id, attempts, last_error in exhausted:
+            print(f"  {cliniko_id} ({attempts} pokušaja) — {last_error}", file=sys.stderr)
+        print(
+            "  Riješi uzrok pa ponovno omogući pokušaje (README, \"Zaglavljeni računi\").",
+            file=sys.stderr,
+        )
 
 
 def run_with_lock(config, args):
@@ -276,7 +351,7 @@ def run_with_lock(config, args):
         state.close()
         sys.exit(1)
 
-    report_pending_claims(state)
+    report_stuck_invoices(state, config)
 
     if not args.loop:
         run_once(config, cliniko, solo, state)

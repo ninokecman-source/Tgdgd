@@ -3,6 +3,7 @@
   "cliniko_user_agent": "Poprio Cliniko-Solo integracija (tvoj_mail@primjer.com)",
   "poll_interval_seconds": 15,
   "lookback_overlap_seconds": 180,
+  "max_retry_attempts": 5,
 
   "solo_api_token": "tvoj_solo_api_token",
   "solo_document_type": "racun",

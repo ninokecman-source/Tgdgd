@@ -56,6 +56,11 @@ class ClinikoClient:
             page += 1
         return invoices
 
+    def get_invoice(self, invoice_id):
+        """Pojedini račun po ID-u - koristi se za ponovni pokušaj ranije
+        neuspjelih računa, neovisno o vremenskom prozoru upita."""
+        return self._get(f"/invoices/{invoice_id}")
+
     def get_patient(self, patient_id):
         return self._get(f"/patients/{patient_id}")
 

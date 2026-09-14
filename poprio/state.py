@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS processed_invoices (
     zki                 TEXT,
     pdf_url             TEXT,
     processed_at        TEXT NOT NULL DEFAULT (datetime('now')),
-    status              TEXT NOT NULL DEFAULT 'done'
+    status              TEXT NOT NULL DEFAULT 'done',
+    attempts            INTEGER NOT NULL DEFAULT 0,
+    last_error          TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sync_state (
@@ -43,17 +45,20 @@ class StateStore:
         # timeout: dva procesa mogu nakratko čekati jedan drugoga na upisu
         self.conn = sqlite3.connect(db_path, timeout=10)
         self.conn.executescript(SCHEMA)
-        self._add_status_column_if_missing()
+        self._add_missing_columns()
         self.conn.commit()
 
-    def _add_status_column_if_missing(self):
-        """Baze nastale prije uvođenja statusa nemaju taj stupac. Postojeći
-        zapisi su svi uspješno poslani, pa im 'done' i odgovara."""
-        columns = {row[1] for row in self.conn.execute("PRAGMA table_info(processed_invoices)")}
-        if "status" not in columns:
-            self.conn.execute(
-                "ALTER TABLE processed_invoices ADD COLUMN status TEXT NOT NULL DEFAULT 'done'"
-            )
+    def _add_missing_columns(self):
+        """Baze nastale prije uvođenja ovih stupaca nemaju ih. Postojeći zapisi
+        su svi uspješno poslani, pa im zadani 'done' i odgovara."""
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(processed_invoices)")}
+        for name, definition in (
+            ("status", "TEXT NOT NULL DEFAULT 'done'"),
+            ("attempts", "INTEGER NOT NULL DEFAULT 0"),
+            ("last_error", "TEXT"),
+        ):
+            if name not in existing:
+                self.conn.execute(f"ALTER TABLE processed_invoices ADD COLUMN {name} {definition}")
 
     def claim(self, cliniko_invoice_id):
         """Pokušava zauzeti račun za slanje. Vraća True samo ako ga je stvarno
@@ -83,15 +88,57 @@ class StateStore:
                 ),
             )
 
-    def release(self, cliniko_invoice_id):
-        """Otpušta zauzimanje nakon neuspjelog slanja, da se račun pokuša
-        ponovno. Briše samo zapise koji su još `pending` - gotov račun se
-        ovime ne može obrisati."""
+    def claim_retry(self, cliniko_invoice_id):
+        """Zauzima ranije neuspjeli račun za ponovni pokušaj. Kao i `claim`,
+        kroz ovo može proći samo jedan proces."""
         with self.conn:
-            self.conn.execute(
-                "DELETE FROM processed_invoices WHERE cliniko_invoice_id = ? AND status = 'pending'",
+            cur = self.conn.execute(
+                """UPDATE processed_invoices SET status = 'pending'
+                   WHERE cliniko_invoice_id = ? AND status = 'failed'""",
                 (str(cliniko_invoice_id),),
             )
+        return cur.rowcount == 1
+
+    def mark_failed(self, cliniko_invoice_id, error):
+        """Bilježi neuspjeh i broji pokušaje. Zapis OSTAJE u bazi - tako račun
+        ne ovisi o tome je li još unutar vremenskog prozora upita prema Clinku,
+        nego se ponavlja po ID-u dok ne uspije ili dok ne potroši pokušaje.
+        Vraća ukupan broj dosadašnjih pokušaja."""
+        with self.conn:
+            self.conn.execute(
+                """UPDATE processed_invoices
+                   SET status = 'failed', attempts = attempts + 1, last_error = ?,
+                       processed_at = datetime('now')
+                   WHERE cliniko_invoice_id = ?""",
+                (str(error)[:500], str(cliniko_invoice_id)),
+            )
+        row = self.conn.execute(
+            "SELECT attempts FROM processed_invoices WHERE cliniko_invoice_id = ?",
+            (str(cliniko_invoice_id),),
+        ).fetchone()
+        return row[0] if row else 0
+
+    def failed_for_retry(self, max_attempts):
+        return [
+            row[0]
+            for row in self.conn.execute(
+                """SELECT cliniko_invoice_id FROM processed_invoices
+                   WHERE status = 'failed' AND attempts < ?
+                   ORDER BY processed_at""",
+                (max_attempts,),
+            )
+        ]
+
+    def exhausted_failures(self, max_attempts):
+        """Računi koji su potrošili sve pokušaje - dalje traže ljudsku pažnju."""
+        return list(
+            self.conn.execute(
+                """SELECT cliniko_invoice_id, attempts, last_error FROM processed_invoices
+                   WHERE status = 'failed' AND attempts >= ?
+                   ORDER BY processed_at""",
+                (max_attempts,),
+            )
+        )
 
     def pending_claims(self):
         """Računi zaustavljeni u `pending` - proces je prekinut usred slanja i
