@@ -10,10 +10,10 @@
   "solo_tip_racuna": 3,
   "solo_tip_kupca": 1,
   "solo_tip_usluge": "id_iz_solo_sucelja_Usluge->Tipovi_usluga",
-  "solo_nacin_placanja_item_codes": {
-    "3": "19",
-    "2": "18",
-    "1": "20"
+  "solo_nacin_placanja_item_ids": {
+    "3": "2030716998274516377",
+    "2": "2030716647605536151",
+    "1": "2030716822734505368"
   },
   "solo_nacin_placanja_default": 2,
   "solo_default_tax_rate": 0,

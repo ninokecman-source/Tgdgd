@@ -73,25 +73,38 @@ def extract_oib(patient, section_name="Fiskalizacija", field_label="OIB"):
     return None
 
 
+def extract_billable_item_id(item):
+    """ID kataloške stavke iz koje je nastala ova stavka računa."""
+    link = (item.get("billable_item") or {}).get("links", {}).get("self", "")
+    match = re.search(r"/billable_items/(\d+)", link)
+    return match.group(1) if match else None
+
+
+def marker_item_ids(config):
+    return {str(v).strip() for v in config["solo_nacin_placanja_item_ids"].values()}
+
+
 def detect_nacin_placanja(invoice_id, invoice_items, config):
-    """Cliniko API ne šalje način plaćanja kao posebno polje na računu, ali
-    ga osoblje označava dodavanjem posebne stavke od 0 EUR na račun (npr.
-    "Način plaćanja: Gotovina", šifra "GOT" postavljena kao item code te
-    stavke u Cliniko Settings -> Billable items). Ova funkcija traži tu
-    stavku po `code` polju svake stavke računa (točno podudaranje,
-    case-insensitive) prema mapi `solo_nacin_placanja_item_codes` u
-    config.json (Solo kod -> Cliniko item code). Ako nijedna stavka na
-    računu ne odgovara, vraća `solo_nacin_placanja_default` i to jasno
-    ispisuje u logu."""
-    item_codes = {(item.get("code") or "").strip().upper() for item in invoice_items}
-    for solo_code, cliniko_code in config["solo_nacin_placanja_item_codes"].items():
-        if cliniko_code.strip().upper() in item_codes:
+    """Cliniko API ne šalje način plaćanja kao posebno polje na računu, ali ga
+    osoblje označava dodavanjem posebne stavke od 0 EUR na račun (npr. "Način
+    plaćanja: Gotovina").
+
+    Prepoznaje se po ID-u kataloške stavke, ne po njenoj šifri ili nazivu:
+    Cliniko šifre dodjeljuje iz istog brojčanog niza kojim numerira i obične
+    usluge, pa bi se buduća usluga mogla sudariti s oznakom - a ID je trajan i
+    jedinstven i preživi preimenovanje stavke.
+
+    Ako nijedna stavka na računu ne odgovara, vraća `solo_nacin_placanja_default`
+    i to jasno ispisuje u logu."""
+    present = {extract_billable_item_id(item) for item in invoice_items}
+    for solo_code, billable_item_id in config["solo_nacin_placanja_item_ids"].items():
+        if str(billable_item_id).strip() in present:
             return int(solo_code)
 
     default = config["solo_nacin_placanja_default"]
     print(
-        f"[UPOZORENJE] Cliniko račun {invoice_id}: nijedna stavka računa ne "
-        f"odgovara poznatoj šifri načina plaćanja, koristim zadani ({default})."
+        f"[UPOZORENJE] Cliniko račun {invoice_id}: nijedna stavka računa nije "
+        f"oznaka načina plaćanja, koristim zadani ({default})."
     )
     return default
 
@@ -123,10 +136,7 @@ def build_stavke(config, invoice, invoice_items):
 
     Diže iznimku ako se zbroj stavki ne poklapa s ukupnim iznosom računa -
     bolje ne fiskalizirati ništa nego fiskalizirati krivi iznos."""
-    marker_codes = {
-        str(code).strip().upper()
-        for code in config["solo_nacin_placanja_item_codes"].values()
-    }
+    markers = marker_item_ids(config)
     tax_rate = config["solo_default_tax_rate"]
     fallback_opis = config["solo_default_service_description"]
 
@@ -134,7 +144,7 @@ def build_stavke(config, invoice, invoice_items):
     for item in invoice_items:
         # Oznaka načina plaćanja je pomoćna stavka od 0 EUR - služi samo za
         # prepoznavanje, na računu u Solu nema što tražiti.
-        if (item.get("code") or "").strip().upper() in marker_codes:
+        if extract_billable_item_id(item) in markers:
             continue
 
         quantity = float(item.get("quantity") or 1)
@@ -402,6 +412,64 @@ def run_once(config, cliniko, solo, state, alerter=None):
     return processed_count
 
 
+def verify_payment_markers(config, cliniko, alerter):
+    """Provjerava da oznake načina plaćanja iz configa stvarno postoje u Clinku.
+
+    Ako je oznaka obrisana ili je u config upisan krivi ID, prepoznavanje tiho
+    pada na zadani način plaćanja - a to je kriv podatak na fiskalnom računu.
+    Zato se provjerava jednom pri pokretanju i ispisuje na što se koji Solo kod
+    zapravo veže."""
+    naziv_koda = {1: "transakcijski", 2: "gotovina", 3: "kartice", 4: "ček", 5: "ostalo"}
+    try:
+        katalog = {str(b["id"]): b for b in cliniko.get_billable_items()}
+    except Exception as e:
+        print(f"[UPOZORENJE] Nisam uspio provjeriti oznake načina plaćanja: {e}",
+              file=sys.stderr)
+        return
+
+    nedostaju = []
+    for solo_code, billable_item_id in config["solo_nacin_placanja_item_ids"].items():
+        stavka = katalog.get(str(billable_item_id).strip())
+        opis = naziv_koda.get(int(solo_code), solo_code)
+        if not stavka:
+            nedostaju.append(f"{opis} (ID {billable_item_id})")
+            continue
+        cijena = float(stavka.get("price") or 0)
+        upozorenje = "  <- cijena nije 0!" if cijena else ""
+        print(f"  oznaka {opis}: {stavka.get('name')!r} ({cijena:.2f} EUR){upozorenje}")
+
+    if nedostaju:
+        poruka = (
+            "Ove oznake načina plaćanja iz config.json ne postoje u Clinku:\n\n"
+            + "\n".join(f"  {n}" for n in nedostaju)
+            + "\n\nRačuni s tim načinom plaćanja bit će fiskalizirani sa zadanim "
+              "načinom, što je kriv podatak. Provjeri ID-eve naredbom:\n"
+              "  python sync.py --list-billable-items"
+        )
+        print(f"[UPOZORENJE] {poruka}", file=sys.stderr)
+        alerter.problem("markers_missing", "Oznake načina plaćanja ne postoje", poruka)
+    else:
+        alerter.resolved(
+            "markers_missing",
+            "Oznake načina plaćanja ponovno u redu",
+            "Sve oznake načina plaćanja iz config.json ponovno postoje u Clinku.",
+        )
+
+
+def list_billable_items(config):
+    """Ispisuje katalog usluga s ID-evima - za popunjavanje
+    `solo_nacin_placanja_item_ids` u config.json."""
+    cliniko = ClinikoClient(
+        api_key=config["cliniko_api_key"],
+        user_agent=config["cliniko_user_agent"],
+    )
+    print(f"{'ID':<22} {'šifra':<8} {'cijena':>9}  naziv")
+    for b in sorted(cliniko.get_billable_items(), key=lambda x: float(x.get("price") or 0)):
+        print(f"{b['id']:<22} {str(b.get('item_code') or ''):<8} "
+              f"{float(b.get('price') or 0):>9.2f}  {b.get('name')}")
+    print("\nStavke s cijenom 0.00 su kandidati za oznake načina plaćanja.")
+
+
 def ping_healthcheck(config):
     """Javlja vanjskom nadzoru da je prolaz prošao.
 
@@ -506,6 +574,7 @@ def run_with_lock(config, args):
         state.close()
         sys.exit(1)
 
+    verify_payment_markers(config, cliniko, alerter)
     report_stuck_invoices(state, config, alerter)
 
     if not args.loop:
@@ -534,9 +603,17 @@ def main():
         "--loop", action="store_true",
         help="Radi trajno (za pokretanje kao systemd servis) umjesto jednog prolaza za cron.",
     )
+    parser.add_argument(
+        "--list-billable-items", action="store_true",
+        help="Ispiši katalog usluga iz Clinika s ID-evima i izađi (za popunjavanje configa).",
+    )
     args = parser.parse_args()
 
     config = load_config()
+
+    if args.list_billable_items:
+        list_billable_items(config)
+        return
     lock_path = Path(config["state_db_path"]).with_suffix(".lock")
 
     try:

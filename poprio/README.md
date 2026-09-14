@@ -75,9 +75,10 @@ Popuni u `config.json`:
   `tip_kupca=1` znači B2C/fizička osoba, a `solo_default_tax_rate=0` znači
   bez PDV-a (Solo API prihvaća 0/5/13/25 kao stopu). Ako si ipak u sustavu
   PDV-a, promijeni na stvarnu stopu (npr. 25).
-- `solo_nacin_placanja_item_codes` + `solo_nacin_placanja_default` – kako
+- `solo_nacin_placanja_item_ids` + `solo_nacin_placanja_default` – kako
   skripta bira kartice (3) / gotovinu (2) / transakcijski (1), po
-  računu, vidi "Kako se određuje način plaćanja" niže
+  računu, vidi "Kako se određuje način plaćanja" niže. ID-eve dobiješ
+  naredbom `python sync.py --list-billable-items`.
 - `solo_default_service_description` – opis koji se stavlja na Solo stavku
   **samo ako** stavka na Cliniko računu nema naziv; inače se prenosi stvarni
   naziv usluge (vidi "Što ide na Solo račun" niže)
@@ -399,39 +400,54 @@ uslugu, po tvom izboru), svaku s cijenom **0** i jasnim nazivom da ima
 smisla ako je pacijent primijeti na svom računu, npr. "Način plaćanja:
 Kartica", "Način plaćanja: Gotovina", "Način plaćanja: Transakcijski".
 
-**Item code polje pokušaj popuniti ručno** (npr. `KART`/`GOT`/`TRAN`) —
-ako ga ostaviš prazno, Cliniko će sam dodijeliti sljedeći slobodan
-**broj** (npr. `18`, `19`, `20`, nastavak na postojeći brojčani katalog
-usluga). Oboje radi identično za skriptu — bitno je samo da **točno
-prepišeš stvarno dodijeljeni `item_code`** u `solo_nacin_placanja_item_codes`
-u `config.json`, jer se po njemu (ne po nazivu) prepoznaje stavka. Provjeri
-stvarnu vrijednost u Clinku (Settings -> Billable Items -> otvori stavku)
-prije nego je upišeš u config:
+Zatim pokreni:
+
+```bash
+python sync.py --list-billable-items
+```
+
+Ispisat će cijeli katalog s ID-evima; stavke s cijenom `0.00` su tvoje tri
+oznake. Prepiši njihove **ID-eve** u `solo_nacin_placanja_item_ids`:
 
 ```json
-"solo_nacin_placanja_item_codes": {
-  "3": "19",
-  "2": "18",
-  "1": "20"
+"solo_nacin_placanja_item_ids": {
+  "3": "2030716998274516377",
+  "2": "2030716647605536151",
+  "1": "2030716822734505368"
 }
 ```
 
 (Solo kod: 1=transakcijski, 2=gotovina, 3=kartice, 4=ček, 5=ostalo — ključ
-lijevo je Solo kod, vrijednost desno je Cliniko item code koji mu
-odgovara. Brojevi u primjeru gore su konkretni kodovi koje je Cliniko
-dodijelio u ovom računu — kod tebe mogu biti drugačiji, uvijek provjeri.)
+lijevo je Solo kod, vrijednost desno je ID Cliniko stavke koja mu odgovara.)
+
+**Zašto ID, a ne šifra ili naziv:** Cliniko šifre (`item_code`) dodjeljuje
+iz istog brojčanog niza kojim numerira i obične usluge — oznake su dobile
+`18`/`19`/`20` jer su bile sljedeće slobodne. Neka buduća usluga mogla bi
+dobiti isti broj i skripta bi je pročitala kao oznaku plaćanja te je izbacila
+s računa. ID je trajan, jedinstven, i preživi preimenovanje stavke.
+
+Pri svakom pokretanju skripta provjeri da te tri stavke stvarno postoje i
+ispiše na što se koji Solo kod veže:
+
+```
+  oznaka kartice: 'Kartično plaćanje' (0.00 EUR)
+  oznaka gotovina: 'Gotovinsko plaćanje' (0.00 EUR)
+  oznaka transakcijski: 'Transkacijsko plaćanje' (0.00 EUR)
+```
+
+Ako neka nedostaje (obrisana ili krivi ID u configu), javlja se mailom —
+jer bi inače svi takvi računi tiho išli sa zadanim načinom plaćanja.
 
 ### Svakodnevna upotreba
 
 Kod zatvaranja svakog Cliniko računa, osoblje doda odgovarajuću stavku
 načina plaćanja uz uslugu (npr. "Fizioterapijski tretman" + "Način
 plaćanja: Gotovina"). Skripta dohvaća stavke računa
-(`GET /invoices/{id}/invoice_items`), traži onu čiji `code` odgovara
-jednom od kodova u configu (točno podudaranje, case-insensitive), i
-koristi pripadajući Solo kod. Stavka od 0 EUR **ne utječe** na iznos koji
-ide u Solo (Solo dobiva samo stvarnu uslugu, ne i marker).
+(`GET /invoices/{id}/invoice_items`) i traži onu koja dolazi iz jedne od tri
+kataloške stavke iz configa. Oznaka **ne ide** na Solo dokument i ne utječe
+na iznos.
 
-Ako nijedna stavka na računu ne odgovara nijednom kodu, koristi se
+Ako nijedna stavka na računu nije oznaka, koristi se
 `solo_nacin_placanja_default`, uz upozorenje u ispisu (`journalctl -u
 poprio` ili `sync.log`) — to je znak da je osoblje zaboravilo dodati
 stavku na taj račun.

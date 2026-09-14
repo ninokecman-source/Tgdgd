@@ -64,6 +64,19 @@ class ClinikoClient:
     def get_patient(self, patient_id):
         return self._get(f"/patients/{patient_id}")
 
+    def get_billable_items(self, per_page=100):
+        """Katalog usluga/proizvoda - koristi se za provjeru da oznake načina
+        plaćanja iz configa stvarno postoje."""
+        items = []
+        page = 1
+        while True:
+            data = self._get("/billable_items", params={"page": page, "per_page": per_page})
+            items.extend(data.get("billable_items", []))
+            if not data.get("links", {}).get("next"):
+                break
+            page += 1
+        return items
+
     def get_invoice_items(self, invoice_id):
         """Stavke danog računa - koristimo ih za prepoznavanje markera načina
         plaćanja koji osoblje doda uz uslugu (vidi sync.py::detect_nacin_placanja)."""
