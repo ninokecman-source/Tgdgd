@@ -69,6 +69,8 @@ Popuni u `config.json`:
   kartici pacijenta u kojem klinika drži OIB (zadano "Fiskalizacija" / "OIB");
   vidi "OIB i adresa kupca na računu" niže. Ako to polje ne postoji, OIB se
   nikad ne šalje i skripta radi normalno.
+- `cliniko_skip_item_ids` – kataloške stavke koje označavaju da račun NE ide
+  u Solo (npr. "R1 račun" za tvrtke); vidi "Računi na tvrtku (R1)" niže
 - `solo_api_token` – Solo API token (korak 3)
 - `solo_document_type` – `"racun"` (zadano) kreira odmah fiskalizirani
   račun; `"ponuda"` kreira nefiskalni nacrt koji se ručno pretvara u Solo
@@ -285,6 +287,53 @@ je otvorio račun i dodao samo "Gotovinsko plaćanje") označava se kao
 Solo prima najviše **36 stavki** po računu; veći račun se odbija prije slanja,
 uz jasnu poruku umjesto Solo-ove šifre greške.
 
+## Računi na tvrtku (R1)
+
+Račun na tvrtku **se ne prenosi u Solo** — izdaje se ručno, izravno u Solu.
+
+Razlog je što Cliniko nema ništa od onoga što Solo traži za B2B račun:
+
+| Solo traži za B2B | Ima li Cliniko |
+|---|---|
+| naziv tvrtke | samo kao slobodan tekst, bez strukture |
+| **OIB tvrtke** (obavezan) | nema polja nigdje — ni na pacijentu ni na kontaktu |
+| **KPD šifra po stavci** (obavezna) | ne postoji kao pojam |
+| oznaka da je kupac tvrtka (F1 umjesto F2) | nema je |
+
+Umjesto da se to nekako izmišlja, takav račun se u Clinku **označi** i skripta
+ga preskače.
+
+### Postavljanje
+
+1. U Clinku kreiraj stavku (Settings → Billable Items) s cijenom **0**, npr.
+   **"R1 račun"**
+2. `python sync.py --list-billable-items` i prepiši njen ID u config:
+
+```json
+"cliniko_skip_item_ids": {
+  "R1 račun": "3000000000000000001"
+}
+```
+
+Ključ lijevo je samo naziv koji će se pojaviti u logu i mailu; možeš dodati i
+više takvih oznaka ako zatreba.
+
+### Kako se ponaša
+
+Kad se ta stavka nađe na računu, skripta ga **trajno preskače** (stanje
+`skipped`) — ne šalje ga, ne ponavlja i ne čeka oznaku načina plaćanja. Ta se
+provjera radi **prva**, prije svega ostalog, jer račun na tvrtku obično nema
+ni oznaku načina plaćanja pa bi inače zapeo u čekanju ispravka koji nikad ne
+dolazi.
+
+O svakom takvom računu stiže **jedan** mail („račun #120 treba ručno izdati u
+Solu"), i to samo jednom — jer osoba koja doda oznaku u Clinku nije nužno ona
+koja izdaje račun u Solu. Podsjetnik se ne ponavlja.
+
+Pri pokretanju se provjerava da ta oznaka postoji u Clinku, isto kao oznake
+načina plaćanja: ako se ID obriše ili krivo prepiše, račun na tvrtku bi tiho
+otišao u Solo kao da je za fizičku osobu.
+
 ## Obavijesti kad nešto zapne
 
 Bez ovoga sve završava u logu koji nitko ne gleda — računi se tiho prestanu
@@ -341,7 +390,7 @@ Svaki račun je u jednom od stanja:
 | `failed`, pokušaji < `max_retry_attempts` | slanje palo, npr. Solo nedostupan | ponavlja u svakom prolazu |
 | `failed`, pokušaji potrošeni | ne ide ni nakon više pokušaja | staje i javlja pri svakom pokretanju |
 | `waiting` | nema oznake načina plaćanja | ponavlja neograničeno, javlja mailom |
-| `skipped` | nema nijedne stavke osim oznake | ništa — nema se što fiskalizirati |
+| `skipped` | nema stavki, ili je označen za preskakanje (R1) | ništa — trajno zatvoren |
 | `pending` | proces prekinut **usred** slanja | ne dira — traži ljudsku provjeru |
 
 ### Zaglavljeni računi (potrošeni pokušaji)

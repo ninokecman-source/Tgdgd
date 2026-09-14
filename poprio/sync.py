@@ -147,6 +147,33 @@ class NothingToInvoice(Exception):
     """Na računu nema nijedne stvarne stavke - nema se što fiskalizirati."""
 
 
+class DeliberatelySkipped(Exception):
+    """Račun je u Clinku označen da ga skripta ne dira (npr. R1 na tvrtku)."""
+
+
+def skip_item_ids(config):
+    return {str(v).strip() for v in config.get("cliniko_skip_item_ids", {}).values()}
+
+
+def check_skip_marker(invoice_items, config):
+    """Račun s oznakom za preskakanje ne ide u Solo uopće.
+
+    Služi za račune na tvrtku (R1): Solo za B2B traži naziv i OIB tvrtke te
+    KPD šifru po stavci, a ništa od toga ne postoji u Clinku - pa se takav
+    račun izdaje ručno u Solu. Oznaka je obična stavka od 0 EUR, ista mehanika
+    kao kod načina plaćanja."""
+    skip = skip_item_ids(config)
+    if not skip:
+        return
+    nazivi = {str(v).strip(): k for k, v in config.get("cliniko_skip_item_ids", {}).items()}
+    for item in invoice_items:
+        item_id = extract_billable_item_id(item)
+        if item_id in skip:
+            raise DeliberatelySkipped(
+                f"označen kao '{nazivi.get(item_id, 'preskoči')}' - izdaje se ručno u Solu"
+            )
+
+
 def line_total(item):
     """Iznos retka koji je pacijent stvarno platio - nakon popusta, s porezom."""
     total = item.get("total_including_tax")
@@ -328,6 +355,9 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
             )
 
         invoice_items = cliniko.get_invoice_items(cliniko_id)
+        # Provjera preskakanja ide PRVA - račun na tvrtku nema ni oznaku načina
+        # plaćanja, pa bi inače završio u čekanju na ispravak koji nikad ne dolazi.
+        check_skip_marker(invoice_items, config)
         nacin_placanja = detect_nacin_placanja(cliniko_id, invoice_items, config)
         stavke = build_stavke(config, invoice, invoice_items)
 
@@ -359,6 +389,22 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
                 napomene=napomene,
                 stavke=stavke,
             )
+    except DeliberatelySkipped as e:
+        # Namjerna odluka osoblja, ne greška. Zatvara se trajno - nikad se ne
+        # ponavlja - ali se jednom javi mailom, jer osoba koja doda oznaku u
+        # Clinku nije nužno ona koja izdaje račun u Solu.
+        state.mark_skipped(cliniko_id, e)
+        print(f"[PRESKOČENO] Cliniko račun #{invoice.get('number')}: {e}")
+        if alerter:
+            alerter.problem(
+                f"skipped:{cliniko_id}",
+                f"Račun #{invoice.get('number')} treba ručno izdati u Solu",
+                f"Cliniko račun #{invoice.get('number')} "
+                f"({invoice.get('total_amount')} EUR) {e}.\n\n"
+                f"Skripta ga namjerno nije prenijela u Solo. Provjeri je li izdan "
+                f"ručno — ovo je jedina obavijest, neće se ponavljati.",
+            )
+        return False
     except MissingPaymentMarker as e:
         # Nije greška nego nedovršen posao u Clinku. Ne troši pokušaje i
         # ponavlja se neograničeno - čim netko doda oznaku, račun prođe sam.
@@ -477,10 +523,17 @@ def verify_payment_markers(config, cliniko, alerter):
               file=sys.stderr)
         return
 
+    ocekivane = [
+        (naziv_koda.get(int(code), code), item_id)
+        for code, item_id in config["solo_nacin_placanja_item_ids"].items()
+    ] + [
+        (f"preskoči: {naziv}", item_id)
+        for naziv, item_id in config.get("cliniko_skip_item_ids", {}).items()
+    ]
+
     nedostaju = []
-    for solo_code, billable_item_id in config["solo_nacin_placanja_item_ids"].items():
+    for opis, billable_item_id in ocekivane:
         stavka = katalog.get(str(billable_item_id).strip())
-        opis = naziv_koda.get(int(solo_code), solo_code)
         if not stavka:
             nedostaju.append(f"{opis} (ID {billable_item_id})")
             continue
@@ -493,7 +546,9 @@ def verify_payment_markers(config, cliniko, alerter):
             "Ove oznake načina plaćanja iz config.json ne postoje u Clinku:\n\n"
             + "\n".join(f"  {n}" for n in nedostaju)
             + "\n\nRačuni s tim načinom plaćanja neće se moći fiskalizirati nego "
-              "će čekati ispravak. Provjeri ID-eve naredbom:\n"
+              "će čekati ispravak, a račun označen za preskakanje (npr. R1 na "
+              "tvrtku) mogao bi biti poslan u Solo kao da je za fizičku osobu. "
+              "Provjeri ID-eve naredbom:\n"
               "  python sync.py --list-billable-items"
         )
         print(f"[UPOZORENJE] {poruka}", file=sys.stderr)
