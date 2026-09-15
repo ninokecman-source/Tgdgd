@@ -70,7 +70,7 @@ Popuni u `config.json`:
   vidi "OIB i adresa kupca na računu" niže. Ako to polje ne postoji, OIB se
   nikad ne šalje i skripta radi normalno.
 - `cliniko_r1_item_ids` – kataloške stavke koje označavaju račun na tvrtku;
-  takav ide u Solo kao ponuda umjesto fiskaliziranog računa (npr. "R1 račun").
+  takav ide u Solo kao ponuda umjesto fiskaliziranog računa (npr. "R1 - račun").
   Vidi "Računi na tvrtku (R1)" niže.
 - `solo_api_token` – Solo API token (korak 3)
 - `solo_document_type` – `"racun"` (zadano) kreira odmah fiskalizirani
@@ -316,14 +316,17 @@ nijedan fiskalni dokument ne nastaje s krivim podacima.
 ### Postavljanje
 
 1. U Clinku kreiraj stavku (Settings → Billable Items) s cijenom **0**, npr.
-   **"R1 račun"**
+   **"R1 - račun"**
 2. `python sync.py --list-billable-items` i prepiši njen ID u config:
 
 ```json
 "cliniko_r1_item_ids": {
-  "R1 račun": "3000000000000000001"
+  "R1 - račun": "2040004755530450528"
 }
 ```
+
+(Gornji ID je stvarna stavka u Clinku ordinacije i već je upisan u
+`config.example.json`.)
 
 Ključ lijevo je naziv koji se pojavljuje u logu i mailu; možeš dodati i više
 takvih oznaka.
