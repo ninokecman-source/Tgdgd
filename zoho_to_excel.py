@@ -51,20 +51,38 @@ DATE_RE = re.compile(r"\d{1,2}\.\s*-?\s*\d{0,2}\.?\s*\d{1,2}\.\s*\d{4}\.?")
 TAG_RE = re.compile(r"<[^<]+?>")
 
 
-def with_retry(func, attempts=3, delay=5, retry_on=(OSError, ssl.SSLError)):
+def with_retry(func, attempts=3, delay=5, retry_on=(OSError, ssl.SSLError), backoff=1):
     """Pokuša pozvati func() do 'attempts' puta, uz pauzu 'delay' sekundi
     između pokušaja, ako baci neku od 'retry_on' iznimki (npr. privremeni
     mrežni prekid pri IMAP konekciji, ili macOS privremeno blokira pristup
-    Desktop/iCloud datoteci dok se ne sinkronizira). Zadnji pokušaj, ako i
-    on padne, propagira iznimku dalje."""
+    Desktop/iCloud datoteci dok se ne sinkronizira). Uz backoff > 1 svaka
+    sljedeća pauza je toliko puta duža. Zadnji pokušaj, ako i on padne,
+    propagira iznimku dalje."""
+    pauza = delay
     for attempt in range(1, attempts + 1):
         try:
             return func()
         except retry_on as e:
             if attempt == attempts:
                 raise
-            print(f"  [!] {e} - pokušaj {attempt}/{attempts}, ponavljam za {delay}s...")
-            time.sleep(delay)
+            print(f"  [!] {e} - pokušaj {attempt}/{attempts}, ponavljam za {pauza}s...")
+            time.sleep(pauza)
+            pauza *= backoff
+
+
+# Cron zna krenuti prije nego se Mac probudi i podigne mrežu; tada prvi
+# pokušaj padne na razrješavanju imena (gaierror). Zato se na IMAP čeka
+# strpljivije nego na ostalo: 10, 20, 40 pa 80 sekundi.
+IMAP_ATTEMPTS = 5
+IMAP_DELAY = 10
+IMAP_BACKOFF = 2
+
+
+def connect_imap(config):
+    """Spoji se na Zoho IMAP, uz strpljivo ponavljanje."""
+    return with_retry(lambda: imaplib.IMAP4_SSL(config["imap_host"]),
+                      attempts=IMAP_ATTEMPTS, delay=IMAP_DELAY,
+                      backoff=IMAP_BACKOFF)
 
 
 def load_config() -> dict:
@@ -649,7 +667,7 @@ def main():
 
     processed = load_state(state_path)
 
-    imap = with_retry(lambda: imaplib.IMAP4_SSL(config["imap_host"]))
+    imap = connect_imap(config)
     imap.login(config["zoho_email"], config["zoho_app_password"])
 
     folder_roots = config.get("folder_roots", ["Split", "Zagreb"])

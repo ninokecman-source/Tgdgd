@@ -56,7 +56,7 @@ MJESECI_GENITIV = [
 ]
 
 
-def _iz_glavnog_foldera(naziv):
+def iz_glavnog_foldera(naziv):
     """Uvezi modul iz glavnog foldera projekta (predlosci, send_reminders) -
     bank_solo je podmapa, pa put treba dodati ručno. Vrati None ako ne ide."""
     try:
@@ -77,7 +77,7 @@ def datumi_rijecima(dates_text: str) -> str:
     Za čitanje datuma koristi parser iz send_reminders.py (jedan izvor
     istine za sve oblike koje Emmett koristi). Ako se do njega ne može doći
     ili se datum ne može pročitati, vraća zapis kakav je u tablici."""
-    modul = _iz_glavnog_foldera("send_reminders")
+    modul = iz_glavnog_foldera("send_reminders")
     if modul is None:
         return dates_text
 
@@ -166,7 +166,7 @@ def send_payment_confirmation(config, registrant, iznos, ukupno_uplaceno):
     }
 
     # Tekst: dokument uz tablice -> config.json -> ugrađeni tekst.
-    predlosci = _iz_glavnog_foldera("predlosci")
+    predlosci = iz_glavnog_foldera("predlosci")
     if predlosci is not None:
         from pathlib import Path
         naslov, tijelo, izvor = predlosci.dohvati(

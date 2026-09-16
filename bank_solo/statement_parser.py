@@ -33,16 +33,24 @@ Redak sa saldom (907) sadrži, na fiksnim pozicijama:
     iznos #5  završni saldo
 
 Kako se smjer ne bi mogao krivo pročitati (a kriva ponuda u Solu se teško
-popravlja), svaki izvod se PROVJERAVA protiv ta dva ukupna iznosa: zbroj
-pročitanih uplata mora odgovarati ukupnim uplatama, a zbroj isplata
-ukupnim isplatama. Ako se ne poklapa - npr. banka uvede novi kod tipa -
-izvod se ne obrađuje nego se javi u logu, umjesto da se nešto krivo
-proknjiži.
+popravlja), svaki izvod se PROVJERAVA protiv ta dva ukupna iznosa.
+
+Mjerodavne su UPLATE: ako se njihov zbroj ne poklapa s ukupnim uplatama iz
+izvoda, izvod se ne obrađuje nego se javi u logu. Neslaganje samo u
+isplatama ne zaustavlja obradu (nijedna ulazna transakcija tada nije
+promakla - vidjela bi se kao manjak u uplatama), nego ide kao upozorenje:
+inače bi jedna nepročitana bankovna naknada trajno blokirala knjiženje.
 """
 
 import re
 
-TRANSACTION_RE = re.compile(r"^\d{2}[A-Z]{2}\d")
+# Transakcijski redak počinje dvoznamenkastim kodom tipa ("20" uplata,
+# "10" isplata). Prije se tražio i oblik IBAN-a odmah iza njega, pa su
+# ispadali redci bez IBAN-a - bankovne naknade, kartična plaćanja i
+# slično. Da ih se ne pročita, zbroj se nije poklapao sa saldom i cijeli
+# izvod bi ostao neobrađen. Da nešto ne bude pročitano krivo, čuva
+# provjera protiv salda niže.
+TRANSACTION_RE = re.compile(r"^\d{2}")
 AMOUNT_RE = re.compile(r"[+-]\d{15}")
 
 DEFAULT_CREDIT_TYPE_CODES = ["20"]   # "20" = uplata, "10" = isplata
@@ -125,8 +133,10 @@ def parse_statement(text: str, credit_type_codes=None) -> dict:
 
         uplate         - lista ulaznih transakcija
         isplate        - lista izlaznih transakcija
-        saldo_ok       - True ako se oba zbroja poklapaju sa saldom izvoda
-        poruka         - objašnjenje ako se ne poklapa (inače prazno)
+        saldo_ok       - True ako se zbroj uplata poklapa sa saldom izvoda
+        poruka         - zašto izvod nije upotrebljiv (inače prazno)
+        upozorenje     - izvod je upotrebljiv, ali nešto se ne poklapa
+                         (npr. nepročitana isplata) - treba ga spomenuti u logu
 
     Kad je saldo_ok False, pozivatelj NE SMIJE obraditi uplate iz ovog
     izvoda - znači da smjer ili raspored polja nisu ispravno pročitani.
@@ -159,13 +169,15 @@ def parse_statement(text: str, credit_type_codes=None) -> dict:
             "saldo_ok": False,
             "poruka": "u izvodu nema upotrebljivog retka sa saldom (907) - ne mogu "
                       "provjeriti jesu li transakcije ispravno pročitane",
+            "upozorenje": "",
         }
 
     zbroj_uplata = round(sum(abs(t["amount"]) for t in uplate), 2)
     zbroj_isplata = round(sum(abs(t["amount"]) for t in isplate), 2)
 
     neslaganja = []
-    if abs(zbroj_uplata - saldo["ukupno_uplata"]) > 0.01:
+    uplate_ne_valjaju = abs(zbroj_uplata - saldo["ukupno_uplata"]) > 0.01
+    if uplate_ne_valjaju:
         neslaganja.append(
             f"uplate: izvod kaže {saldo['ukupno_uplata']:.2f} EUR, "
             f"a pročitao sam {zbroj_uplata:.2f} EUR ({len(uplate)} transakcija)")
@@ -176,13 +188,34 @@ def parse_statement(text: str, credit_type_codes=None) -> dict:
 
     if neslaganja:
         kodovi = sorted({t["type_code"] for t in uplate + isplate})
+        objasnjenje = ("; ".join(neslaganja) +
+                       f". Kodovi tipa u izvodu: {kodovi}, kao uplate se broje "
+                       f"{sorted(credit_codes)}")
+
+        # Ako se UPLATE poklapaju do lipe, nijedna ulazna transakcija nije
+        # promakla ni krivo pročitana - nepročitani redak bi se vidio kao
+        # manjak baš u uplatama. Neslaganje samo u isplatama znači da nismo
+        # pročitali nešto odlazno (naknadu, karticu), što na ponude nema
+        # utjecaja. Zato se izvod obrađuje, uz upozorenje - inače bi jedna
+        # nepročitana naknada trajno zaustavila knjiženje uplata.
+        if not uplate_ne_valjaju:
+            return {
+                "uplate": uplate,
+                "isplate": isplate,
+                "saldo_ok": True,
+                "poruka": "",
+                "upozorenje": ("isplate se ne poklapaju sa saldom, ali uplate se "
+                               "poklapaju do lipe pa se izvod obrađuje - " +
+                               objasnjenje),
+            }
+
         return {
             "uplate": uplate,
             "isplate": isplate,
             "saldo_ok": False,
-            "poruka": ("ne poklapa se sa saldom izvoda - " + "; ".join(neslaganja) +
-                       f". Kodovi tipa u izvodu: {kodovi}, kao uplate se broje "
-                       f"{sorted(credit_codes)}"),
+            "poruka": "ne poklapa se sa saldom izvoda - " + objasnjenje,
+            "upozorenje": "",
         }
 
-    return {"uplate": uplate, "isplate": isplate, "saldo_ok": True, "poruka": ""}
+    return {"uplate": uplate, "isplate": isplate, "saldo_ok": True,
+            "poruka": "", "upozorenje": ""}

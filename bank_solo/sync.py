@@ -19,7 +19,8 @@ import sys
 from email import policy
 from pathlib import Path
 
-from mailer import send_payment_confirmation, send_unmatched_notification
+from mailer import (iz_glavnog_foldera, send_payment_confirmation,
+                    send_unmatched_notification)
 from oib_lookup import discover_registration_folders, find_oib
 from registrants import add_payment, find_matching_registrant, load_registrants
 from solo_client import SoloAPIError, SoloClient
@@ -27,6 +28,16 @@ from state import StateStore
 from statement_parser import parse_statement
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
+
+
+def spoji_imap(config):
+    """Spoji se na IMAP, uz strpljivo ponavljanje. Kad cron krene dok
+    računalo tek budi mrežu, prvi pokušaj padne na razrješavanju imena
+    (gaierror) - za nekoliko desetaka sekundi veza je obično tu."""
+    glavni = iz_glavnog_foldera("zoho_to_excel")
+    if glavni is None:
+        return imaplib.IMAP4_SSL(config["imap_host"])
+    return glavni.connect_imap(config)
 
 
 def load_config():
@@ -153,7 +164,7 @@ def run():
     state = StateStore(config["state_db_path"])
     solo = SoloClient(api_token=config["solo_api_token"])
 
-    imap = imaplib.IMAP4_SSL(config["imap_host"])
+    imap = spoji_imap(config)
     imap.login(config["zoho_email"], config["zoho_app_password"])
     imap.select(config.get("imap_folder", "INBOX"))
 
@@ -204,9 +215,13 @@ def run():
                 had_failure = True
                 continue
 
+            if izvod.get("upozorenje"):
+                print(f"  [UPOZORENJE] {izvod['upozorenje']}")
+
             transactions = izvod["uplate"]
             print(f"  Pronađeno {len(transactions)} uplata "
-                  f"({len(izvod['isplate'])} isplata preskočeno), saldo se poklapa.")
+                  f"({len(izvod['isplate'])} isplata preskočeno), uplate se poklapaju "
+                  f"sa saldom.")
             for tx in transactions:
                 outcome = process_transaction(tx, registrants, config, solo, state, imap, registration_folders)
                 if outcome == "sent":

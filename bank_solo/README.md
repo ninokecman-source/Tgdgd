@@ -149,6 +149,35 @@ opisu.
 python3 diagnose.py --izvod
 ```
 
+## Kada se izvod obrađuje, a kada ne
+
+Svaki izvod se prije obrade provjerava protiv retka sa saldom (907), koji
+nosi ukupne uplate i ukupne isplate za taj dan.
+
+- **Zbroj pročitanih uplata mora se poklopiti do lipe.** Ako se ne poklapa,
+  znači da je neka ulazna transakcija promakla ili je krivo pročitana —
+  izvod se **ne obrađuje**, mail ostaje neoznačen i pokušava se ponovno.
+  Radije propuštena uplata nego kriva ponuda u Solu.
+- **Neslaganje samo u isplatama ne zaustavlja obradu**, nego ide kao
+  upozorenje u log. Ako se uplate poklapaju točno, nijedna ulazna
+  transakcija nije promakla — nepročitano je nešto odlazno (bankovna
+  naknada, kartica), što na ponude nema nikakvog utjecaja. Bez toga bi
+  jedna nepročitana naknada trajno blokirala knjiženje svih uplata.
+
+Transakcijski redak se prepoznaje po kodu `905` na kraju i dvoznamenkastom
+kodu tipa na početku (`20` uplata, `10` isplata). Prije se tražio i oblik
+IBAN-a odmah iza koda tipa, pa su ispadali redci koji IBAN nemaju —
+bankovne naknade i kartična plaćanja — i cijeli izvod bi ostao neobrađen.
+
+Ako izvod nema upotrebljiv redak 907, ne obrađuje se — bez njega se nema
+čime provjeriti je li pročitan ispravno.
+
+Da vidiš kako parser čita konkretan izvod:
+
+```bash
+python3 diagnose.py --izvod --koliko 3
+```
+
 ## Potvrda uplate polazniku
 
 Čim se uplata upari i proknjiži, polazniku se javlja da je zaprimljena.
