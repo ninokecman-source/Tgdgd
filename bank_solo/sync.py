@@ -22,7 +22,7 @@ from pathlib import Path
 from mailer import (iz_glavnog_foldera, send_payment_confirmation,
                     send_unmatched_notification)
 from oib_lookup import discover_registration_folders, find_oib
-from registrants import add_payment, find_matching_registrant, load_registrants
+from registrants import add_payment, load_registrants, match_payment
 from solo_client import SoloAPIError, SoloClient
 from state import StateStore
 from statement_parser import parse_statement
@@ -86,16 +86,20 @@ def process_transaction(tx, registrants, config, solo, state, imap, registration
     if state.is_transaction_processed(tx["ref_id"]):
         return "already_done"
 
-    # Ime polaznika se traži u imenu uplatitelja i u opisu plaćanja - tamo
-    # gdje stvarno može pisati. Prije se pretraživao cijeli redak, pa je i
-    # IBAN ili poziv na broj mogao slučajno sadržavati traženi niz.
-    tekst_za_uparivanje = f"{tx.get('name', '')} {tx.get('description', '')}".strip()
-    registrant = find_matching_registrant(tekst_za_uparivanje or tx["raw_line"], registrants)
+    # Ime polaznika se traži u opisu plaćanja pa u imenu uplatitelja - tamo
+    # gdje stvarno može pisati. Opis je mjerodavan, jer ljudi plaćaju i za
+    # druge. (Cijeli redak se ne pretražuje: IBAN ili poziv na broj mogu
+    # slučajno sadržavati traženi niz.)
+    registrant, upozorenje = match_payment(
+        tx.get("name", ""), tx.get("description", ""), registrants)
     if registrant is None:
+        razlog = upozorenje or "nijedno ime polaznika nije pronađeno"
         print(f"[!] Neuparena uplata {tx['amount']:.2f} EUR ({tx['date']}, ref {tx['ref_id']}) "
               f"od {tx.get('name') or '?'} - opis: {tx.get('description') or '(nema)'} "
-              f"- nijedno ime polaznika nije pronađeno, treba ručna provjera.")
+              f"- {razlog}, treba ručna provjera.")
         return "unmatched"
+    if upozorenje:
+        print(f"  [!] {upozorenje}")
 
     full_name = f"{registrant['first_name']} {registrant['last_name']}".strip()
     napomene = f"{registrant['course_code']} - {registrant['location']}".strip(" -")

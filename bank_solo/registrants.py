@@ -77,13 +77,78 @@ def load_registrants(excel_dir: Path) -> list:
 def find_matching_registrant(raw_line: str, registrants: list):
     """Traži bilo koju poznatu varijantu imena polaznika kao podniz u
     (normaliziranom) tekstu retka transakcije. Vraća prvi pronađeni
-    registrant dict, ili None."""
-    normalized_line = normalize_name(raw_line)
+    registrant dict, ili None.
+
+    Zadržano radi jednostavnih provjera; za pravo uparivanje uplate koristi
+    match_payment(), koji zna razlikovati uplatitelja od polaznika."""
+    pronadjeni = find_registrants_in(raw_line, registrants)
+    return pronadjeni[0] if pronadjeni else None
+
+
+def find_registrants_in(text: str, registrants: list) -> list:
+    """Svi polaznici čije se ime pojavljuje u tekstu, bez ponavljanja."""
+    if not text:
+        return []
+    normalized = normalize_name(text)
+    pronadjeni = []
     for registrant in registrants:
         for variant in registrant["name_variants"]:
-            if variant and variant in normalized_line:
-                return registrant
-    return None
+            if variant and variant in normalized:
+                pronadjeni.append(registrant)
+                break
+    return pronadjeni
+
+
+def _oznaka(registrant) -> str:
+    return f"{registrant['first_name']} {registrant['last_name']}".strip()
+
+
+def match_payment(name: str, description: str, registrants: list):
+    """Odluči na čije ime ide uplata. Vrati (registrant, upozorenje);
+    registrant je None ako se ne može pouzdano odlučiti.
+
+    Ljudi plaćaju i za druge - roditelj za dijete, kolegica za kolegicu -
+    pa ime uplatitelja nije nužno ime polaznika. Zato je OPIS PLAĆANJA
+    mjerodavan: tamo se piše za koga se plaća. Ime uplatitelja je rezerva,
+    za uobičajen slučaj kad netko plaća sam za sebe.
+
+    Prije se pretraživalo ime i opis zajedno i uzimalo prvo pronađeno ime,
+    redom kojim su polaznici u tablicama - pa je uplatitelj koji je i sam
+    polaznik uvijek pobjeđivao osobu za koju plaća, i novac bi se upisao
+    krivom čovjeku."""
+    u_opisu = find_registrants_in(description, registrants)
+    u_imenu = find_registrants_in(name, registrants)
+    kljuc = lambda r: (str(r["file_path"]), r["row"])
+    iz_imena = {kljuc(r) for r in u_imenu}
+
+    if len(u_opisu) == 1:
+        polaznik = u_opisu[0]
+        if iz_imena and kljuc(polaznik) not in iz_imena:
+            return polaznik, (f"uplatitelj je {name.strip()}, a plaćeno je za "
+                              f"{_oznaka(polaznik)} - knjižim na polaznika iz opisa")
+        return polaznik, ""
+
+    if len(u_opisu) > 1:
+        # Opis spominje više poznatih imena (npr. "uplata za X, uplatitelj Y").
+        # Uplatitelj je već poznat iz svog polja, pa ostaje onaj drugi.
+        kandidati = [r for r in u_opisu if kljuc(r) not in iz_imena]
+        if len(kandidati) == 1:
+            return kandidati[0], (f"opis spominje više polaznika, uzimam "
+                                  f"{_oznaka(kandidati[0])} (uplatitelj je "
+                                  f"{name.strip()})")
+        imena = ", ".join(sorted({_oznaka(r) for r in u_opisu}))
+        return None, (f"opis spominje više polaznika ({imena}) i ne mogu "
+                      f"odlučiti za koga je uplata - treba ručna provjera")
+
+    if len(u_imenu) == 1:
+        return u_imenu[0], ""
+
+    if len(u_imenu) > 1:
+        imena = ", ".join(sorted({_oznaka(r) for r in u_imenu}))
+        return None, (f"ime uplatitelja odgovara većem broju polaznika ({imena}) "
+                      f"- treba ručna provjera")
+
+    return None, ""
 
 
 def add_payment(file_path: Path, row: int, amount: float) -> float:

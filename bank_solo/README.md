@@ -149,6 +149,25 @@ opisu.
 python3 diagnose.py --izvod
 ```
 
+## Na čije ime ide uplata
+
+Ljudi plaćaju i za druge — kolegica za kolegicu, roditelj za dijete — pa
+ime uplatitelja nije nužno ime polaznika. Zato je mjerodavan **opis
+plaćanja**:
+
+1. Ako opis spominje točno jednog polaznika iz tablica, uplata ide njemu.
+   Ako to nije uplatitelj, u logu stoji upozorenje da se vidi.
+2. Ako opis spominje više poznatih imena, a jedno od njih je uplatitelj
+   (npr. „Zrinka Smoje uplata za Ana Horvat"), uzima se onaj drugi —
+   uplatitelj je već poznat iz svog polja.
+3. Ako opis nikoga ne spominje, gleda se ime uplatitelja — uobičajen
+   slučaj kad netko plaća sam za sebe.
+4. Ako se ne može pouzdano odlučiti, uplata se **ne knjiži**: stiže ti
+   mail o neuparenoj uplati i riješiš je ručno.
+
+Zato je važno da u opisu plaćanja stoji ime polaznika. To se traži i u
+automatskom odgovoru na prijavu („Opis plaćanja: … + Vaše ime i prezime").
+
 ## Kada se izvod obrađuje, a kada ne
 
 Svaki izvod se prije obrade provjerava protiv retka sa saldom (907), koji
