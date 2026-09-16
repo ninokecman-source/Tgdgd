@@ -29,8 +29,15 @@ provjeru ima li novih.
 
 ```bash
 cd poprio
-pip install -r requirements.txt
+python3 -m venv venv
+venv/bin/pip install -r requirements.txt
 ```
+
+Zasebno okruženje, a ne `pip install` po sustavu: Ubuntu 24.04 i Debian 12
+sistemski `pip install` i odbijaju (`externally-managed-environment`).
+
+Za postavljanje na server od nule (zakup, osiguranje, systemd, nadzor,
+sigurnosne kopije) postoji zaseban vodič: **[DEPLOY.md](DEPLOY.md)**.
 
 ## 2. Cliniko API ključ
 
@@ -182,20 +189,27 @@ pa je dovoljan jedan trajni proces:
 scp -r poprio/ korisnik@server:/opt/poprio
 ssh korisnik@server
 cd /opt/poprio && cp config.example.json config.json   # pa popuni config.json
+sudo chmod 600 config.json
 sudo useradd --system --home /opt/poprio --shell /usr/sbin/nologin poprio
+sudo python3 -m venv /opt/poprio/venv
+sudo /opt/poprio/venv/bin/pip install -r /opt/poprio/requirements.txt
 sudo chown -R poprio:poprio /opt/poprio
-sudo pip install -r requirements.txt   # sustavski, da ga vidi i korisnik poprio
-# (alternativa: virtualenv u /opt/poprio/venv pa u poprio.service
-#  ExecStart=/opt/poprio/venv/bin/python /opt/poprio/sync.py --loop)
 sudo cp poprio.service /etc/systemd/system/poprio.service
 sudo systemctl daemon-reload
 
+# StateDirectory kreira /var/lib/poprio tek kad servis krene, a inicijalizacija
+# ide prije toga - i korisnik poprio sam ne smije pisati u /var/lib
+sudo install -d -o poprio -g poprio -m 700 /var/lib/poprio
+
 # jednokratna inicijalizacija (vidi korak 6) - servis se bez nje neće pokrenuti
-sudo -u poprio /usr/bin/python3 /opt/poprio/sync.py --init-from-now
+sudo -u poprio /opt/poprio/venv/bin/python /opt/poprio/sync.py --init-from-now
 
 sudo systemctl enable --now poprio
 journalctl -u poprio -f   # praćenje logova
 ```
+
+Cijeli postupak od praznog servera — zakup, vatrozid, korisnik, nadzor i
+sigurnosne kopije — opisan je u **[DEPLOY.md](DEPLOY.md)**.
 
 Baza obrađenih računa živi u `/var/lib/poprio/` — systemd ju kreira i
 održava preko `StateDirectory=poprio`, pa preživi restart, reboot i ponovni
@@ -230,7 +244,7 @@ svakome tko do njega dođe (npr. push u registry).
 ### c) cron (alternativa, bez trajnog procesa)
 
 ```
-* * * * * cd /putanja/do/poprio && /usr/bin/python3 sync.py >> sync.log 2>&1
+* * * * * cd /opt/poprio && venv/bin/python sync.py >> sync.log 2>&1
 ```
 
 ## Oznaka izvornog Cliniko računa

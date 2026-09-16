@@ -1,16 +1,27 @@
 # systemd servis za Poprio (Cliniko -> Solo) na vanjskom serveru.
 #
-# Instalacija:
+# Cijeli postupak od praznog servera: vidi DEPLOY.md. Ukratko:
 #   1. Kopiraj cijeli poprio/ folder na server, npr. u /opt/poprio
-#   2. Popuni /opt/poprio/config.json (vidi README.md)
-#   3. sudo cp poprio.service /etc/systemd/system/poprio.service
-#   4. Prilagodi WorkingDirectory/ExecStart ako folder nije /opt/poprio
-#   5. sudo systemctl daemon-reload
-#   6. Inicijaliziraj bazu obrađenih računa (jednom, svjesan odabir):
-#        sudo -u poprio /usr/bin/python3 /opt/poprio/sync.py --init-from-now
+#   2. python3 -m venv /opt/poprio/venv
+#      /opt/poprio/venv/bin/pip install -r /opt/poprio/requirements.txt
+#   3. Popuni /opt/poprio/config.json (vidi README.md)
+#   4. sudo cp poprio.service /etc/systemd/system/poprio.service
+#   5. Prilagodi WorkingDirectory/ExecStart ako folder nije /opt/poprio
+#   6. sudo systemctl daemon-reload
+#   7. sudo install -d -o poprio -g poprio -m 700 /var/lib/poprio
+#   8. Inicijaliziraj bazu obrađenih računa (jednom, svjesan odabir):
+#        sudo -u poprio /opt/poprio/venv/bin/python /opt/poprio/sync.py --init-from-now
 #      ili --backfill-days N ako želiš obraditi i starije plaćene račune
-#   7. sudo systemctl enable --now poprio
-#   8. Prati log: journalctl -u poprio -f
+#   9. sudo systemctl enable --now poprio
+#  10. Prati log: journalctl -u poprio -f
+#
+# Korak 7 je nužan iako StateDirectory=poprio kreira isti folder: systemd ga
+# kreira tek pri pokretanju servisa, a inicijalizacija ide prije toga i
+# korisnik poprio sam ne smije pisati u /var/lib.
+#
+# ExecStart ide kroz venv, a ne kroz /usr/bin/python3: Ubuntu 24.04 i Debian 12
+# odbijaju `pip install` po sustavu (externally-managed-environment), pa bi
+# sistemski python3 ostao bez `requests`.
 #
 # StateDirectory=poprio znači da systemd sam kreira i održava /var/lib/poprio
 # (vlasništvo korisnika servisa) te da taj folder preživi restart, reboot i
@@ -25,11 +36,13 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/poprio
-ExecStart=/usr/bin/python3 /opt/poprio/sync.py --loop
+ExecStart=/opt/poprio/venv/bin/python /opt/poprio/sync.py --loop
 Restart=always
 RestartSec=15
 User=poprio
 StateDirectory=poprio
+# Baza sadrži imena pacijenata i brojeve računa - nek je vidi samo servis.
+StateDirectoryMode=0700
 
 [Install]
 WantedBy=multi-user.target
