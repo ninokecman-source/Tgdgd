@@ -1,6 +1,7 @@
 # Postavljanje Poprija na vanjski server — korak po korak
 
-Vodič pretpostavlja **Ubuntu 24.04 LTS** i da na serveru ne radi ništa drugo.
+Vodič pretpostavlja **Ubuntu LTS** (24.04 ili 26.04) i da na serveru ne radi
+ništa drugo.
 Od nule do skripte koja radi treba oko 30 minuta.
 
 Skripta ne otvara nijedan port prema van — samo se spaja na Cliniko, Solo i
@@ -14,7 +15,7 @@ mail server. Zato serveru ne treba ni domena ni certifikat ni web server.
 - novi Solo API token
 - SMTP podaci za mail (host, port, korisnik, app-specific lozinka)
 - ID stavke "R1 - račun" iz Clinika — već je upisan u `config.example.json`
-- SSH ključ na svom računalu (`ssh-keygen -t ed25519` ako ga nemaš)
+- SSH ključ (kako ga napraviti — i s iPada — piše u koraku 1)
 
 ---
 
@@ -28,12 +29,26 @@ Pri kreiranju odaberi:
 | stavka | vrijednost |
 |---|---|
 | lokacija | unutar EU (zbog podataka pacijenata) |
-| image | Ubuntu 24.04 LTS |
+| image | Ubuntu LTS (24.04 ili 26.04) |
 | tip | najmanji dostupni (1–2 vCPU, 1–4 GB RAM) |
-| SSH ključ | dodaj svoj javni ključ |
-| backup | uključi ako ga provider nudi |
+| mreža | **IPv4 mora biti uključen** (samo IPv6 nije dovoljno) |
+| SSH ključ | dodaj svoj javni ključ — **ne** prijavu lozinkom |
+| backup | uključi, košta oko 20% cijene servera |
 
 Zapiši IP adresu servera.
+
+### SSH ključ
+
+Ako ga još nemaš, na svom računalu:
+
+```bash
+ssh-keygen -t ed25519 -C "poprio"
+cat ~/.ssh/id_ed25519.pub     # ovo zalijepi u polje SSH key
+```
+
+S iPada ili telefona: instaliraj **Termius** ili **Blink Shell**, ondje
+generiraj ključ (Keychain → New Key) i kopiraj javni dio. Cijelo postavljanje
+može se odraditi iz te aplikacije — nije potrebno računalo.
 
 ---
 
@@ -75,26 +90,29 @@ Ako igdje piše `PasswordAuthentication yes`, promijeni u `no` i
 ## 3. Python i alati
 
 ```bash
-apt install -y python3 python3-venv sqlite3 rsync
+apt install -y python3 python3-venv sqlite3 git rsync
 ```
 
 ---
 
 ## 4. Prijenos koda
 
-**Sa svog računala** (ne sa servera), iz foldera u kojem je `poprio/`:
+Najjednostavnije, **na serveru** (repo je javan, ne treba token ni lozinka):
+
+```bash
+git clone -b Poprio https://github.com/ninokecman-source/Tgdgd.git /tmp/tgdgd
+mkdir -p /opt/poprio && cp -r /tmp/tgdgd/poprio/. /opt/poprio/ && rm -rf /tmp/tgdgd
+```
+
+Ako radije prenosiš sa svog računala, iz foldera u kojem je `poprio/`:
 
 ```bash
 rsync -av --exclude 'config.json' --exclude '__pycache__' \
       poprio/ root@IP_ADRESA_SERVERA:/opt/poprio/
 ```
 
-Ako radije povlačiš iz gita, na serveru:
-
-```bash
-git clone -b Poprio https://github.com/ninokecman-source/Tgdgd.git /tmp/tgdgd
-mkdir -p /opt/poprio && cp -r /tmp/tgdgd/poprio/. /opt/poprio/ && rm -rf /tmp/tgdgd
-```
+U repozitoriju nema nijednog ključa — `config.json` je u `.gitignore` i nikad
+nije commitan. Ključevi se upisuju tek u koraku 7, izravno na serveru.
 
 ---
 
