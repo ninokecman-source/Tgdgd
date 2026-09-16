@@ -15,6 +15,11 @@ treba pogledati zašto.
 
 Ispis namjerno NE prikazuje cijeli redak izvoda (sadrži IBAN i ime
 uplatitelja). Ako ga stvarno trebaš vidjeti, dodaj --puni-redak.
+
+S --proknjizeno: popis uplata koje su već obrađene - tko, koliko, koja
+Solo ponuda i kada. Tu provjeriš je li neka uplata stvarno prošla.
+
+    python3 diagnose.py --proknjizeno
 """
 
 import argparse
@@ -130,12 +135,48 @@ def diagnose_statements(config, imap, koliko: int, puni_redak: bool, maska: bool
 
 
 
+def prikazi_proknjizeno(config, koliko: int) -> None:
+    """Popis već obrađenih uplata iz SQLite stanja - tko, koliko, koja
+    ponuda, kada. Ne dira mail ni Solo, samo čita lokalnu bazu."""
+    import sqlite3
+
+    put = Path(config["state_db_path"])
+    if not put.is_absolute():
+        put = Path(__file__).with_name(str(put))
+    if not put.exists():
+        print(f"Nema baze stanja: {put} - još nijedna uplata nije obrađena.")
+        return
+
+    conn = sqlite3.connect(put)
+    redci = conn.execute(
+        """SELECT processed_at, matched_name, amount, solo_ponuda
+           FROM processed_transactions ORDER BY processed_at DESC LIMIT ?""",
+        (koliko,)).fetchall()
+    ukupno = conn.execute("SELECT COUNT(*), COALESCE(SUM(amount), 0) "
+                          "FROM processed_transactions").fetchone()
+    mailova = conn.execute("SELECT COUNT(*) FROM processed_mails").fetchone()[0]
+    conn.close()
+
+    if not redci:
+        print("Nijedna uplata još nije proknjižena.")
+    else:
+        print(f"Zadnjih {len(redci)} proknjiženih uplata:\n")
+        for kada, ime, iznos, ponuda in redci:
+            print(f"  {kada}  {iznos:>8.2f} EUR  {ime or '(bez imena)':<28} "
+                  f"ponuda {ponuda or '(nema broja)'}")
+    print(f"\nUkupno: {ukupno[0]} uplata, {ukupno[1]:.2f} EUR, "
+          f"{mailova} obrađenih mailova.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Dijagnostika za bank_solo.")
+    parser.add_argument("--proknjizeno", action="store_true",
+                        help="Popis već obrađenih uplata (tko, koliko, koja ponuda)")
     parser.add_argument("--izvod", action="store_true",
                         help="Pokaži kako se transakcije iz stvarnih izvoda klasificiraju")
     parser.add_argument("--koliko", type=int, default=3,
-                        help="Koliko zadnjih izvoda pregledati (uz --izvod, default 3)")
+                        help="Koliko zadnjih izvoda pregledati (uz --izvod, default 3; "
+                             "uz --proknjizeno najmanje 20)")
     parser.add_argument("--puni-redak", action="store_true",
                         help="Ispiši i cijeli redak izvoda (sadrži IBAN i ime uplatitelja)")
     parser.add_argument("--maska", action="store_true",
@@ -145,6 +186,12 @@ def main():
     args = parser.parse_args()
 
     config = load_config()
+
+    # Ovo čita samo lokalnu bazu - nema potrebe dizati vezu na mail.
+    if args.proknjizeno:
+        prikazi_proknjizeno(config, max(args.koliko, 20))
+        return
+
     imap = connect(config)
     try:
         if args.izvod:

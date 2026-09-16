@@ -178,6 +178,12 @@ Da vidiš kako parser čita konkretan izvod:
 python3 diagnose.py --izvod --koliko 3
 ```
 
+Da vidiš koje su uplate već proknjižene (tko, koliko, koja Solo ponuda):
+
+```bash
+python3 diagnose.py --proknjizeno
+```
+
 ## Potvrda uplate polazniku
 
 Čim se uplata upari i proknjiži, polazniku se javlja da je zaprimljena.
