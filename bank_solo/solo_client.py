@@ -13,7 +13,9 @@ class SoloAPIError(Exception):
         super().__init__(f"Solo API greška {status}: {message}")
         self.status = status
         self.message = message
-        self.payload = payload
+        # Token se ne sprema uz iznimku - payload zna završiti u logu ili
+        # tracebacku, a tamo mu nije mjesto.
+        self.payload = [(k, v) for k, v in (payload or []) if k != "token"]
 
 
 class SoloClient:
@@ -61,13 +63,38 @@ class SoloClient:
             time.sleep(remaining)
 
     def _post(self, endpoint, payload, result_key="racun"):
+        """Sve što pođe po zlu izlazi kao SoloAPIError.
+
+        Pozivatelj na SoloAPIError označi transakciju neuspjelom i pokuša
+        ponovno sljedeći put. Da mrežna greška ili HTTP 500 izlete kao
+        requests iznimka, srušile bi cijelu obradu - i sve uplate iza te
+        ostale bi neproknjižene do sljedećeg pokretanja."""
         self._wait_for_rate_limit()
         self._last_request_time = time.monotonic()
-        resp = self.session.post(f"{BASE_URL}/{endpoint}", data=payload, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
+
+        try:
+            resp = self.session.post(f"{BASE_URL}/{endpoint}", data=payload, timeout=30)
+        except requests.RequestException as e:
+            raise SoloAPIError("veza", f"Solo nije dostupan: {e}", payload) from None
+
+        if resp.status_code >= 400:
+            raise SoloAPIError(resp.status_code, f"HTTP {resp.status_code} "
+                               f"({resp.reason})", payload)
+
+        try:
+            data = resp.json()
+        except ValueError:
+            raise SoloAPIError("odgovor", "Solo nije vratio JSON (moguć ispad "
+                               "servisa ili stranica s greškom)", payload) from None
+
+        if not isinstance(data, dict):
+            raise SoloAPIError("odgovor", f"neočekivan oblik odgovora: {type(data).__name__}",
+                               payload)
 
         if data.get("status") != 0:
             raise SoloAPIError(data.get("status"), data.get("message"), payload)
+
+        if result_key not in data:
+            raise SoloAPIError("odgovor", f"u odgovoru nema polja {result_key!r}", payload)
 
         return data[result_key]

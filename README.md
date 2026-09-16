@@ -263,6 +263,28 @@ Za automatsko pokretanje, jednom dnevno:
 **Napomena:** tablica sadrži osobne podatke polaznika (ime, adresa, email,
 telefon). Šalje se centrali jer je to njihov administrativni obrazac.
 
+## Što se događa kad nešto pukne
+
+Sustav je posložen tako da **radije ne napravi ništa nego da napravi krivo**.
+Konkretno:
+
+- **Tablica se ne može spremiti** (iCloud drži datoteku, nema mjesta): te
+  prijave ostaju neobrađene i potvrde se **ne šalju** — pokušat će se opet
+  pri sljedećem prolasku. Ostale tablice se svejedno spremaju.
+- **Solo ne odgovara** (ispad, HTTP greška, prekid veze): ta uplata se
+  označi neuspjelom i pokušava se ponovno; obrada ostalih uplata se
+  nastavlja.
+- **Uplata se ne može pouzdano pripisati** polazniku: ne knjiži se, nego ti
+  stiže mail o neuparenoj uplati.
+- **Izvod se ne poklapa sa saldom u uplatama**: ne obrađuje se uopće.
+- **Tekst poruke ima tipfeler** u vitičastoj zagradi: ta se poruka ne šalje,
+  a u logu piše koji dokument, koji podatak ne postoji i koji postoje.
+- **Mail o logovima ne prođe**: pozicija u logovima se ne pomiče, pa isti
+  nalaz ide u sljedećoj provjeri (greške se ne izgube).
+
+Postavke se nikad ne prepisuju u tišini: `setup_config.py` mijenja samo ono
+što sam upišeš i prije toga radi kopiju `config.json.prije-izmjene`.
+
 ## Provjera logova (`provjeri_logove.py`)
 
 Skripte pišu u `log.txt` (prijave i podsjetnici) i `sync.log` (izvodi i

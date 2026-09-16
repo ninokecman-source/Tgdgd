@@ -169,6 +169,31 @@ def dohvati(mapa, nazivi, config=None, kljuc_naslov=None, kljuc_tijela=None,
     return naslov, None, "nema teksta"
 
 
+class GreskaPredloska(Exception):
+    """Tekst poruke ima nešto što se ne može popuniti."""
+
+
+def popuni(tekst: str, varijable: dict, izvor: str = "") -> str:
+    """Ubaci podatke u tekst poruke ({first_name}, {location}, ...).
+
+    Otkad se tekstovi uređuju u Wordu, tipfeler u vitičastoj zagradi je
+    očekivana pogreška - a gola KeyError poruka ne kaže ni gdje je ni što
+    napraviti. Zato se pretvara u rečenicu koja imenuje dokument, krivi
+    podatak i one koji postoje."""
+    gdje = f" ({izvor})" if izvor else ""
+    try:
+        return tekst.format(**varijable)
+    except KeyError as e:
+        dostupni = ", ".join("{" + k + "}" for k in sorted(varijable))
+        raise GreskaPredloska(
+            f"u tekstu{gdje} stoji {{{e.args[0]}}}, a takav podatak ne postoji. "
+            f"Dostupni su: {dostupni}") from None
+    except (IndexError, ValueError) as e:
+        raise GreskaPredloska(
+            f"u tekstu{gdje} vitičasta zagrada nije na mjestu ({e}). Ako zagrada "
+            f"treba ostati u poruci kakva jest, upiši je dvaput: {{{{ i }}}}") from None
+
+
 def naziv_lokacije(location: str) -> str:
     """'Split' -> 'lokacija split' (naziv dokumenta s uputama)."""
     return f"lokacija {bez_dijakritika(location)}" if location else ""

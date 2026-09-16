@@ -228,12 +228,11 @@ def save_state(state: dict) -> None:
         json.dump(state, f, ensure_ascii=False, indent=2, sort_keys=True)
 
 
-def render(template: str, participant: dict, info: dict) -> str:
-    return template.format(
-        first_name=participant["first_name"],
-        last_name=participant["last_name"],
-        **info,
-    )
+def render(template: str, participant: dict, info: dict, izvor: str = "") -> str:
+    varijable = dict(info,
+                     first_name=participant["first_name"],
+                     last_name=participant["last_name"])
+    return predlosci.popuni(template, varijable, izvor)
 
 
 def send_one(config: dict, to_email: str, subject: str, body: str) -> None:
@@ -285,7 +284,8 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
     _, blok, _ = blok_uplate(mapa, config, info["course_code"])
     # Blok uvijek zavrsava praznim retkom, pa se ne slijepi s tekstom
     # koji u podsjetniku dolazi iza njega.
-    info["blok_uplate"] = (blok.format(**info).rstrip("\n") + "\n\n") if blok else ""
+    info["blok_uplate"] = ((predlosci.popuni(blok, info, "blok uplate").rstrip("\n")
+                            + "\n\n") if blok else "")
 
     participants = read_participants(ws, find_totals_row(ws))
     if not participants:
@@ -352,8 +352,8 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
             for p in primatelji:
                 print(f"  - {p['first_name']} {p['last_name']} <{p['email']}>")
             print("  --- poruka ---")
-            print("  Naslov:", render(naslov_predloska, primatelji[0], info))
-            for line in render(tijelo, primatelji[0], info).splitlines():
+            print("  Naslov:", render(naslov_predloska, primatelji[0], info, izvor))
+            for line in render(tijelo, primatelji[0], info, izvor).splitlines():
                 print("  " + line)
             continue
 
@@ -361,8 +361,8 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
         for p in primatelji:
             try:
                 send_one(config, p["email"],
-                         render(naslov_predloska, p, info),
-                         render(tijelo, p, info))
+                         render(naslov_predloska, p, info, izvor),
+                         render(tijelo, p, info, izvor))
                 poslano.add(p["email"].lower())
                 sent_count += 1
                 print(f"  Poslano: {p['email']}")
@@ -494,7 +494,11 @@ def main():
 
     total = 0
     for xlsx_path in files:
-        total += process_course(xlsx_path, config, state, today, dry_run)
+        # Pogreška u tekstu jedne poruke ne smije zaustaviti ostale tečajeve.
+        try:
+            total += process_course(xlsx_path, config, state, today, dry_run)
+        except predlosci.GreskaPredloska as e:
+            print(f"[!] {xlsx_path.name}: {e}")
 
     print()
     if dry_run:

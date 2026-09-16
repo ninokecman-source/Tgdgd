@@ -378,12 +378,13 @@ def send_confirmation_email(config: dict, data: dict, course_code: str,
         nazivi_uvjeta, kljuc_uvjeta = "odgovor uvjeti akontacija", "reply_deposit_section"
     else:
         nazivi_uvjeta, kljuc_uvjeta = "odgovor uvjeti puni iznos", "reply_no_deposit_section"
-    _, section, _ = predlosci.dohvati(mapa, nazivi_uvjeta, config=config,
-                                      kljuc_tijela=kljuc_uvjeta)
+    _, section, izvor_uvjeta = predlosci.dohvati(mapa, nazivi_uvjeta, config=config,
+                                                kljuc_tijela=kljuc_uvjeta)
     # Odlomak zavrsava prijelomom retka, pa ga predlozak odvaja praznim
     # retkom od onoga sto slijedi (Word ne pamti prazan redak na kraju).
     template_vars["deposit_section"] = (
-        section.format(**template_vars).rstrip("\n") + "\n") if section else ""
+        predlosci.popuni(section, template_vars, izvor_uvjeta).rstrip("\n")
+        + "\n") if section else ""
 
     subject, body, izvor = predlosci.dohvati(
         mapa, "odgovor na prijavu", config=config,
@@ -394,8 +395,8 @@ def send_confirmation_email(config: dict, data: dict, course_code: str,
         return False
 
     subject = (subject or "Potvrda prijave - Emmett tehnika {course_code} ({dates})")
-    subject = subject.format(**template_vars)
-    body = body.format(**template_vars)
+    subject = predlosci.popuni(subject, template_vars, izvor)
+    body = predlosci.popuni(body, template_vars, izvor)
 
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -618,14 +619,14 @@ def process_folder(imap, raw_folder: str, folder_location: str, config: dict,
                 wb, ws = get_or_create_workbook(
                     path, course_code, location, dates, instructor
                 )
-                totals_row = find_totals_row(ws)
-                workbooks[key] = [path, wb, ws, totals_row]
+                # [put, workbook, list, red_ukupnog, potvrde_na_cekanju, uid-evi]
+                workbooks[key] = [path, wb, ws, find_totals_row(ws), [], []]
             else:
-                path, wb, ws, totals_row = workbooks[key]
+                ws = workbooks[key][2]
                 if dates and ws["C6"].value != dates:
                     ws["C6"] = dates
 
-            path, wb, ws, totals_row = workbooks[key]
+            path, wb, ws, totals_row = workbooks[key][:4]
             row = append_participant(ws, parsed, totals_row)
 
             if row is None:
@@ -639,18 +640,12 @@ def process_folder(imap, raw_folder: str, folder_location: str, config: dict,
                 print(f"Dodano [{raw_folder}] ({course_code} / {location}): "
                       f"{parsed['First name']} {parsed['Last Name']}")
 
-                if config.get("send_replies"):
-                    try:
-                        sent = send_confirmation_email(
-                            config, parsed, course_code, location,
-                            ws["C6"].value or dates,
-                        )
-                        if sent:
-                            print(f"  Poslana potvrda na {parsed['Email Address']}")
-                        else:
-                            print("  Potvrda nije poslana (nema email adrese)")
-                    except Exception as e:
-                        print(f"  Greška pri slanju potvrde: {e}")
+                # Potvrda ide tek kad tablica bude spremljena na disk. Inače
+                # bi neuspjelo spremanje ostavilo polaznika bez retka, a s
+                # poslanom potvrdom - i sljedeći prolazak bi mu je poslao opet.
+                workbooks[key][4].append(
+                    (parsed, course_code, location, ws["C6"].value or dates))
+                workbooks[key][5].append(state_key)
         else:
             print(f"Preskočeno [{raw_folder}]: {parsed['identifier_line'][:80]}")
 
@@ -661,7 +656,12 @@ def process_folder(imap, raw_folder: str, folder_location: str, config: dict,
 
 def main():
     config = load_config()
+    # Relativan put se računa od foldera skripte, ne od trenutnog direktorija.
+    # Inače bi pokretanje iz drugog foldera našlo praznu evidenciju, pa bi se
+    # svi mailovi obradili ponovno - i svi polaznici dobili potvrdu drugi put.
     state_path = Path(config.get("state_path", "processed_uids.json"))
+    if not state_path.is_absolute():
+        state_path = Path(__file__).with_name(str(state_path))
     output_dir = Path(config["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -679,9 +679,30 @@ def main():
     for raw_folder, folder_location in target_folders:
         added += process_folder(imap, raw_folder, folder_location, config, processed, workbooks)
 
-    for path, wb, ws, _ in workbooks.values():
-        with_retry(lambda: wb.save(path), retry_on=(PermissionError, OSError))
+    neuspjeli = set()
+    for path, wb, ws, _, potvrde, state_keys in workbooks.values():
+        try:
+            with_retry(lambda: wb.save(path), retry_on=(PermissionError, OSError))
+        except Exception as e:
+            # Ostale tablice se svejedno spremaju; ove prijave ostaju
+            # neobrađene pa će se pokušati ponovno pri sljedećem prolasku.
+            print(f"[GREŠKA] Ne mogu spremiti {path}: {e}", file=sys.stderr)
+            neuspjeli.update(state_keys)
+            continue
 
+        if config.get("send_replies"):
+            for parsed, course_code, location, dates in potvrde:
+                try:
+                    if send_confirmation_email(config, parsed, course_code,
+                                               location, dates):
+                        print(f"  Poslana potvrda na {parsed['Email Address']}")
+                    else:
+                        print("  Potvrda nije poslana (nema email adrese)")
+                except Exception as e:
+                    print(f"  [!] Greška pri slanju potvrde "
+                          f"{parsed.get('Email Address')}: {e}")
+
+    processed -= neuspjeli
     save_state(state_path, processed)
     imap.logout()
 

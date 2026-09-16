@@ -177,12 +177,20 @@ def send_payment_confirmation(config, registrant, iznos, ukupno_uplaceno):
     else:
         tijelo = config.get(kljuc) or DEFAULT_BODIES[kljuc]
         naslov = config.get("payment_confirmation_subject") or DEFAULT_SUBJECT
+        izvor = "config.json"
+
+    if predlosci is not None:
+        naslov_gotov = predlosci.popuni(naslov, varijable, izvor)
+        tijelo_gotov = predlosci.popuni(tijelo, varijable, izvor)
+    else:
+        naslov_gotov = naslov.format(**varijable)
+        tijelo_gotov = tijelo.format(**varijable)
 
     msg = EmailMessage()
-    msg["Subject"] = naslov.format(**varijable)
+    msg["Subject"] = naslov_gotov
     msg["From"] = config["zoho_email"]
     msg["To"] = to_email
-    msg.set_content(tijelo.format(**varijable))
+    msg.set_content(tijelo_gotov)
 
     if config.get("smtp_port", 465) == 465:
         with smtplib.SMTP_SSL(config["smtp_host"], config["smtp_port"], timeout=30) as smtp:

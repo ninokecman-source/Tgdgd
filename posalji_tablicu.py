@@ -227,8 +227,8 @@ def obradi_tablicu(xlsx_path: Path, config: dict, state: dict, danas: date,
         xlsx_path.parent, "izvjestaj centrali", config=config,
         kljuc_naslov="course_report_subject", kljuc_tijela="course_report_body",
         zadani_naslov=DEFAULT_SUBJECT, zadano_tijelo=DEFAULT_BODY)
-    naslov = naslov.format(**varijable)
-    tijelo = tijelo.format(**varijable)
+    naslov = predlosci.popuni(naslov, varijable, izvor)
+    tijelo = predlosci.popuni(tijelo, varijable, izvor)
 
     print(f"\n{info['course_code']} / {info['location']} ({info['dates']}) - "
           f"završio prije {proslo} dana, {len(polaznici)} polaznika")
@@ -296,7 +296,12 @@ def main():
         print(f"Pregled kao da je {danas.strftime('%d.%m.%Y.')}\n")
     else:
         danas = date.today()
-    poslano = sum(obradi_tablicu(p, config, state, danas, dry_run) for p in datoteke)
+    poslano = 0
+    for put in datoteke:
+        try:
+            poslano += obradi_tablicu(put, config, state, danas, dry_run)
+        except predlosci.GreskaPredloska as e:
+            print(f"[!] {put.name}: {e}")
 
     print()
     if dry_run:

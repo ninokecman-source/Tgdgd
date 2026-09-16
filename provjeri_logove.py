@@ -46,6 +46,7 @@ PROBLEM_UZORCI = [
     re.compile(r"Traceback \(most recent call last\)"),
     re.compile(r"\[!\]"),
     re.compile(r"\[GREŠKA\]", re.IGNORECASE),
+    re.compile(r"\[UPOZORENJE\]", re.IGNORECASE),
     re.compile(r"NE VALJA"),
     re.compile(r"nije poslan", re.IGNORECASE),
     re.compile(r"ne mogu", re.IGNORECASE),
@@ -73,9 +74,12 @@ def procitaj_novo(path: Path, zadnja_pozicija: int) -> tuple:
     if zadnja_pozicija > velicina:
         zadnja_pozicija = 0
 
-    with open(path, "r", encoding="utf-8", errors="replace") as f:
+    # Pozicija je broj bajtova (iz stat), pa se i čita u bajtovima; tekstualni
+    # seek očekuje svoju oznaku, ne bajt, i zna se izgubiti na kvačicama.
+    with open(path, "rb") as f:
         f.seek(zadnja_pozicija)
-        return f.read(), velicina
+        podaci = f.read()
+    return podaci.decode("utf-8", errors="replace"), velicina
 
 
 def nadji_probleme(tekst: str) -> list:
@@ -189,28 +193,37 @@ def main():
             dijelovi.append(f"### {naziv}\nSve uredno "
                             f"({len(novi_tekst.splitlines())} novih redaka, bez grešaka).")
 
-    save_state(state)
-
     kad = datetime.now().strftime("%d.%m.%Y. %H:%M")
     tijelo = f"Provjera logova, {kad}\n\n" + "\n\n".join(dijelovi)
 
     if args.ispis:
-        print(tijelo)
+        print(tijelo)   # samo gledanje - pozicija se ne pomiče
         return
 
     if prva_provjera and not args.test:
+        save_state(state)
         print("Prva provjera - zapamtio sam dokle su logovi pročitani, mail ne šaljem.")
         print("Za provjeru da slanje radi, pokreni s --test.")
         return
 
-    if ima_problema:
-        posalji_mail(config, f"⚠️ Emmett skripte - problem u logovima ({kad})", tijelo)
-        print(f"Poslan mail o problemima na {config.get('notify_email', config['zoho_email'])}.")
-    elif args.test:
-        posalji_mail(config, f"✅ Emmett skripte - sve uredno ({kad})", tijelo)
-        print("Poslan probni mail.")
-    else:
-        print("Nema problema - mail se ne šalje.")
+    # Dokle je log pročitan pamti se TEK kad poruka ode. Inače bi neuspjelo
+    # slanje pomaknulo poziciju, pa te greške više nikad ne bi bile prijavljene.
+    try:
+        if ima_problema:
+            posalji_mail(config, f"⚠️ Emmett skripte - problem u logovima ({kad})", tijelo)
+            print(f"Poslan mail o problemima na "
+                  f"{config.get('notify_email', config['zoho_email'])}.")
+        elif args.test:
+            posalji_mail(config, f"✅ Emmett skripte - sve uredno ({kad})", tijelo)
+            print("Poslan probni mail.")
+        else:
+            print("Nema problema - mail se ne šalje.")
+    except Exception as e:
+        print(f"[GREŠKA] Mail o logovima nije poslan: {e}", file=sys.stderr)
+        print("Pozicija u logovima nije pomaknuta - isti nalaz ide u sljedećoj provjeri.")
+        return
+
+    save_state(state)
 
 
 if __name__ == "__main__":
