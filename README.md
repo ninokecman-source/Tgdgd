@@ -57,6 +57,11 @@ Velika i mala slova te kvačice u nazivu nisu bitni. Podržani su `.docx`,
 **Naslov maila:** ako prvi redak dokumenta glasi `Naslov: …` (prolazi i
 `Subject:`), taj redak postaje naslov poruke, a ostatak je tijelo.
 
+**Opis plaćanja u tekstovima o uplati** traži ime i prezime *polaznika*,
+ne uplatitelja, i to izrijekom — po tome se uplata povezuje s prijavom. Ako
+to iz teksta izbaciš, uplata koju netko radi za drugoga završit će na
+krivoj osobi (vidi „Na čije ime ide uplata" u `bank_solo/README.md`).
+
 **Podaci u vitičastim zagradama** (`{first_name}`, `{course_code}`,
 `{iznos}` …) popunjavaju se sami — koji su gdje dostupni, piše uz svaku
 poruku niže.
