@@ -322,6 +322,30 @@ systemctl restart poprio
 `config.json` i baza u `/var/lib/poprio/` se ne diraju — zato baza i **ne
 smije** živjeti u `/opt/poprio`.
 
+## Česte zamke
+
+**`journalctl -f` guta naredbe.** Praćenje loga (`-f`, follow) radi dok ga ne
+prekineš s `Ctrl+C`. Sve što u međuvremenu zalijepiš odlazi *u* njega kao tekst
+i ne izvršava se — a izgleda kao da si naredbu pokrenuo. Ako zalijepiš nešto i
+ništa se ne dogodi, prvo pogledaj vraća li se prompt `#`.
+
+**Za izmjenu configa koristi `sed`, ne `nano`.** Na tabletu je `nano` mučenje
+jer traži `Ctrl+O` i `Ctrl+X`. Jedan red umjesto toga:
+
+```bash
+sed -i 's|"solo_document_type": "ponuda"|"solo_document_type": "racun"|' /opt/poprio/config.json
+/opt/poprio/venv/bin/python -c "import json; json.load(open('/opt/poprio/config.json')); print('config OK')"
+systemctl restart poprio
+```
+
+Provjera JSON-a prije restarta je važna: pokvaren `config.json` zaustavlja
+servis, a `sed` nema pojma je li rezultat i dalje valjan JSON.
+
+**Mail ne radi dok `smtp_password` nije popunjen.** Dok stoji zamjenska
+vrijednost, u logu se pojavljuje `Obavijest ... nije poslana: timed out`. To
+ne ruši sinkronizaciju — računi se i dalje obrađuju — ali ne stižu ni
+obavijesti o problemima ni PDF pacijentu.
+
 ## Korisne naredbe
 
 ```bash
