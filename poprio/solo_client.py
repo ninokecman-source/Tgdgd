@@ -4,8 +4,8 @@ Payload format je usklađen s ponašanjem Solo API-ja potvrđenim na živom
 Solo računu (vidi poprio/README.md, "Poznata svojstva Solo API-ja"):
 - "usluga" mora ići kao ponovljeno polje (jedan po stavci računa),
   ne samo implicitno kroz indeksirane opis_usluge_N ključeve
-- cijena_N i popust_N moraju koristiti zarez kao decimalni separator
-  (hrvatski format, npr. "76,00"), ne točku
+- cijena_N, popust_N i kolicina_N moraju koristiti zarez kao decimalni
+  separator (hrvatski format, npr. "76,00", "2,5"), ne točku
 - popust_N je obavezan po stavci čak i kad je 0
 - tip_kupca mora biti broj (1 = B2C), ne string
 - tip_usluge (ID tipa usluge iz Solo računa) je obavezan
@@ -85,13 +85,24 @@ class SoloClient:
         return self._post("ponuda", payload, result_key="ponuda")
 
     @staticmethod
-    def _append_stavke(payload, stavke):
+    def _kolicina(value):
+        """Količina u hrvatskom zapisu - zarezom, bez suvišnih nula.
+
+        Solo odbija točku i u količini, ne samo u cijeni: provjereno na živom
+        API-ju, '1.0' i '2.5' vraćaju grešku 111 ("Količina nije poslana ili u
+        neispravnom formatu"), dok '1' i '2,5' prolaze. Cliniko količinu daje
+        kao broj, pa bi bez ovoga svaki račun sa stvarnim stavkama pao."""
+        s = f"{float(value):.3f}".rstrip("0").rstrip(".")
+        return s.replace(".", ",")
+
+    @classmethod
+    def _append_stavke(cls, payload, stavke):
         for i, stavka in enumerate(stavke, start=1):
             payload.append(("usluga", i))
             payload.append((f"opis_usluge_{i}", stavka["opis"]))
             payload.append((f"cijena_{i}", f"{stavka['cijena']:.2f}".replace(".", ",")))
             payload.append((f"popust_{i}", "0,00"))
-            payload.append((f"kolicina_{i}", stavka.get("kolicina", 1)))
+            payload.append((f"kolicina_{i}", cls._kolicina(stavka.get("kolicina", 1))))
             payload.append((f"porez_stopa_{i}", stavka["porez_stopa"]))
 
     def _wait_for_rate_limit(self):
