@@ -37,6 +37,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 import predlosci
+import tablice
 from zoho_to_excel import (
     FIRST_PARTICIPANT_ROW,
     find_totals_row,
@@ -324,9 +325,15 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
         # središ. Oboje dolazi iz istog dokumenta.
         if ("{lokacija_tekst}" in tijelo or "{venue}" in tijelo) and not info["lokacija_tekst"]:
             if dokument is None:
-                print(f"[!] {xlsx_path.name}: podsjetnik {days_before} dana prije treba "
-                      f"upute za lokaciju - nedostaje 'lokacija {info['location']}.docx' "
-                      f"u {mapa} - preskačem.")
+                u_oblaku = tablice.trag_u_oblaku(mapa, predlosci.naziv_lokacije(info["location"]))
+                if u_oblaku:
+                    print(f"[!] {xlsx_path.name}: {u_oblaku} nije na disku nego u oblaku "
+                          f"- ne mogu pročitati upute za lokaciju, preskačem. Otvori "
+                          f"folder u Finderu da se preuzme.")
+                else:
+                    print(f"[!] {xlsx_path.name}: podsjetnik {days_before} dana prije treba "
+                          f"upute za lokaciju - nedostaje 'lokacija {info['location']}.docx' "
+                          f"u {mapa} - preskačem.")
             else:
                 print(f"[!] {xlsx_path.name}: iz dokumenta {dokument.name} ne mogu "
                       f"pročitati tekst - spremi ga kao .docx - preskačem.")
@@ -411,7 +418,11 @@ def show_overview(files: list, config: dict, state: dict, today: date) -> None:
         info["lokacija_tekst"] = tekst_lokacije
 
         if dokument is None:
-            print(f"  Upute:     NEMA dokumenta 'lokacija {info['location']}.docx'")
+            u_oblaku = tablice.trag_u_oblaku(mapa, predlosci.naziv_lokacije(info["location"]))
+            if u_oblaku:
+                print(f"  Upute:     {u_oblaku} je U OBLAKU, nije preuzeta")
+            else:
+                print(f"  Upute:     NEMA dokumenta 'lokacija {info['location']}.docx'")
         elif not tekst_lokacije:
             print(f"  Upute:     {dokument.name} - NE MOGU pročitati tekst (spremi kao .docx)")
         else:
@@ -479,8 +490,7 @@ def main():
         sys.exit(f"Ne postoji folder s tablicama: {output_dir}")
 
     today = date.today()
-    files = sorted(p for p in output_dir.glob("*.xlsx") if not p.name.startswith("~$")
-                      and p.name != "template_admin_sheet.xlsx")
+    files = tablice.nadji(output_dir)
     if not files:
         print(f"Nema nijedne .xlsx tablice u {output_dir}.")
         return

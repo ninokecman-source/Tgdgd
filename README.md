@@ -263,6 +263,31 @@ Za automatsko pokretanje, jednom dnevno:
 **Napomena:** tablica sadrži osobne podatke polaznika (ime, adresa, email,
 telefon). Šalje se centrali jer je to njihov administrativni obrazac.
 
+## Tablice u sinkroniziranom folderu (iCloud, Dropbox)
+
+Folder s tablicama smije biti sinkroniziran, uz dvije postavke na Macu:
+
+- **iCloud Drive → Options → Optimise Mac Storage isključen**, i desni klik
+  na folder → **Keep Downloaded**. Inače macOS pravu datoteku zamijeni
+  praznim tragom kad oslobađa prostor.
+- **`/usr/sbin/cron` u Privacy & Security → Full Disk Access**, inače
+  pozadinski proces ne smije čitati taj folder.
+
+Skripte uz to same paze na dvije zamke koje sinkronizacija donosi:
+
+- **Datoteka izbačena u oblak.** Trag (`.Modul 1&2 Split.xlsx.icloud`) ne
+  završava na `.xlsx`, pa bi tečaj bez upozorenja nestao iz obrade. Traži se
+  izrijekom i javlja u logu — i za tablice i za dokumente o lokaciji, gdje
+  se „nema dokumenta" razlikuje od „dokument nije preuzet".
+- **Kopija s sukobom.** Ako je tablica otvorena u Excelu dok skripta u nju
+  piše, nastane `Modul 1&2 Split 2.xlsx`. Takva se **ne obrađuje** — inače
+  bi se polaznici brojali dvaput, a uplata mogla završiti u staroj kopiji.
+  Datoteka se smatra kopijom samo ako uz nju stoji original istog naziva
+  (ili joj u nazivu piše „conflicted copy"), pa se prava tablica ne može
+  slučajno izbaciti.
+
+Oba slučaja idu u log kao `[!]`, pa ih pokupi i provjera logova.
+
 ## Što se događa kad nešto pukne
 
 Sustav je posložen tako da **radije ne napravi ništa nego da napravi krivo**.

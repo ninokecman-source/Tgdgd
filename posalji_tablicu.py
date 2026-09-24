@@ -31,6 +31,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 import predlosci
+import tablice
 from send_reminders import (
     FIRST_PARTICIPANT_ROW,
     course_info,
@@ -281,8 +282,7 @@ def main():
     if not output_dir.exists():
         sys.exit(f"Ne postoji folder s tablicama: {output_dir}")
 
-    datoteke = sorted(p for p in output_dir.glob("*.xlsx") if not p.name.startswith("~$")
-                      and p.name != "template_admin_sheet.xlsx")
+    datoteke = tablice.nadji(output_dir)
     if not datoteke:
         print(f"Nema nijedne .xlsx tablice u {output_dir}.")
         return

@@ -21,15 +21,29 @@ def normalize_name(text: str) -> str:
     return strip_diacritics(text).upper().strip()
 
 
+def _tablice_u(excel_dir: Path) -> list:
+    """Tablice koje se smiju čitati. Ista pravila kao u glavnim skriptama
+    (preskače trag datoteke u oblaku i kopiju s sukobom) - ovdje je to
+    najvažnije, jer bi uplata upisana u krivu kopiju otišla u prazno."""
+    try:
+        from mailer import iz_glavnog_foldera
+        modul = iz_glavnog_foldera("tablice")
+    except Exception:
+        modul = None
+
+    if modul is None:
+        return sorted(p for p in excel_dir.glob("*.xlsx")
+                      if not p.name.startswith("~$"))
+    return modul.nadji(excel_dir)
+
+
 def load_registrants(excel_dir: Path) -> list:
     """Vrati listu dictova za svakog polaznika u svim .xlsx datotekama u
     excel_dir (osim predloška): {first_name, last_name, name_variants,
     email, course_code, location, dates, file_path, row}."""
     registrants = []
 
-    for path in sorted(Path(excel_dir).glob("*.xlsx")):
-        if path.name.startswith("~$"):
-            continue  # privremena Excel zaključana datoteka
+    for path in _tablice_u(Path(excel_dir)):
         try:
             wb = load_workbook(path)
         except Exception:
