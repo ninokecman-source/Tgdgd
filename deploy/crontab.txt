@@ -1,0 +1,7 @@
+# crontab -e  (kao korisnik "proprio")
+# Podsjetnici svakih 15 minuta (tok 1). Cron vrijeme nije bitno – posao sam
+# pazi na vrijeme slanja (SEND_HOURS) i zonu Europe/Zagreb.
+*/15 * * * * cd /opt/proprio-whatsapp && /usr/bin/node src/reminders.js >> data/podsjetnici.log 2>&1
+
+# Dnevni izvještaj "poslano X" za jučer, u 7:05 (G-87)
+5 7 * * * cd /opt/proprio-whatsapp && /usr/bin/node src/cli.js izvjestaj $(date -d yesterday +\%F) >> data/izvjestaji.log 2>&1

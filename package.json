@@ -1,0 +1,21 @@
+{
+  "name": "proprio-whatsapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WhatsApp Cloud API podsjetnici i inbox za Proprio Centar (Cliniko termini)",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "podsjetnici": "node src/reminders.js",
+    "alat": "node src/cli.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "express": "^5.2.1",
+    "libphonenumber-js": "^1.13.14"
+  }
+}
