@@ -511,6 +511,11 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
         # ručno vidi je li neki Cliniko račun već fiskaliziran.
         napomene = f"Cliniko #{cliniko_id}"
 
+        # Od ove točke nadalje prekid procesa znači stvarnu dvojbu - dokument
+        # je u Solu možda nastao. Sve prije nje je sigurno bez posljedica, pa
+        # se takav zapis može vratiti u red sam (vidi recover_unsent_claims).
+        state.mark_sending(cliniko_id)
+
         if document_type == "ponuda":
             racun = solo.create_ponuda(
                 tip_kupca=config["solo_tip_kupca"],
@@ -543,7 +548,7 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
     except NothingToInvoice as e:
         # Nije greška nego račun bez sadržaja (npr. samo oznaka načina plaćanja).
         # Ponavljanje ne bi ništa promijenilo, pa se zatvara kao preskočen.
-        state.mark_skipped(cliniko_id, e)
+        state.mark_skipped(cliniko_id, e, invoice.get('number'))
         print(f"[PRESKOČENO] Cliniko račun {cliniko_id}: {e}")
         return False
     except Exception as e:
@@ -821,6 +826,16 @@ def report_waiting_invoices(state, alerter):
 def report_stuck_invoices(state, config, alerter):
     """Računi koji traže ljudsku pažnju - javljaju se pri svakom pokretanju."""
     report_waiting_invoices(state, alerter)
+
+    # Zapisi zaustavljeni prije nego je išta otišlo u Solo nisu dvojbeni i ne
+    # trebaju čovjeka - vraćaju se u red sami. Bez ovoga račun koji je čekao
+    # oznaku ostane zaglavljen samo zato što je servis restartan u krivoj
+    # sekundi, i tiho ispadne iz obrade.
+    recovered = state.recover_unsent_claims()
+    if recovered:
+        print(f"Vraćeno u red {len(recovered)} računa zaustavljenih prije slanja u Solo: "
+              + ", ".join(recovered))
+
     pending = state.pending_claims()
     if pending:
         alerter.problem(

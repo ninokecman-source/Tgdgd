@@ -464,6 +464,15 @@ sudo -u poprio sqlite3 /var/lib/poprio/state.sqlite3 \
 
 ### Zaustavljeni računi (prekid usred slanja)
 
+Bilježi se je li zahtjev prema Solu uopće krenuo, pa se dva slučaja razlikuju:
+
+- **prekid prije slanja** — dokument sigurno nije nastao, pa se takav račun pri
+  sljedećem pokretanju sam vraća u red (broj pokušaja ostaje netaknut). Ovo
+  nastaje redovito: ponovni pokušaji nakratko zauzmu svaki račun koji čeka
+  oznaku, pa restart servisa lako padne baš u taj prozor.
+- **prekid usred slanja** — ne zna se je li dokument nastao, pa se ne ponavlja
+  sam nego se javlja; razrješava se ručno, kako je opisano niže.
+
 Ako proces bude prekinut (reboot, OOM, `kill`) točno između zauzimanja
 računa i potvrde da je dokument nastao, zapis ostane u stanju `pending`.
 Tada se **stvarno ne zna** je li dokument u Solu nastao ili nije, pa ga

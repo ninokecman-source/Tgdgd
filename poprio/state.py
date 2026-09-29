@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS processed_invoices (
     status              TEXT NOT NULL DEFAULT 'done',
     attempts            INTEGER NOT NULL DEFAULT 0,
     last_error          TEXT,
-    cliniko_number      TEXT
+    cliniko_number      TEXT,
+    solo_attempted      INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sync_state (
@@ -63,6 +64,11 @@ class StateStore:
             ("attempts", "INTEGER NOT NULL DEFAULT 0"),
             ("last_error", "TEXT"),
             ("cliniko_number", "TEXT"),
+            # Zatečeni `pending` zapisi nastali su prije nego se pratilo je li
+            # se do Sola uopće stiglo. Dobivaju 1 (= možda jest): pretpostavka
+            # koja u najgorem slučaju traži pogled u Solo, dok bi obrnuta mogla
+            # stvoriti duplikat fiskalnog računa.
+            ("solo_attempted", "INTEGER NOT NULL DEFAULT 1"),
         ):
             if name not in existing:
                 self.conn.execute(f"ALTER TABLE processed_invoices ADD COLUMN {name} {definition}")
@@ -72,8 +78,8 @@ class StateStore:
         zauzeo ovaj poziv - ako je već zauzet ili obrađen, vraća False."""
         with self.conn:
             cur = self.conn.execute(
-                """INSERT OR IGNORE INTO processed_invoices (cliniko_invoice_id, status)
-                   VALUES (?, 'pending')""",
+                """INSERT OR IGNORE INTO processed_invoices (cliniko_invoice_id, status, solo_attempted)
+                   VALUES (?, 'pending', 0)""",
                 (str(cliniko_invoice_id),),
             )
         return cur.rowcount == 1
@@ -101,7 +107,7 @@ class StateStore:
         jedan proces."""
         with self.conn:
             cur = self.conn.execute(
-                """UPDATE processed_invoices SET status = 'pending'
+                """UPDATE processed_invoices SET status = 'pending', solo_attempted = 0
                    WHERE cliniko_invoice_id = ? AND status IN ('failed', 'waiting')""",
                 (str(cliniko_invoice_id),),
             )
@@ -151,16 +157,18 @@ class StateStore:
         ).fetchone()
         return row[0] if row else 0
 
-    def mark_skipped(self, cliniko_invoice_id, reason):
+    def mark_skipped(self, cliniko_invoice_id, reason, cliniko_number=None):
         """Račun na kojem nema ničega za fiskalizirati (npr. sadrži samo oznaku
         načina plaćanja od 0 EUR). Nije greška, ali ni dokument ne nastaje - pa
         se ne ponavlja, a ostaje vidljiv u bazi."""
         with self.conn:
             self.conn.execute(
                 """UPDATE processed_invoices
-                   SET status = 'skipped', last_error = ?, processed_at = datetime('now')
+                   SET status = 'skipped', last_error = ?, cliniko_number = ?,
+                       processed_at = datetime('now')
                    WHERE cliniko_invoice_id = ?""",
-                (str(reason)[:500], str(cliniko_invoice_id)),
+                (str(reason)[:500], str(cliniko_number) if cliniko_number else None,
+                 str(cliniko_invoice_id)),
             )
 
     def failed_for_retry(self, max_attempts):
@@ -187,13 +195,52 @@ class StateStore:
             )
         )
 
+    def mark_sending(self, cliniko_invoice_id):
+        """Bilježi da zahtjev prema Solu kreće. Od ovog trenutka prekid procesa
+        znači da se ne zna je li dokument nastao; prije njega se zna da nije."""
+        with self.conn:
+            self.conn.execute(
+                "UPDATE processed_invoices SET solo_attempted = 1 WHERE cliniko_invoice_id = ?",
+                (str(cliniko_invoice_id),),
+            )
+
+    def recover_unsent_claims(self):
+        """Vraća u red račune zaustavljene u `pending` PRIJE nego je išta otišlo
+        u Solo, i vraća njihove ID-eve.
+
+        Takav zapis nije dvojben: dokument sigurno nije nastao, pa ga nema
+        razloga ostavljati čovjeku. Nastaje redovito - `retry_failed` svakih
+        nekoliko sekundi nakratko zauzme svaki račun koji čeka oznaku, pa
+        restart servisa lako padne baš u taj prozor.
+
+        Broj pokušaja se NE dira: račun koji stvarno pada i dalje ih troši i
+        ne može se vrtjeti unedogled."""
+        ids = [
+            row[0]
+            for row in self.conn.execute(
+                "SELECT cliniko_invoice_id FROM processed_invoices "
+                "WHERE status = 'pending' AND solo_attempted = 0"
+            )
+        ]
+        if ids:
+            with self.conn:
+                self.conn.execute(
+                    "UPDATE processed_invoices SET status = 'failed' "
+                    "WHERE status = 'pending' AND solo_attempted = 0"
+                )
+        return ids
+
     def pending_claims(self):
-        """Računi zaustavljeni u `pending` - proces je prekinut usred slanja i
-        ne zna se je li dokument u Solu nastao."""
+        """Računi zaustavljeni usred slanja u Solo - ne zna se je li dokument
+        nastao, pa ih razrješava čovjek.
+
+        Samo oni kod kojih je zahtjev prema Solu stvarno krenuo; ostale je
+        `recover_unsent_claims` već vratio u red."""
         return [
             row[0]
             for row in self.conn.execute(
-                "SELECT cliniko_invoice_id FROM processed_invoices WHERE status = 'pending'"
+                "SELECT cliniko_invoice_id FROM processed_invoices "
+                "WHERE status = 'pending' AND solo_attempted = 1"
             )
         ]
 
