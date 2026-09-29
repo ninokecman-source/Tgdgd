@@ -41,6 +41,9 @@ SOLO_MAX_STAVKI = 36
 # Solo prihvaća 4 decimale u postotku popusta - provjereno na živom API-ju
 # (cijena 55,00 uz popust 18,1818 daje točno 45,00).
 DISCOUNT_DECIMALS = 4
+# Obrada jednog računa traje sekunde; zauzeće starije od ovoga je zaglavljeno,
+# a ne u letu. Koristi se za oporavak tijekom rada, ne samo pri pokretanju.
+STALE_CLAIM_MINUTES = 10
 
 # Što piše kao kupac kad pacijent u Clinku nema upisano ime.
 KUPAC_BEZ_IMENA = "Klijent"
@@ -634,6 +637,13 @@ def advance_watermark(state, previous, latest_seen, config):
 
 
 def run_once(config, cliniko, solo, state, alerter=None):
+    # Zaustavljena zauzeća ne čekaju restart servisa. Prekid usred prolaza
+    # (npr. greška koja sruši cijeli prolaz) ostavi zapis u `pending`, a on se
+    # više ne bi pojavio ni u jednom redu - tiho bi ispao iz obrade.
+    stale = state.recover_unsent_claims(older_than_minutes=STALE_CLAIM_MINUTES)
+    if stale:
+        print(f"Vraćeno u red {len(stale)} zaustavljenih zauzeća: " + ", ".join(stale))
+
     processed_count = retry_failed(config, cliniko, solo, state, alerter)
 
     watermark = state.get_watermark()

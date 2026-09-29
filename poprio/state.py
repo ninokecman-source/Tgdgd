@@ -107,7 +107,9 @@ class StateStore:
         jedan proces."""
         with self.conn:
             cur = self.conn.execute(
-                """UPDATE processed_invoices SET status = 'pending', solo_attempted = 0
+                """UPDATE processed_invoices
+                   SET status = 'pending', solo_attempted = 0,
+                       processed_at = datetime('now')
                    WHERE cliniko_invoice_id = ? AND status IN ('failed', 'waiting')""",
                 (str(cliniko_invoice_id),),
             )
@@ -204,29 +206,38 @@ class StateStore:
                 (str(cliniko_invoice_id),),
             )
 
-    def recover_unsent_claims(self):
+    def recover_unsent_claims(self, older_than_minutes=None):
         """Vraća u red račune zaustavljene u `pending` PRIJE nego je išta otišlo
         u Solo, i vraća njihove ID-eve.
 
         Takav zapis nije dvojben: dokument sigurno nije nastao, pa ga nema
         razloga ostavljati čovjeku. Nastaje redovito - `retry_failed` svakih
         nekoliko sekundi nakratko zauzme svaki račun koji čeka oznaku, pa
-        restart servisa lako padne baš u taj prozor.
+        prekid procesa lako padne baš u taj prozor.
+
+        `older_than_minutes` odvaja zaglavljene od onih koji su upravo sada u
+        obradi. Pri pokretanju se izostavlja - ništa još nije u letu, pa se
+        kupi sve. Tijekom rada se postavlja, jer obrada jednog računa traje
+        sekunde: zapis stariji od nekoliko minuta sigurno nije živ.
 
         Broj pokušaja se NE dira: račun koji stvarno pada i dalje ih troši i
         ne može se vrtjeti unedogled."""
+        uvjet = "status = 'pending' AND solo_attempted = 0"
+        params = ()
+        if older_than_minutes is not None:
+            uvjet += " AND processed_at < datetime('now', ?)"
+            params = (f"-{int(older_than_minutes)} minutes",)
+
         ids = [
             row[0]
             for row in self.conn.execute(
-                "SELECT cliniko_invoice_id FROM processed_invoices "
-                "WHERE status = 'pending' AND solo_attempted = 0"
+                f"SELECT cliniko_invoice_id FROM processed_invoices WHERE {uvjet}", params
             )
         ]
         if ids:
             with self.conn:
                 self.conn.execute(
-                    "UPDATE processed_invoices SET status = 'failed' "
-                    "WHERE status = 'pending' AND solo_attempted = 0"
+                    f"UPDATE processed_invoices SET status = 'failed' WHERE {uvjet}", params
                 )
         return ids
 
