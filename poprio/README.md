@@ -308,6 +308,26 @@ je otvorio račun i dodao samo "Gotovinsko plaćanje") označava se kao
 Solo prima najviše **36 stavki** po računu; veći račun se odbija prije slanja,
 uz jasnu poruku umjesto Solo-ove šifre greške.
 
+## Popust
+
+Popust dan u Clinku prenosi se na dokument u Solu i **vidi se** kao popust, ne
+kao snižena cijena. Na ponudi/računu ostaje originalna cijena usluge, a uz nju
+postotak popusta — isto kako izgleda i na računu u Clinku.
+
+Cliniko dopušta popust u postotku i u eurima; Solo prima samo postotak
+(`popust_x`), pa se popust u eurima pretvara u postotak. Solo prihvaća 4
+decimale i sam izračuna redak, pa pretvorba ne gubi ni cent: 55,00 EUR uz
+popust od 10 EUR postaje 18,1818 % i daje točno 45,00.
+
+Postotak se ne čita iz Clinikovog polja nego se računa iz onoga što je pacijent
+stvarno platio. Tako ispada isto za obje vrste popusta i ne ovisi o tome koje
+polje Cliniko popuni u kojem slučaju.
+
+Ako se izračunati popust ne bi poklopio s plaćenim iznosom do centa, stavka
+pada natrag na sniženu cijenu bez prikazanog popusta — iznos je uvijek važniji
+od prikaza. Uz to i dalje vrijedi provjera ukupnog iznosa: ako se zbroj stavki
+ne poklapa s računom u Clinku, ne fiskalizira se ništa.
+
 ## Računi na tvrtku (R1)
 
 Račun na tvrtku **se ne fiskalizira** — u Solo ide kao **ponuda**, koju

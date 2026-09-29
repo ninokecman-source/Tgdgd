@@ -38,6 +38,9 @@ FAILED_PASSES_BEFORE_ALERT = 3
 
 # Solo prima najviše 36 stavki po računu (greška 107).
 SOLO_MAX_STAVKI = 36
+# Solo prihvaća 4 decimale u postotku popusta - provjereno na živom API-ju
+# (cijena 55,00 uz popust 18,1818 daje točno 45,00).
+DISCOUNT_DECIMALS = 4
 
 # Što piše kao kupac kad pacijent u Clinku nema upisano ime.
 KUPAC_BEZ_IMENA = "Klijent"
@@ -230,6 +233,47 @@ def r1_marker_name(invoice_items, config):
     return None
 
 
+def split_discount(item, quantity, tax_rate):
+    """Razdvaja redak na cijenu prije popusta i postotak popusta za Solo.
+
+    Solo popust prima kao POSTOTAK, ne kao iznos - provjereno na živom API-ju:
+    cijena 200,00 uz popust 10 daje sumu 180,00. Cliniko popust daje na dva
+    načina, kao postotak (`discount_percentage`) ili u eurima
+    (`discounted_amount`, uz `is_monetary_discount`), pa se iznos u eurima mora
+    pretvoriti u postotak.
+
+    Postotak se ne čita iz Clinikovog polja nego se izračuna iz onoga što je
+    pacijent stvarno platio. Tako ispadne isto za obje vrste popusta, a ne ovisi
+    o tome koje polje Cliniko popuni u kojem slučaju.
+
+    Vraća (neto_cijena_po_jedinici_prije_popusta, postotak) ili None kad popusta
+    nema, ili kad bi ga prikaz promijenio makar za cent. U tom slučaju
+    pozivatelj ostaje pri dosadašnjem ponašanju - popust uračunat u cijenu,
+    nevidljiv na dokumentu ali s točnim iznosom. Točan iznos je uvijek
+    važniji od prikaza."""
+    gross_after = line_total(item)
+    gross_before = float(item.get("unit_price") or 0) * quantity
+    if gross_before <= 0 or gross_before - gross_after < 0.005:
+        return None
+
+    unit_net = round(float(item["unit_price"]) / (1 + tax_rate / 100), 2)
+    pct = round((1 - gross_after / gross_before) * 100, DISCOUNT_DECIMALS)
+    if not 0 < pct < 100:
+        return None
+
+    # Solo redak računa kao round(cijena * kolicina * (1 - popust/100), 2) i
+    # na to dodaje porez. Ako to ne da točno ono što je pacijent platio,
+    # popust se ne prikazuje.
+    if abs(solo_line_gross(unit_net, quantity, pct, tax_rate) - gross_after) >= 0.005:
+        return None
+    return unit_net, pct
+
+
+def solo_line_gross(cijena, kolicina, popust, tax_rate):
+    """Iznos retka s porezom onako kako će ga izračunati Solo."""
+    return round(round(cijena * kolicina * (1 - popust / 100), 2) * (1 + tax_rate / 100), 2)
+
+
 def line_total(item):
     """Iznos retka koji je pacijent stvarno platio - nakon popusta, s porezom."""
     total = item.get("total_including_tax")
@@ -247,9 +291,11 @@ def build_stavke(config, invoice, invoice_items):
     očekuje NETO cijenu po jedinici i sam dodaje porez, a Cliniko daje iznos
     retka s porezom i nakon popusta - pa se računa unatrag.
 
-    Popust se ne prenosi kao zaseban podatak nego je već sadržan u cijeni
-    (`popust_x` u Solu je postotak, a Cliniko popust može biti i u eurima;
-    pretvaranje bi zbog zaokruživanja lako promijenilo ukupan iznos).
+    Popust se prenosi zasebno, da se na dokumentu vidi kao i na računu u
+    Clinku. `popust_x` u Solu je postotak, a Cliniko popust može biti i u
+    eurima, pa se postotak izračunava iz stvarno plaćenog iznosa - vidi
+    `split_discount`. Ako se izračunati popust ne bi poklopio do centa,
+    stavka pada natrag na sniženu cijenu bez prikazanog popusta.
 
     Diže iznimku ako se zbroj stavki ne poklapa s ukupnim iznosom računa -
     bolje ne fiskalizirati ništa nego fiskalizirati krivi iznos."""
@@ -276,11 +322,21 @@ def build_stavke(config, invoice, invoice_items):
                 f"račun s nultom ili negativnom stavkom se ne fiskalizira"
             )
 
-        net_line = line_total(item) / (1 + tax_rate / 100)
+        # Popust se prenosi kao popust, da se na dokumentu i vidi - ali samo ako
+        # se iznos poklopi do centa. Ako ne, pada natrag na sniženu cijenu:
+        # račun tada izgleda kao da popusta nije bilo, ali je iznos točan.
+        discount = split_discount(item, quantity, tax_rate)
+        if discount:
+            cijena, popust = discount
+        else:
+            cijena = round(line_total(item) / (1 + tax_rate / 100) / quantity, 2)
+            popust = 0
+
         stavke.append({
             "opis": (item.get("name") or fallback_opis)[:500],
-            "cijena": round(net_line / quantity, 2),
+            "cijena": cijena,
             "kolicina": quantity,
+            "popust": popust,
             "porez_stopa": tax_rate,
         })
 
@@ -304,7 +360,11 @@ def build_stavke(config, invoice, invoice_items):
             f"(odobrenje se rješava stornom)"
         )
     computed = round(
-        sum(s["cijena"] * s["kolicina"] for s in stavke) * (1 + tax_rate / 100), 2
+        sum(
+            solo_line_gross(s["cijena"], s["kolicina"], s["popust"], tax_rate)
+            for s in stavke
+        ),
+        2,
     )
     if abs(computed - expected) >= 0.005:
         raise ValueError(

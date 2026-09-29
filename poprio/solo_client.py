@@ -6,7 +6,8 @@ Solo računu (vidi poprio/README.md, "Poznata svojstva Solo API-ja"):
   ne samo implicitno kroz indeksirane opis_usluge_N ključeve
 - cijena_N, popust_N i kolicina_N moraju koristiti zarez kao decimalni
   separator (hrvatski format, npr. "76,00", "2,5"), ne točku
-- popust_N je obavezan po stavci čak i kad je 0
+- popust_N je obavezan po stavci čak i kad je 0, i izražen je u POSTOTKU
+  (ne u eurima); prihvaća 4 decimale
 - tip_kupca mora biti broj (1 = B2C), ne string
 - tip_usluge (ID tipa usluge iz Solo računa) je obavezan
 """
@@ -95,13 +96,24 @@ class SoloClient:
         s = f"{float(value):.3f}".rstrip("0").rstrip(".")
         return s.replace(".", ",")
 
+    @staticmethod
+    def _popust(value):
+        """Popust je POSTOTAK, ne iznos - provjereno na živom API-ju: cijena
+        200,00 uz popust 10 daje sumu 180,00.
+
+        Solo prihvaća do 4 decimale i sam izračuna redak, pa se i popust koji
+        je u Clinku upisan u eurima može prikazati točno (55,00 uz 18,1818
+        daje 45,00)."""
+        s = f"{float(value):.4f}".rstrip("0").rstrip(".")
+        return (s or "0").replace(".", ",")
+
     @classmethod
     def _append_stavke(cls, payload, stavke):
         for i, stavka in enumerate(stavke, start=1):
             payload.append(("usluga", i))
             payload.append((f"opis_usluge_{i}", stavka["opis"]))
             payload.append((f"cijena_{i}", f"{stavka['cijena']:.2f}".replace(".", ",")))
-            payload.append((f"popust_{i}", "0,00"))
+            payload.append((f"popust_{i}", cls._popust(stavka.get("popust", 0))))
             payload.append((f"kolicina_{i}", cls._kolicina(stavka.get("kolicina", 1))))
             payload.append((f"porez_stopa_{i}", stavka["porez_stopa"]))
 
