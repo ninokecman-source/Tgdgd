@@ -747,6 +747,63 @@ def list_billable_items(config):
     print("\nStavke s cijenom 0.00 su kandidati za oznake načina plaćanja.")
 
 
+def print_status(config):
+    """Ispisuje stanje obrade - što je prošlo, što čeka, što traži pažnju.
+
+    Čita bazu i ne dira ništa, pa se smije pokrenuti dok servis radi."""
+    state = StateStore(config["state_db_path"])
+    try:
+        redovi = dict(
+            state.conn.execute(
+                "SELECT status, COUNT(*) FROM processed_invoices GROUP BY status"
+            )
+        )
+        ukupno = sum(redovi.values())
+        opis = {
+            "done": "poslano u Solo",
+            "waiting": "čeka oznaku načina plaćanja u Clinku",
+            "failed": "nije uspjelo, pokušava se ponovno",
+            "pending": "u obradi ili zaustavljeno",
+            "skipped": "preskočeno (nema što fiskalizirati)",
+        }
+        print(f"Zadnja provjera do: {state.get_watermark()}")
+        print(f"Ukupno računa u bazi: {ukupno}\n")
+        for status in ("done", "waiting", "failed", "pending", "skipped"):
+            if redovi.get(status):
+                print(f"  {redovi[status]:>4}  {status:<8} — {opis[status]}")
+
+        ostalo = list(
+            state.conn.execute(
+                """SELECT COALESCE('#' || cliniko_number, cliniko_invoice_id),
+                          status, last_error
+                   FROM processed_invoices
+                   WHERE status != 'done' ORDER BY status, cliniko_number"""
+            )
+        )
+        if ostalo:
+            print("\nRačuni koji nisu poslani:")
+            for oznaka, status, greska in ostalo:
+                print(f"  {oznaka:<21} {status:<8} {(greska or '')[:60]}")
+
+        zaustavljeni = state.pending_claims()
+        if zaustavljeni:
+            print(
+                "\nPAŽNJA: ovi su zaustavljeni nakon što je zahtjev prema Solu već "
+                "krenuo,\npa se ne zna je li dokument nastao. Provjeri u Solu ima li "
+                "dokument\ns napomenom \"Cliniko #<id>\" prije nego ih vratiš u red:"
+            )
+            for cliniko_id in zaustavljeni:
+                print(f"  {cliniko_id}")
+        elif redovi.get("pending"):
+            print(
+                "\n(`pending` bez upozorenja je račun koji se upravo obrađuje - "
+                "normalno.\n Pokreni ponovno za koju sekundu i vidjet ćeš da je "
+                "otišao dalje.)"
+            )
+    finally:
+        state.close()
+
+
 def ping_healthcheck(config):
     """Javlja vanjskom nadzoru da je prolaz prošao.
 
@@ -929,6 +986,10 @@ def main():
         help="Radi trajno (za pokretanje kao systemd servis) umjesto jednog prolaza za cron.",
     )
     parser.add_argument(
+        "--status", action="store_true",
+        help="Ispiši stanje obrade (što je poslano, što čeka) i izađi.",
+    )
+    parser.add_argument(
         "--list-billable-items", action="store_true",
         help="Ispiši katalog usluga iz Clinika s ID-evima i izađi (za popunjavanje configa).",
     )
@@ -938,6 +999,11 @@ def main():
 
     if args.list_billable_items:
         list_billable_items(config)
+        return
+
+    # Samo čitanje, pa ne treba zaključavanje - radi i dok servis vrti.
+    if args.status:
+        print_status(config)
         return
     lock_path = Path(config["state_db_path"]).with_suffix(".lock")
 

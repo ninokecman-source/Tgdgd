@@ -388,6 +388,19 @@ Pri pokretanju se provjerava da oznaka postoji u Clinku, isto kao oznake načina
 plaćanja: da se ID obriše ili krivo prepiše, račun na tvrtku bio bi fiskaliziran
 kao da je za fizičku osobu.
 
+## Provjera stanja
+
+```bash
+sudo -u poprio /opt/poprio/venv/bin/python /opt/poprio/sync.py --status
+```
+
+Ispisuje koliko je računa poslano, koji čekaju oznaku načina plaćanja i koji
+traže pažnju. Samo čita bazu, pa se smije pokrenuti dok servis radi.
+
+Račun u stanju `pending` obično se upravo obrađuje i za koju sekundu ode dalje.
+Zaustavljenima se smatraju samo oni kod kojih je zahtjev prema Solu već krenuo —
+njih ispis izdvaja posebno, s uputom što provjeriti.
+
 ## Obavijesti kad nešto zapne
 
 Bez ovoga sve završava u logu koji nitko ne gleda — računi se tiho prestanu
