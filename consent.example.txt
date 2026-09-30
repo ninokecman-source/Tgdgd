@@ -1,0 +1,9 @@
+# Popis pacijenata koji su pristali na WhatsApp podsjetnike (način CONSENT_MODE=allowlist).
+# Kopirati u consent.txt. Jedan pacijent po retku:
+#   - Cliniko ID pacijenta (broj iz adrese kartona: .../patients/123456789), ILI
+#   - broj mobitela (bilo koji format: 098 123 4567, +385 98 123 4567 ...)
+# Redovi koji počinju s # se zanemaruju.
+#
+# Primjer za pilot (svoj broj i nekoliko kolega):
+# 098 123 4567
+# 123456789

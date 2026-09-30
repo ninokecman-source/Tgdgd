@@ -1,126 +1,124 @@
-"use strict";
-// Webhook server (korak 5, poglavlje 4) + inbox recepcije + provjera zdravlja.
-// Pokretanje: npm start
+import http from 'node:http';
+import { pathToFileURL } from 'node:url';
+import { loadEnvFile, loadConfig, assertConfig } from './config.js';
+import { openDb } from './db.js';
+import { ClinikoClient } from './cliniko.js';
+import { WhatsAppClient } from './whatsapp.js';
+import { runReminders } from './reminders.js';
+import { handleWebhookRequest } from './webhook.js';
+import { statusHtml } from './status.js';
+import { zonedParts, ymd } from './time.js';
+import { log } from './log.js';
 
-const express = require("express");
-const { verifySignature, processPendingEvents } = require("./webhook");
-const { mountReception } = require("./reception");
-const { iso, addMinutes } = require("./timeutil");
+const MAX_BODY = 2 * 1024 * 1024;
 
-function healthStatus({ store, config, now }) {
-  const n = now();
-  const problems = [];
-  const last = store.lastJobRun("reminders");
-  if (!last) {
-    problems.push("Posao podsjetnika se još nije pokrenuo");
-  } else if (new Date(last.finished_at) < addMinutes(n, -config.health.maxJobAgeMinutes)) {
-    problems.push(`Posao podsjetnika nije se pokrenuo od ${last.finished_at} (cron? G-87)`);
-  } else if (last.error) {
-    problems.push(`Zadnji prolaz podsjetnika prekinut: ${last.error}`);
-  }
-  const unconfirmed = store.countUnconfirmedBefore(iso(addMinutes(n, -config.health.maxUnconfirmedMinutes)));
-  if (unconfirmed) {
-    problems.push(`${unconfirmed} poslanih poruka bez ijednog statusa s webhooka – provjeri webhook (G-31, G-35)`);
-  }
-  return {
-    ok: problems.length === 0,
-    problems,
-    lastReminderRun: last ? last.finished_at : null,
-    lastWebhookAt: store.getKv("last_webhook_at"),
-  };
+export function createServer(ctx) {
+  const { cfg } = ctx;
+  return http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://localhost');
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > MAX_BODY) req.destroy();
+      else chunks.push(c);
+    });
+    req.on('end', () => {
+      try {
+        const body = Buffer.concat(chunks);
+        const p = url.pathname.replace(/\/$/, '') || '/';
+        if (p === cfg.webhookPath) return handleWebhookRequest(req, res, body, url, ctx);
+        if (p === '/health') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ ok: true, lastRun: ctx.lastRun || null }));
+        }
+        if (p === '/status') {
+          if (!cfg.statusToken || url.searchParams.get('token') !== cfg.statusToken) {
+            res.writeHead(403);
+            return res.end();
+          }
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+          return res.end(statusHtml(ctx.db, cfg.timezone));
+        }
+        res.writeHead(404);
+        res.end();
+      } catch (e) {
+        log.error('HTTP:', e.message);
+        if (!res.headersSent) res.writeHead(500);
+        res.end();
+      }
+    });
+  });
 }
 
-function createApp(ctx) {
-  const { config, store, log } = ctx;
-  const app = express();
-  app.disable("x-powered-by");
-  app.set("trust proxy", "loopback");
-
-  // 1) Verifikacija webhooka (Meta šalje GET) – G-30: vrati čisti challenge.
-  app.get("/whatsapp/webhook", (req, res) => {
-    const mode = req.query["hub.mode"];
-    const token = req.query["hub.verify_token"];
-    const challenge = req.query["hub.challenge"];
-    if (mode === "subscribe" && config.wa.verifyToken && token === config.wa.verifyToken && typeof challenge === "string") {
-      return res.status(200).type("text/plain").send(challenge);
+/**
+ * Jednostavan raspored: svake minute provjeri lokalno vrijeme; u svakom satu iz
+ * REMINDER_HOURS pokreni slanje jednom. U 3 h noću obriši stare zapise.
+ */
+export function startScheduler(ctx, job, purge) {
+  const { cfg } = ctx;
+  const done = new Set();
+  const tick = () => {
+    const p = zonedParts(new Date(), cfg.timezone);
+    const key = `${ymd(p)} ${p.hour}`;
+    if (done.has(key)) return;
+    if (cfg.hours.has(p.hour)) {
+      done.add(key);
+      job();
+    } else if (p.hour === 3) {
+      done.add(key);
+      purge();
     }
-    log.warn("Webhook verifikacija odbijena: verify token se ne podudara (G-30)");
-    return res.sendStatus(403);
-  });
+    if (done.size > 200) done.clear();
+  };
+  tick();
+  return setInterval(tick, 30_000);
+}
 
-  // 2) Događaji (Meta šalje POST). Sirovo tijelo zbog potpisa (G-32); događaj
-  //    se sprema, odmah se vraća 200 (G-33), obrada ide nakon toga.
-  app.post("/whatsapp/webhook", express.raw({ type: () => true, limit: "2mb" }), (req, res) => {
-    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-    if (!verifySignature(raw, req.get("X-Hub-Signature-256"), config.wa.appSecret)) {
-      log.warn("Webhook: neispravan potpis – odbijeno (G-32)");
-      return res.sendStatus(401);
-    }
-    const text = raw.toString("utf8");
+async function main() {
+  loadEnvFile();
+  const cfg = loadConfig();
+  assertConfig(cfg, ['cliniko', 'whatsapp', 'webhook']);
+  const ctx = { cfg, db: openDb(cfg.dbPath), cliniko: new ClinikoClient(cfg.cliniko), wa: new WhatsAppClient(cfg.wa) };
+
+  let running = false;
+  const job = async () => {
+    if (running) return;
+    running = true;
     try {
-      JSON.parse(text);
-    } catch {
-      return res.sendStatus(400);
+      ctx.cliniko.patientCache.clear();
+      const s = await runReminders(ctx);
+      ctx.lastRun = { at: new Date().toISOString(), date: s.date, sent: s.sent, alreadySent: s.alreadySent, failed: s.failed, noPhone: s.noPhone, noConsent: s.noConsent };
+      log.info(`Podsjetnici za ${s.date}: poslano ${s.sent}, već ranije ${s.alreadySent}, greške ${s.failed}, bez mobitela ${s.noPhone}, bez privole ${s.noConsent}`);
+    } catch (e) {
+      log.error('Slanje podsjetnika prekinuto:', e.message);
+    } finally {
+      running = false;
     }
-    store.storeEvent(text, iso(ctx.now()));
-    res.sendStatus(200);
-    setImmediate(() => processPendingEvents(ctx).catch((err) => log.error(`Obrada webhooka: ${err.message}`)));
-  });
-
-  // Za uptime monitor (G-87): 503 kad nešto ne radi.
-  app.get("/zdravlje", (req, res) => {
-    const h = healthStatus(ctx);
-    res.status(h.ok ? 200 : 503).json(h);
-  });
-
-  if (config.reception.user && config.reception.password) {
-    mountReception(app, ctx);
-  }
-
-  return app;
-}
-
-function main() {
-  const { loadConfig, requireKeys } = require("./config");
-  const { Store } = require("./db");
-  const { WhatsAppClient } = require("./whatsapp");
-  const { createLogger } = require("./log");
-
-  const config = loadConfig();
-  requireKeys(config, ["wa.token", "wa.phoneNumberId", "wa.appSecret", "wa.verifyToken", "wa.graphVersion"]);
-  const log = createLogger();
-  const ctx = {
-    config,
-    log,
-    store: new Store(config.dbPath),
-    wa: new WhatsAppClient(config.wa),
-    now: () => new Date(),
   };
-  const app = createApp(ctx);
-  const server = app.listen(config.port, config.host, () => {
-    log.info(`Webhook server sluša na ${config.host}:${config.port}`);
-    if (!config.reception.user || !config.reception.password) {
-      log.warn("RECEPTION_USER/RECEPTION_PASSWORD nisu postavljeni – stranica /recepcija je isključena");
-    }
-    // Događaji spremljeni prije pada servera obrađuju se odmah po pokretanju.
-    processPendingEvents(ctx).catch((err) => log.error(`Obrada webhooka: ${err.message}`));
+  const purge = () => {
+    const n = ctx.db.purgeOlderThan(new Date(Date.now() - cfg.retentionDays * 86400_000).toISOString());
+    if (n) log.info(`Obrisano ${n} zapisa starijih od ${cfg.retentionDays} dana.`);
+  };
+
+  createServer(ctx).listen(cfg.port, () => {
+    log.info(`Servis radi na portu ${cfg.port}. Webhook: ${cfg.webhookPath}. Slanje u satima: ${[...cfg.hours].join(',')} (${cfg.timezone}).` +
+      (cfg.dryRun ? ' DRY_RUN – ništa se ne šalje.' : '') + (cfg.testPhone ? ' TEST_PHONE – sve poruke idu na testni broj.' : ''));
+    startScheduler(ctx, job, purge);
   });
 
-  const stop = () => server.close(() => {
-    ctx.store.close();
+  const stop = () => {
+    log.info('Zaustavljam servis.');
+    ctx.db.close();
     process.exit(0);
+  };
+  process.on('SIGTERM', stop);
+  process.on('SIGINT', stop);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((e) => {
+    log.error(e.message);
+    process.exit(1);
   });
-  process.on("SIGTERM", stop);
-  process.on("SIGINT", stop);
 }
-
-if (require.main === module) {
-  try {
-    main();
-  } catch (err) {
-    console.error(`[GREŠKA] ${err.message}`);
-    process.exitCode = 1;
-  }
-}
-
-module.exports = { createApp, healthStatus };

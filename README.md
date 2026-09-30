@@ -1,197 +1,239 @@
-# Proprio Centar – WhatsApp podsjetnici i inbox (Cloud API)
+# Proprio WhatsApp ↔ Cliniko
 
-Samostalan projekt napravljen prema uputama
-`Dropbox/Proprio/whatsup/whatsapp_business_integracija_klinika.txt`, **put C**
-(izravno Meta WhatsApp Cloud API + vlastiti mali backend). Termini se čitaju iz
-Clinika. Oznake G-xx u kodu i porukama odgovaraju katalogu grešaka iz uputa.
+Vlastita integracija koja pacijentima Proprio Centra šalje **WhatsApp podsjetnik dan prije termina**
+iz Clinikoa, prima njihove odgovore (gumbi *Potvrđujem* / *Trebam promjenu*) i recepciji daje
+jednostavnu stranicu s pregledom.
 
-## Što radi
+- Bez vanjskih biblioteka – samo Node.js 22.13+ (ugrađeni SQLite, HTTP, Intl). Nema `npm install`.
+- Postojeći WhatsApp Business broj **ostaje u aplikaciji na mobitelu** (coexistence preko 360dialoga).
+- Testirano: 13 automatskih testova (`npm test`), uključujući promjenu sata, duplikate, potpis webhooka.
 
-| Tok iz uputa | Kako |
-|---|---|
-| (1) Podsjetnik 24 h prije termina | `npm run podsjetnici` iz crona svakih 15 min: termini iz Clinika → samo pacijenti s privolom → predložak `podsjetnik_termin` → wamid u bazu |
-| (2) Potvrda / promjena gumbom | gumb se povezuje s terminom preko `context.id`; „Potvrđujem" → potvrđeno, „Trebam promjenu" → zadatak recepciji „nazvati" |
-| (3) Slobodne poruke pacijenta | idu u inbox na `/recepcija`; recepcija odgovara unutar 24 h |
-| (4) Statusi isporuke | sent → delivered → read; kod `failed` zadatak recepciji s razlogom (rezervni kanal: poziv/SMS) |
+---
 
-Uz to:
+## 1. Kako radi
 
-- **STOP / ODJAVA** od pacijenta odmah opoziva privolu i potvrđuje odjavu.
-- **Zaštita od duplog slanja** (G-82): atomsko zaključavanje po terminu. Ako proces padne usred slanja, podsjetnik se ne šalje ponovno, nego ide recepciji na provjeru.
-- **Termin otkazan ili pomaknut** (G-81): termin se ponovno provjerava u Clinikou neposredno prije slanja. Pomaknuti termin dobije novi podsjetnik za novo vrijeme.
-- **Greške** se dijele na tri vrste:
-  - privremene: ponavljaju se (1 s, 2 s, 4 s, 8 s, pa u sljedećem prolazu);
-  - vezane uz pacijenta: zadatak recepciji;
-  - kvar postavki (npr. istekao token): posao staje, a termini ostaju na čekanju.
-- **Nije isporučeno** 4 h prije termina (G-51): zadatak recepciji.
-- **Webhook** (G-30 do G-35):
-  - potpis se provjerava na sirovom tijelu zahtjeva;
-  - događaj se spremi u bazu prije odgovora 200, pa se ništa ne gubi ako server padne;
-  - duplikati se ignoriraju;
-  - status se nikad ne vraća unatrag.
-- **Zona Europe/Zagreb** (G-80): u bazi je UTC, a datum i sat u poruci su lokalni, i ljeti i zimi.
-- **Rok čuvanja** (poglavlje 5): poruke i podsjetnici se brišu nakon 365 dana, a sirovi webhook događaji nakon 7 dana.
-- **Nadzor**:
-  - `/zdravlje` vraća 503 ako cron ne radi ili webhook ne javlja statuse;
-  - dnevni izvještaj „poslano X".
-- **Dijagnostika**: `npm run alat -- provjera` i `npm run alat -- greska <kod>`.
-
-### Što namjerno NE radi
-
-- **Ne piše u Cliniko.** Potvrde se vide na `/recepcija`.
-- **Ne šalje zdravstvene podatke.** Predložak ima samo ime, datum i sat.
-- **Ne preuzima slike ni glasovne poruke.** Recepcija dobije napomenu da je pacijent poslao medij.
-- **Ne radi s WhatsApp Business aplikacijom na mobitelu** ni s neslužbenim alatima.
-- **Pazi na dvostruke podsjetnike:** ako Cliniko već šalje SMS podsjetnike, pacijent s WhatsApp privolom dobit će oboje. Za njih isključite SMS podsjetnik u Clinikou.
-
-## Što treba prije (poglavlje 1)
-
-- Verificiran Meta Business portfolio, WhatsApp broj klinike i odobreno prikazno ime.
-- **Server koji je stalno upaljen** (VPS u EU), ne osobno računalo. Meta webhook mora biti dostupan 0–24.
-- Domena s HTTPS-om, npr. `api.proprio.hr`. Caddy sam nabavi certifikat (`deploy/Caddyfile`).
-- Node.js 20.12 ili noviji.
-- Cliniko API ključ.
-
-## Instalacija
-
-```bash
-git clone -b claude/whatsapp-proprio https://github.com/ninokecman-source/Tgdgd /opt/proprio-whatsapp
-cd /opt/proprio-whatsapp
-npm ci --omit=dev
-cp .env.example .env      # pa popuni – svako polje je objašnjeno u datoteci
+```
+            svaki sat 10–19 h                       odobreni predložak
+ Cliniko  ───────────────────►  ovaj servis  ─────────────────────────►  WhatsApp  ──►  pacijent
+ (sutrašnji termini, API)       (mali server)  ◄─────────────────────────  (360dialog)  ◄── gumb / odgovor
+                                     │                webhook
+                                     ├── baza (SQLite): tko je dobio, isporuka, odgovor
+                                     └── /status  → stranica za recepciju
 ```
 
-## Postavljanje, korak po korak (poglavlje 2 uputa)
+1. Svaki sat od 10 do 19 h servis iz Clinikoa uzme **sutrašnje** termine (individualne i grupne).
+2. Preskače otkazane, arhivirane i "did not arrive" termine.
+3. Za svakog pacijenta šalje **jedan** podsjetnik (za najraniji termin tog dana) – samo ako:
+   - ima mobilni broj (fiksni broj nema WhatsApp),
+   - ima privolu (vidi poglavlje 5).
+4. Ista poruka se **nikad ne šalje dvaput**. Ako se termin premjesti na drugo vrijeme, pacijent dobije novi podsjetnik.
+5. Kad pacijent klikne gumb, servis to zabilježi, po želji pošalje kratki automatski odgovor
+   i (opcionalno) upiše napomenu u termin u Clinikou.
+6. Sve ostale poruke pacijenata recepcija i dalje vidi i odgovara **u aplikaciji na mobitelu**.
 
-1. **Korak 1–2**: Business portfolio, verifikacija i Developer aplikacija. To se radi ručno u Meta sučelju, prema uputama.
-2. **Korak 3**: dodaj broj, verificiraj ga i postavi 6-znamenkasti PIN (spremi ga u upravitelj lozinki). Zatim:
-   ```bash
-   npm run alat -- registriraj 123456
-   ```
-3. **Korak 4**: System User token upiši u `WA_TOKEN`. U `.env` upiši i `WA_PHONE_NUMBER_ID`, `WA_WABA_ID` i `WA_APP_SECRET`.
-4. **Korak 5 – webhook**:
-   - pokreni server (vidi „Pokretanje") i Caddy;
-   - u App Dashboardu → WhatsApp → Configuration upiši Callback URL `https://api.proprio.hr/whatsapp/webhook` i isti `WA_VERIFY_TOKEN`;
-   - pretplati se na polja `messages` i `message_template_status_update`;
-   - pokreni:
-     ```bash
-     npm run alat -- pretplati
-     ```
-   - aplikaciju prebaci u **Live**.
-5. **Korak 6 – predložak** u WhatsApp Manageru. Kategorija **UTILITY**, jezik **hr**, naziv `podsjetnik_termin`:
-   ```
-   Poštovani/a {{1}}, podsjećamo Vas na termin u Proprio Centru
-   {{2}} u {{3}} h. Molimo potvrdite dolazak.
-   [Quick reply: Potvrđujem]  [Quick reply: Trebam promjenu]
-   ```
-   Primjeri varijabli za predaju: `Ana Horvat`, `30.9.2026.`, `14:30`. Ako promijeniš tekst gumba, promijeni i `WA_BUTTON_CONFIRM` / `WA_BUTTON_CHANGE`.
-6. **Korak 7 – test**:
-   ```bash
-   npm run alat -- provjera                 # sve redom: token, broj, pretplata, predložak, Cliniko, webhook
-   npm run alat -- test-poruka 0981234567   # predložak na tvoj mobitel
-   npm run podsjetnici -- --probno          # što bi sutra poslao, bez slanja
-   ```
-7. **Korak 8 – puštanje**: upiši privole za 10–20 pacijenata (pilot) i uključi cron. Kad sve radi, upisuj privole svima koji pristanu.
+Poruka pacijentu (predložak):
 
-## Pokretanje
+> Poštovani/a **Ana**, podsjećamo Vas na termin u Proprio Centru **četvrtak, 1. listopada** u **09:00** h. Molimo potvrdite dolazak.
+> [Potvrđujem] [Trebam promjenu]
 
-- **Server** (webhook + recepcija): `npm start`. Za stalni rad koristi `deploy/proprio-whatsapp.service` (systemd, automatski restart).
-- **Podsjetnici**: cron svakih 15 minuta, vidi `deploy/crontab.txt`. Posao sam pazi na sate slanja (`SEND_HOURS`, zadano 8–20 h po zagrebačkom vremenu), pa vrijeme u cronu nije bitno.
+---
 
-Server sluša samo na `127.0.0.1`, a van ga izlaže Caddy s HTTPS-om.
+## 2. Što treba pripremiti (jednom)
 
-## Privole (poglavlje 5)
+| # | Što | Gdje | Tko |
+|---|-----|------|-----|
+| 1 | Verificirana tvrtka u Meti | business.facebook.com → Sigurnosni centar | admin |
+| 2 | 360dialog račun + spajanje postojećeg broja (coexistence) | hub.360dialog.com | admin |
+| 3 | 360dialog API ključ | 360dialog Hub → broj → API key | admin |
+| 4 | Odobren predložak `podsjetnik_termin` (hr, UTILITY) | WhatsApp Manager ili 360dialog Hub | admin |
+| 5 | Cliniko API ključ | Cliniko → My Info → Manage API keys | admin |
+| 6 | Mali server u EU + (pod)domena, npr. `wa.proprio.hr` | npr. Hetzner Cloud, DNS kod registrara | informatičar |
 
-Poruke dobivaju **samo** pacijenti s evidentiranom privolom. Za svaku se pamti
-kada je dana, kako i za koji broj. Privolu upisuješ na jedan od tri načina:
+### 2.1 Spajanje broja preko 360dialoga (coexistence)
+1. Registrirajte se na **hub.360dialog.com** (izravni klijent) i odaberite plan.
+2. Pokrenite spajanje broja, prijavite se Meta računom tvrtke i odaberite opciju za **postojeći
+   WhatsApp Business app broj** (coexistence). U aplikaciji na mobitelu potvrdite povezivanje
+   (obično skeniranjem QR koda) i po želji dozvolite prijenos povijesti poruka.
+3. Uvjeti: aplikacija WhatsApp Business novija verzija, broj aktivno korišten barem 7 dana,
+   aplikaciju na mobitelu **otvoriti barem svakih 13 dana** (inače se veza prekida).
+4. U Hubu generirajte **API ključ** za broj → to je `D360_API_KEY`.
 
-- na stranici `/recepcija` (obrazac „Upiši privolu");
-- iz naredbenog retka:
+### 2.2 Predložak poruke
+U WhatsApp Manageru (business.facebook.com → WhatsApp Manager → Predlošci) ili u 360dialog Hubu:
+
+- Naziv: `podsjetnik_termin` · Kategorija: **Utility** · Jezik: **Croatian (hr)**
+- Tijelo:
+  `Poštovani/a {{1}}, podsjećamo Vas na termin u Proprio Centru {{2}} u {{3}} h. Molimo potvrdite dolazak.`
+- Primjeri varijabli: `Ana` · `četvrtak, 1. listopada` · `09:00`
+- Gumbi (Quick reply): `Potvrđujem` i `Trebam promjenu`
+
+Ako tekst gumba promijenite, isto upišite u `.env` (`WA_BUTTON_CONFIRM`, `WA_BUTTON_CHANGE`).
+**Ne dodavati** nikakve promotivne rečenice ni zdravstvene podatke (vrstu terapije, dijagnozu).
+
+### 2.3 Cliniko API ključ
+1. Preporuka: u Clinikou otvorite zasebnog korisnika, npr. "WhatsApp integracija".
+2. Prijavljeni kao taj korisnik: **My Info → Manage API keys → Add an API key**.
+3. Ključ završava oznakom poslužitelja (npr. `...-uk1`) – servis je sam prepoznaje.
+4. Ako želite upis potvrda u napomene termina (`CLINIKO_WRITE_NOTES=true`), korisnik mora smjeti uređivati termine.
+
+---
+
+## 3. Instalacija na server (Ubuntu 24.04, npr. Hetzner CX22 u Njemačkoj/Finskoj)
+
+```bash
+# 1) Node.js 22 LTS
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs caddy     # caddy: vidi caddyserver.com/docs/install ako ga nema u apt-u
+node -v                                  # mora biti 22.13 ili noviji
+
+# 2) Korisnik i kod
+sudo useradd --system --create-home --shell /usr/sbin/nologin proprio
+sudo mkdir -p /opt/proprio-whatsapp-cliniko
+# kopirajte sadržaj ove mape u /opt/proprio-whatsapp-cliniko (scp, rsync ili git)
+sudo mkdir -p /opt/proprio-whatsapp-cliniko/data
+sudo chown -R proprio:proprio /opt/proprio-whatsapp-cliniko
+
+# 3) Postavke
+cd /opt/proprio-whatsapp-cliniko
+sudo -u proprio cp .env.example .env
+sudo -u proprio nano .env                # popunite (poglavlje 4)
+sudo chmod 600 .env
+sudo -u proprio cp consent.example.txt consent.txt
+
+# 4) Provjera
+sudo -u proprio npm run check            # ✔ Cliniko ... ✔ WhatsApp ...
+sudo -u proprio npm run preview          # što bi se poslalo sutra – NIŠTA ne šalje
+
+# 5) HTTPS + servis
+# DNS: A zapis wa.proprio.hr -> IP servera
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile   # zamijenite domenu
+sudo systemctl reload caddy
+sudo cp deploy/proprio-whatsapp.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now proprio-whatsapp
+journalctl -u proprio-whatsapp -f         # logovi
+```
+
+### 3.1 Webhook (da odgovori pacijenata stižu u servis)
+U `.env` postavite `WEBHOOK_PATH` na dugu nasumičnu putanju, npr.
+`/whatsapp/webhook/7f3c9a1e5b2d4c8f9e0a` (generirajte s `openssl rand -hex 16`), pa je prijavite 360dialogu:
+
+```bash
+curl -X POST https://waba-v2.360dialog.io/v1/configs/webhook \
+  -H "D360-API-KEY: VAŠ_KLJUČ" -H "Content-Type: application/json" \
+  -d '{"url":"https://wa.proprio.hr/whatsapp/webhook/7f3c9a1e5b2d4c8f9e0a"}'
+```
+Dugačka tajna putanja štiti webhook (360dialog ne potpisuje poruke kao Meta).
+
+---
+
+## 4. Postavke (`.env`)
+
+Sve je opisano u `.env.example`. Najvažnije:
+
+| Varijabla | Značenje |
+|-----------|----------|
+| `CLINIKO_API_KEY` | API ključ iz Clinikoa |
+| `CLINIKO_USER_AGENT` | Naziv + **ispravan e-mail**, npr. `Proprio WhatsApp podsjetnici (info@proprio.hr)` – Cliniko inače blokira |
+| `CLINIKO_INCLUDE_GROUP` | `true` = i grupni programi |
+| `CLINIKO_WRITE_NOTES` | `true` = potvrda pacijenta upisuje se u napomenu termina |
+| `WA_PROVIDER` | `360dialog` (preporuka, coexistence) ili `meta` |
+| `D360_API_KEY` | API ključ iz 360dialog Huba |
+| `WA_TEMPLATE_NAME` / `WA_TEMPLATE_LANG` | točno kao u odobrenom predlošku |
+| `CONSENT_MODE` | `allowlist` (pilot), `custom_field` (rad), `all` |
+| `REMINDER_HOURS` | sati slanja, zadano `10-19` |
+| `REMINDER_DAYS_AHEAD` | `1` = podsjetnik dan prije |
+| `STATUS_TOKEN` | lozinka za stranicu recepcije |
+| `TEST_PHONE` | ako je upisan, **sve** poruke idu na taj broj (za testiranje) |
+| `DRY_RUN` | `true` = ništa se ne šalje |
+
+---
+
+## 5. Privola pacijenata (GDPR + pravila WhatsAppa)
+
+WhatsApp traži da pacijent pristane primati poruke na WhatsApp. Tri načina:
+
+- **`allowlist` – za pilot.** U `consent.txt` upišite ID pacijenta ili broj mobitela, jedan po retku.
+- **`custom_field` – za redovni rad (preporuka).** U Clinikou dodajte prilagođeno polje pacijenta
+  (Settings → Custom fields), npr. potvrdni okvir **"WhatsApp podsjetnici"** s jednom opcijom
+  "Pacijent pristaje", ili radio gumbe Da/Ne. Recepcija ga označi pri prvom dolasku.
+  Naziv polja mora biti isti kao `CONSENT_FIELD_NAME`.
+- **`all`** – svi s mobitelom. Ne preporučuje se bez pravne provjere.
+
+Ostalo:
+- U poruci su samo ime, datum i sat – **nikakvi zdravstveni podaci**.
+- Slobodan tekst pacijenata servis **ne sprema**; zapisi se brišu nakon `RETENTION_DAYS` (zadano 90 dana).
+- U logovima su brojevi djelomično skriveni (`38598***4567`).
+- Dopunite politiku privatnosti i evidenciju obrade (Meta i 360dialog kao izvršitelji obrade, DPA s 360dialogom).
+
+---
+
+## 6. Puštanje u rad – preporučeni redoslijed
+
+1. U Clinikou napravite **testnog pacijenta** sa svojim mobitelom i zakažite mu lažni termin za sutra.
+   `CONSENT_MODE=allowlist`, u `consent.txt` samo njegov broj → `npm run preview`, pa `npm run send`.
+   Provjerite tekst, datum, sat i gumbe; kliknite gumb i pogledajte `/status`. Termin zatim otkažite.
+2. U `consent.txt` dodajte 10–20 pacijenata (djelatnici, stalni pacijenti) → 1–2 tjedna.
+3. Dodajte polje privole u Cliniko, `CONSENT_MODE=custom_field`.
+4. U Clinikou isključite SMS podsjetnike za pacijente koji dobivaju WhatsApp (ili ih ostavite kao rezervu).
+
+Nakon svake promjene `.env`: `sudo systemctl restart proprio-whatsapp`.
+
+---
+
+## 7. Svakodnevno korištenje
+
+- **Recepcija:** `https://wa.proprio.hr/status?token=STATUS_TOKEN` (spremite kao oznaku u pregledniku).
+  Prikazuje danas, sutra i prekosutra. **Označeni redovi** = nazvati pacijenta
+  (nema mobitela, nema privole, poruka nije isporučena ili pacijent traži promjenu).
+- **Ručno slanje / provjera (na serveru):**
   ```bash
-  npm run alat -- privola-dodaj 0981234567 "obrazac pri naručivanju"
+  npm run preview -- --date=2026-10-01    # što bi se poslalo za taj dan
+  npm run send -- --date=2026-10-01       # pošalji (preskače već poslane)
+  npm run status -- --date=2026-10-01     # tablica zapisa
   ```
-- skupno iz CSV-a (npr. izvoz iz Excela):
-  ```bash
-  npm run alat -- privola-uvoz privole.csv
-  ```
-  Stupci su `telefon;izvor;datum;cliniko_id`; zadnja dva nisu obavezna.
+- **Zdravlje servisa:** `https://wa.proprio.hr/health` (može se dodati u besplatni uptime monitor).
 
-Broj se upisuje kako god je zapisan (`098 123 4567`, `+385…`, `00385…`) i sam se
-normalizira. Opoziv: gumb na stranici, `privola-opozovi <broj>` ili poruka **STOP**
-od pacijenta.
+---
 
-## Stranica za recepciju – `/recepcija`
+## 8. Najčešći problemi
 
-Zaštićena korisničkim imenom i lozinkom (`RECEPTION_USER` / `RECEPTION_PASSWORD`). Prikazuje:
+| Simptom | Uzrok | Rješenje |
+|---------|-------|----------|
+| `Cliniko API 401` | krivi ili opozvan API ključ | novi ključ u Clinikou |
+| `Cliniko API 403` / blokada | User-Agent bez e-maila | ispraviti `CLINIKO_USER_AGENT` |
+| `WhatsApp 132001` | predložak ne postoji / nije odobren / kriv jezik | provjeriti naziv i `hr` u WhatsApp Manageru |
+| `WhatsApp 132000` | broj varijabli ne odgovara | predložak mora imati točno {{1}} {{2}} {{3}} |
+| `WhatsApp 131026` | broj nema WhatsApp | recepcija nazove; ispraviti broj u Clinikou |
+| `WhatsApp 131047` | slobodna poruka nakon 24 h | automatski odgovori šalju se samo odmah nakon klika – normalno ne bi smjelo |
+| `WhatsApp 131049/131048` | Meta ograničila poruke / pacijenti blokiraju | provjeriti privole i tekst |
+| Veza s aplikacijom na mobitelu prekinuta | aplikacija neotvorena > 13 dana | otvoriti aplikaciju; ponovno spojiti u 360dialog Hubu |
+| Mnogo "nema mobitela" | broj upisan kao fiksni ili neispravno | ispraviti broj u Clinikou (tip "Mobile") |
+| Odgovori se ne bilježe | webhook nije prijavljen ili kriva putanja | ponoviti korak 3.1, `journalctl -u proprio-whatsapp -f` |
 
-- **Zadatke**: traži promjenu, nije isporučeno, poruka pacijenta, odjava… Broj je poveznica za poziv. Na poruku pacijenta može se odgovoriti tekstom dok ne prođe 24 h (G-40); nakon toga stranica traži da se pacijenta nazove.
-- **Termine sljedeća 2 dana**, sa stanjem podsjetnika (poslano / isporučeno / pročitano / NIJE isporučeno) i odgovorom pacijenta.
-- **Privole**: upis, opoziv i popis.
+Detaljan katalog grešaka: `whatsapp_business_integracija_klinika.txt` (poglavlje 6).
 
-U odgovore nikad ne pišite dijagnozu, nalaz ni terapiju (G-91).
+---
 
-## Nadzor (G-87)
+## 9. Struktura koda
 
-- `https://api.proprio.hr/zdravlje` vraća 200 kad je sve u redu, a 503 s popisom problema kad nije. Uključi besplatni uptime monitor (npr. UptimeRobot) na tu adresu s obavijesti e-mailom/SMS-om. Javlja:
-  - da se cron nije pokrenuo zadnjih sat vremena;
-  - da je zadnji prolaz prekinut (npr. istekao token);
-  - da su poruke poslane, a webhook nije javio ni jedan status.
-- **Dnevni izvještaj**: `npm run alat -- izvjestaj [GGGG-MM-DD]` ispisuje:
-  - koliko je podsjetnika poslano, isporučeno, pročitano i neuspjelo;
-  - koliko je pacijenata potvrdilo dolazak ili traži promjenu;
-  - koliko je stiglo poruka od pacijenata.
-
-## Kad nešto ne radi (poglavlje 7)
-
-```bash
-npm run alat -- provjera          # provjeri sve postavke redom
-npm run alat -- greska 131047     # što znači kod i kako ga ispraviti
+```
+src/
+  server.js     HTTP server (webhook, /status, /health) + raspored slanja
+  cli.js        naredbe: check, reminders, status
+  reminders.js  dohvat termina, odabir pacijenata, slanje
+  cliniko.js    Cliniko API klijent (paginacija, 429 limit, User-Agent)
+  whatsapp.js   slanje predloška/teksta (360dialog ili Meta), ponavljanje kod privremenih grešaka
+  webhook.js    statusi isporuke, odgovori pacijenata, provjera potpisa
+  consent.js    privola (allowlist / Cliniko polje)
+  phone.js      normalizacija hrvatskih brojeva, prepoznavanje mobitela
+  time.js       vremenska zona Europe/Zagreb, promjena sata, hrvatski datumi
+  db.js         SQLite baza (ugrađena u Node.js)
+  status.js     stranica za recepciju
+test/           automatski testovi (npm test) s lažnim Cliniko i WhatsApp serverom
+deploy/         systemd servis i Caddy (HTTPS)
 ```
 
-U logu (`data/podsjetnici.log`, `journalctl -u proprio-whatsapp`) greške imaju
-oznaku `[GREŠKA]`, a upozorenja `[!]`. Svaka greška iz Mete ispisuje se s oznakom
-iz uputa, npr. `G-20 (190) Pristupni token je istekao… Ispravak: …`. Logovi ne
-sadrže tekst poruka, a brojevi su skraćeni (`385981***67`).
-
-| Vrsta greške | Primjeri | Što sustav radi |
-|---|---|---|
-| Privremena | 131000, 130429, 131056, mreža | ponavlja odmah (1–8 s), pa u sljedećim prolazima (`MAX_SEND_ATTEMPTS`), zatim zadatak recepciji |
-| Vezana uz pacijenta | 131026 (nema WhatsApp), 131030, 131049 | ne ponavlja; zadatak recepciji „nazvati ili SMS" |
-| Kvar postavki / računa | 190 (token), 132001 (predložak), 131042 (plaćanje), 80007 | zaustavlja slanje, termini čekaju popravak, `/zdravlje` javlja 503 |
-
-## Kontrolna lista prije puštanja (poglavlje 8)
-
-- [ ] Tvrtka verificirana, 2+ admina s 2FA *(Meta)*
-- [ ] Prikazno ime odobreno, profil popunjen *(Meta; `provjera` javlja stanje imena)*
-- [ ] Broj registriran, PIN spremljen *(`alat registriraj`; `provjera`)*
-- [ ] System User token samo u `.env` na serveru *(`.env` je u `.gitignore`)*
-- [ ] Webhook: HTTPS, potpis, brzi 200, red, idempotentnost *(ugrađeno; `provjera` testira URL)*
-- [ ] Predložak UTILITY, jezik „hr", 3 varijable, 2 gumba *(`provjera`)*
-- [ ] Normalizacija brojeva i čišćenje varijabli *(ugrađeno)*
-- [ ] Zona Europe/Zagreb *(ugrađeno, testirano oko promjene sata)*
-- [ ] Zaštita od duplog slanja *(ugrađeno)*
-- [ ] Rezervni kanal kod „failed" *(zadatak recepciji s brojem za poziv)*
-- [ ] Privole evidentirane, STOP radi
-- [ ] Politika privatnosti i evidencija obrade ažurirane *(pravno – nije u kodu)*
-- [ ] Uptime monitor na `/zdravlje`, dnevni izvještaj u cronu
-- [ ] Pilot s 10–20 pacijenata
-
-## Razvoj
-
-```bash
-npm install
-npm test
-```
-
-| Datoteka | Sadržaj |
-|---|---|
-| `src/server.js` | webhook, `/zdravlje`, pokretanje servera |
-| `src/webhook.js` | obrada događaja (gumbi, poruke, STOP, statusi) |
-| `src/reminders.js` | posao podsjetnika |
-| `src/reception.js` | stranica za recepciju |
-| `src/cli.js` | alat za postavljanje i dijagnostiku |
-| `src/whatsapp.js` | Cloud API klijent |
-| `src/cliniko.js` | Cliniko API klijent |
-| `src/errors.js` | katalog grešaka G-xx |
-| `src/db.js` | SQLite baza |
-| `src/phone.js`, `src/timeutil.js` | brojevi i vrijeme |
+Prelazak na izravni Meta Cloud API: `WA_PROVIDER=meta` + `WA_TOKEN`, `WA_PHONE_NUMBER_ID`,
+`WA_APP_SECRET`, `WA_VERIFY_TOKEN` (potpis webhooka se tada provjerava automatski).
+Napomena: izravno preko Mete coexistence nije dostupan bez partnera – tada treba zaseban broj.

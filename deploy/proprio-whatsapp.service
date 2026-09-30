@@ -1,22 +1,25 @@
-# systemd servis za webhook server.
-#   sudo cp deploy/proprio-whatsapp.service /etc/systemd/system/
-#   sudo systemctl daemon-reload && sudo systemctl enable --now proprio-whatsapp
-#   journalctl -u proprio-whatsapp -f      (log)
+# systemd servis – kopirati u /etc/systemd/system/proprio-whatsapp.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now proprio-whatsapp
+#   journalctl -u proprio-whatsapp -f        (praćenje logova)
 [Unit]
-Description=Proprio WhatsApp webhook i recepcija
+Description=Proprio WhatsApp podsjetnici (Cliniko)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=proprio
-WorkingDirectory=/opt/proprio-whatsapp
-ExecStart=/usr/bin/node src/server.js
+WorkingDirectory=/opt/proprio-whatsapp-cliniko
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning src/server.js
 Restart=always
-RestartSec=5
+RestartSec=10
+Environment=NODE_ENV=production
+# Sigurnost
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/opt/proprio-whatsapp/data
+ProtectHome=true
+ReadWritePaths=/opt/proprio-whatsapp-cliniko/data
 PrivateTmp=true
 
 [Install]

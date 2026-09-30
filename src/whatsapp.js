@@ -1,153 +1,84 @@
-"use strict";
-// Klijent za WhatsApp Cloud API (Graph API). Samo ono što klinika treba:
-// slanje predloška i slobodnog teksta, registracija broja, pretplata na
-// webhook i dijagnostika.
-
-const { describe } = require("./errors");
-
-const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
-
-class WhatsAppError extends Error {
-  constructor({ message, code = null, httpStatus = null, subcode = null, details = null, traceId = null }) {
-    super(message);
-    this.name = "WhatsAppError";
-    this.code = code;
-    this.httpStatus = httpStatus;
-    this.subcode = subcode;
-    this.details = details;
-    this.traceId = traceId;
-    this.info = describe(code, httpStatus);
-  }
-}
-
-// G-66: novi redovi, tabovi i višestruki razmaci u varijabli ruše predložak.
-function cleanParam(value, maxLength = 200) {
-  const text = String(value ?? "").replace(/\s+/g, " ").trim();
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
-}
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-class WhatsAppClient {
-  constructor({ token, phoneNumberId, wabaId, graphVersion, fetchImpl = fetch, sleepImpl = sleep, retryDelays = RETRY_DELAYS_MS }) {
-    this.token = token;
-    this.phoneNumberId = phoneNumberId;
-    this.wabaId = wabaId;
-    this.base = `https://graph.facebook.com/${graphVersion}`;
-    this.fetch = fetchImpl;
-    this.sleep = sleepImpl;
-    this.retryDelays = retryDelays;
+export class WhatsAppError extends Error {
+  constructor(code, message, details, httpStatus) {
+    super(`WhatsApp ${code}: ${message}${details ? ' – ' + details : ''}`);
+    this.code = code;
+    this.details = details;
+    this.httpStatus = httpStatus;
+  }
+}
+
+// Privremene greške – ima smisla ponoviti (vidi poglavlje 6 uputa)
+const TRANSIENT = new Set([1, 2, 4, 80007, 130429, 131000, 131016, 131056, 133004, 135000]);
+export const isTransient = (err) =>
+  TRANSIENT.has(Number(err?.code)) || Number(err?.httpStatus) >= 500 || err?.name === 'TypeError';
+
+/** Čisti vrijednost varijable predloška (greška 132007: novi redovi, tabovi, >4 razmaka). */
+export const cleanParam = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+
+export class WhatsAppClient {
+  constructor(wa) {
+    this.wa = wa;
+    if (wa.provider === '360dialog') {
+      this.url = (wa.baseUrl || 'https://waba-v2.360dialog.io') + '/messages';
+      this.headers = { 'D360-API-KEY': wa.d360ApiKey };
+    } else {
+      const base = wa.baseUrl || 'https://graph.facebook.com';
+      this.url = `${base}/${wa.graphVersion}/${wa.phoneNumberId}/messages`;
+      this.headers = { Authorization: `Bearer ${wa.token}` };
+    }
   }
 
-  async request(method, pathAndQuery, body) {
+  async send(payload) {
     let res;
     try {
-      res = await this.fetch(`${this.base}${pathAndQuery}`, {
-        method,
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-          ...(body ? { "Content-Type": "application/json" } : {}),
-        },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(30000),
+      res = await fetch(this.url, {
+        method: 'POST',
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', ...payload }),
       });
-    } catch (err) {
-      throw new WhatsAppError({ message: `Mrežna greška: ${err.message}` });
+    } catch (e) {
+      throw new WhatsAppError('NETWORK', e.message, null, 0);
     }
-    let data = null;
-    try {
-      data = await res.json();
-    } catch {
-      data = null;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+      const e = data.error || {};
+      throw new WhatsAppError(e.code ?? res.status, e.message || res.statusText, e.error_data?.details, res.status);
     }
-    if (!res.ok || (data && data.error)) {
-      const e = (data && data.error) || {};
-      throw new WhatsAppError({
-        message: e.message || `HTTP ${res.status}`,
-        code: e.code ?? null,
-        httpStatus: res.status,
-        subcode: e.error_subcode ?? null,
-        details: e.error_data?.details ?? null,
-        traceId: e.fbtrace_id ?? null,
-      });
-    }
-    return data;
+    const id = data.messages?.[0]?.id;
+    if (!id) throw new WhatsAppError('NO_ID', 'Odgovor bez ID-a poruke', JSON.stringify(data).slice(0, 200), res.status);
+    return id;
   }
 
-  // Ponavlja samo privremene greške (poglavlje 4: 1 s, 2 s, 4 s, 8 s).
-  async withRetry(fn) {
-    for (let attempt = 0; ; attempt++) {
+  /** Slanje s ponavljanjem za privremene greške (1 s, 4 s, 16 s). */
+  async sendWithRetry(payload, attempts = 3) {
+    for (let i = 0; ; i++) {
       try {
-        return await fn();
+        return await this.send(payload);
       } catch (err) {
-        const canRetry = err instanceof WhatsAppError && err.info.retryNow;
-        if (!canRetry || attempt >= this.retryDelays.length) throw err;
-        await this.sleep(this.retryDelays[attempt]);
+        const transient = isTransient(err) || err.code === 'NETWORK';
+        if (!transient || i >= attempts - 1) throw err;
+        await sleep(1000 * 4 ** i);
       }
     }
   }
 
-  async sendTemplate({ to, name, language, bodyParams }) {
-    const payload = {
-      messaging_product: "whatsapp",
+  sendTemplate(to, bodyParams) {
+    return this.sendWithRetry({
       to,
-      type: "template",
+      type: 'template',
       template: {
-        name,
-        language: { code: language },
+        name: this.wa.templateName,
+        language: { code: this.wa.templateLang },
         components: [
-          {
-            type: "body",
-            parameters: bodyParams.map((text) => ({ type: "text", text: cleanParam(text) })),
-          },
+          { type: 'body', parameters: bodyParams.map((t) => ({ type: 'text', text: cleanParam(t) })) },
         ],
       },
-    };
-    const data = await this.withRetry(() =>
-      this.request("POST", `/${this.phoneNumberId}/messages`, payload)
-    );
-    return data.messages[0].id; // wamid
-  }
-
-  // Slobodan tekst – dopušten samo unutar 24 h od zadnje poruke pacijenta (G-40).
-  async sendText({ to, body }) {
-    const data = await this.withRetry(() =>
-      this.request("POST", `/${this.phoneNumberId}/messages`, {
-        messaging_product: "whatsapp",
-        to,
-        type: "text",
-        text: { body },
-      })
-    );
-    return data.messages[0].id;
-  }
-
-  register(pin) {
-    return this.request("POST", `/${this.phoneNumberId}/register`, {
-      messaging_product: "whatsapp",
-      pin,
     });
   }
 
-  subscribeApp() {
-    return this.request("POST", `/${this.wabaId}/subscribed_apps`);
-  }
-
-  getSubscribedApps() {
-    return this.request("GET", `/${this.wabaId}/subscribed_apps`);
-  }
-
-  getTemplates(name) {
-    const q = new URLSearchParams({ name, fields: "name,language,status,category,components", limit: "100" });
-    return this.request("GET", `/${this.wabaId}/message_templates?${q}`);
-  }
-
-  getPhoneNumber() {
-    const q = new URLSearchParams({
-      fields: "display_phone_number,verified_name,name_status,quality_rating,code_verification_status,platform_type",
-    });
-    return this.request("GET", `/${this.phoneNumberId}?${q}`);
+  sendText(to, text) {
+    return this.sendWithRetry({ to, type: 'text', text: { preview_url: false, body: text } });
   }
 }
-
-module.exports = { WhatsAppClient, WhatsAppError, cleanParam };

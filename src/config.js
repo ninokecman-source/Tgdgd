@@ -1,128 +1,98 @@
-"use strict";
-// Postavke iz varijabli okruženja (.env). Tajne (token, App Secret, Cliniko
-// ključ) postoje SAMO ovdje – nikad u kodu, gitu, logu ni frontendu (G-86).
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseHours } from './time.js';
 
-const fs = require("node:fs");
-const path = require("node:path");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const ROOT = path.resolve(__dirname, "..");
-
-function loadEnvFile() {
-  const envPath = process.env.ENV_FILE || path.join(ROOT, ".env");
-  if (fs.existsSync(envPath)) process.loadEnvFile(envPath);
+/** Učitava .env iz mape projekta (ugrađeno u Node.js, bez dotenv-a). */
+export function loadEnvFile(file = process.env.ENV_FILE || path.join(ROOT, '.env')) {
+  if (fs.existsSync(file)) process.loadEnvFile(file);
 }
 
-function int(name, fallback) {
-  const raw = process.env[name];
-  if (raw === undefined || raw === "") return fallback;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) throw new Error(`${name} mora biti broj, a glasi "${raw}"`);
-  return n;
-}
+const bool = (v, def = false) =>
+  v === undefined || v === '' ? def : ['1', 'true', 'da', 'yes'].includes(String(v).toLowerCase());
+const int = (v, def) => (v === undefined || v === '' ? def : Number.parseInt(v, 10));
+const rel = (p) => (path.isAbsolute(p) || p === ':memory:' ? p : path.join(ROOT, p));
 
-function str(name, fallback = "") {
-  const raw = process.env[name];
-  return raw === undefined || raw === "" ? fallback : raw.trim();
-}
-
-function list(name, fallback) {
-  const raw = str(name, "");
-  if (!raw) return fallback;
-  return raw.split(",").map((s) => s.trim()).filter(Boolean);
-}
-
-function parseHours(raw) {
-  const m = /^(\d{1,2})\s*-\s*(\d{1,2})$/.exec(raw);
-  if (!m) throw new Error(`SEND_HOURS mora biti u obliku "8-20", a glasi "${raw}"`);
-  const start = Number(m[1]);
-  const end = Number(m[2]);
-  if (start < 0 || end > 24 || start >= end) {
-    throw new Error(`SEND_HOURS "${raw}": početak mora biti manji od kraja, unutar 0-24`);
-  }
-  return { start, end };
-}
-
-function loadConfig() {
-  loadEnvFile();
-  return {
-    wa: {
-      token: str("WA_TOKEN"),
-      phoneNumberId: str("WA_PHONE_NUMBER_ID"),
-      wabaId: str("WA_WABA_ID"),
-      appSecret: str("WA_APP_SECRET"),
-      verifyToken: str("WA_VERIFY_TOKEN"),
-      graphVersion: str("WA_GRAPH_VERSION"),
-    },
-    template: {
-      name: str("WA_TEMPLATE_REMINDER", "podsjetnik_termin"),
-      language: str("WA_TEMPLATE_LANGUAGE", "hr"),
-      confirmLabel: str("WA_BUTTON_CONFIRM", "Potvrđujem"),
-      changeLabel: str("WA_BUTTON_CHANGE", "Trebam promjenu"),
-      nameFallback: str("WA_NAME_FALLBACK", "gospođo/gospodine"),
-    },
-    replies: {
-      confirmed: str("REPLY_CONFIRMED", "Hvala, Vaš dolazak je potvrđen. Vidimo se!"),
-      changeRequested: str(
-        "REPLY_CHANGE",
-        "Hvala na javljanju. Recepcija će Vas nazvati radi dogovora novog termina."
-      ),
-      optOut: str(
-        "REPLY_STOP",
-        "Odjavljeni ste s WhatsApp obavijesti Proprio Centra. Više Vam nećemo slati poruke ovim putem."
-      ),
-    },
-    stopWords: list("STOP_WORDS", ["STOP", "ODJAVA", "ODJAVI"]).map((w) => w.toUpperCase()),
+export function loadConfig(overrides = {}) {
+  const env = process.env;
+  const cfg = {
     cliniko: {
-      apiKey: str("CLINIKO_API_KEY"),
-      userAgent: str("CLINIKO_USER_AGENT"),
-      businessId: str("CLINIKO_BUSINESS_ID"),
+      apiKey: env.CLINIKO_API_KEY || '',
+      userAgent: env.CLINIKO_USER_AGENT || '',
+      baseUrl: env.CLINIKO_BASE_URL || '', // samo za testove
+      includeGroup: bool(env.CLINIKO_INCLUDE_GROUP, true),
+      writeNotes: bool(env.CLINIKO_WRITE_NOTES, false),
     },
-    timezone: str("TIMEZONE", "Europe/Zagreb"),
-    reminderHoursBefore: int("REMINDER_HOURS_BEFORE", 24),
-    reminderMinHoursBefore: int("REMINDER_MIN_HOURS_BEFORE", 2),
-    sendHours: parseHours(str("SEND_HOURS", "8-20")),
-    maxSendAttempts: int("MAX_SEND_ATTEMPTS", 3),
-    undeliveredAlertHours: int("UNDELIVERED_ALERT_HOURS", 4),
-    retentionDays: int("RETENTION_DAYS", 365),
-    dbPath: path.resolve(ROOT, str("DB_PATH", "data/whatsapp.sqlite3")),
-    port: int("PORT", 3000),
-    host: str("HOST", "127.0.0.1"),
-    publicWebhookUrl: str("WEBHOOK_PUBLIC_URL"),
-    reception: {
-      user: str("RECEPTION_USER"),
-      password: str("RECEPTION_PASSWORD"),
+    wa: {
+      provider: (env.WA_PROVIDER || '360dialog').toLowerCase(),
+      d360ApiKey: env.D360_API_KEY || '',
+      token: env.WA_TOKEN || '',
+      phoneNumberId: env.WA_PHONE_NUMBER_ID || '',
+      graphVersion: env.WA_GRAPH_VERSION || 'v23.0',
+      appSecret: env.WA_APP_SECRET || '',
+      verifyToken: env.WA_VERIFY_TOKEN || '',
+      baseUrl: env.WA_BASE_URL || '', // samo za testove
+      templateName: env.WA_TEMPLATE_NAME || 'podsjetnik_termin',
+      templateLang: env.WA_TEMPLATE_LANG || 'hr',
+      buttonConfirm: env.WA_BUTTON_CONFIRM || 'Potvrđujem',
+      buttonChange: env.WA_BUTTON_CHANGE || 'Trebam promjenu',
+      replyConfirm: env.WA_REPLY_CONFIRM ?? '',
+      replyChange: env.WA_REPLY_CHANGE ?? '',
     },
-    health: {
-      maxJobAgeMinutes: int("HEALTH_MAX_JOB_AGE_MINUTES", 60),
-      maxUnconfirmedMinutes: int("HEALTH_MAX_UNCONFIRMED_MINUTES", 30),
+    consent: {
+      mode: (env.CONSENT_MODE || 'allowlist').toLowerCase(),
+      fieldName: env.CONSENT_FIELD_NAME || 'WhatsApp podsjetnici',
+      file: rel(env.CONSENT_FILE || './consent.txt'),
     },
+    timezone: env.TIMEZONE || 'Europe/Zagreb',
+    daysAhead: int(env.REMINDER_DAYS_AHEAD, 1),
+    hours: parseHours(env.REMINDER_HOURS || '10-19'),
+    port: int(env.PORT, 3000),
+    webhookPath: (env.WEBHOOK_PATH || '/whatsapp/webhook').replace(/\/$/, ''),
+    statusToken: env.STATUS_TOKEN || '',
+    dbPath: rel(env.DB_PATH || './data/proprio-whatsapp.db'),
+    retentionDays: int(env.RETENTION_DAYS, 90),
+    dryRun: bool(env.DRY_RUN, false),
+    testPhone: env.TEST_PHONE || '',
   };
+  return deepMerge(cfg, overrides);
 }
 
-const LABELS = {
-  "wa.token": "WA_TOKEN",
-  "wa.phoneNumberId": "WA_PHONE_NUMBER_ID",
-  "wa.wabaId": "WA_WABA_ID",
-  "wa.appSecret": "WA_APP_SECRET",
-  "wa.verifyToken": "WA_VERIFY_TOKEN",
-  "wa.graphVersion": "WA_GRAPH_VERSION",
-  "cliniko.apiKey": "CLINIKO_API_KEY",
-  "cliniko.userAgent": "CLINIKO_USER_AGENT",
-};
-
-// Prekini s jasnom porukom ako nedostaje nešto bez čega dio sustava ne može raditi.
-function requireKeys(config, keys) {
-  const missing = keys.filter((k) => {
-    const [a, b] = k.split(".");
-    return !config[a] || !config[a][b];
-  });
+/** Provjera da su postavljene varijable potrebne za određeni dio sustava. */
+export function assertConfig(cfg, parts) {
+  const missing = [];
+  if (parts.includes('cliniko')) {
+    if (!cfg.cliniko.apiKey) missing.push('CLINIKO_API_KEY');
+    if (!/\(.+@.+\)/.test(cfg.cliniko.userAgent)) missing.push('CLINIKO_USER_AGENT (mora sadržavati e-mail u zagradama)');
+  }
+  if (parts.includes('whatsapp')) {
+    if (cfg.wa.provider === '360dialog') {
+      if (!cfg.wa.d360ApiKey) missing.push('D360_API_KEY');
+    } else if (cfg.wa.provider === 'meta') {
+      if (!cfg.wa.token) missing.push('WA_TOKEN');
+      if (!cfg.wa.phoneNumberId) missing.push('WA_PHONE_NUMBER_ID');
+    } else {
+      missing.push('WA_PROVIDER (dozvoljeno: 360dialog ili meta)');
+    }
+  }
+  if (parts.includes('webhook') && cfg.wa.provider === 'meta') {
+    if (!cfg.wa.appSecret) missing.push('WA_APP_SECRET');
+    if (!cfg.wa.verifyToken) missing.push('WA_VERIFY_TOKEN');
+  }
+  if (!['custom_field', 'allowlist', 'all'].includes(cfg.consent.mode)) {
+    missing.push('CONSENT_MODE (custom_field, allowlist ili all)');
+  }
   if (missing.length) {
-    const names = missing.map((k) => LABELS[k] || k).join(", ");
-    throw new Error(`Nedostaje u .env: ${names} (vidi .env.example)`);
-  }
-  if (keys.includes("wa.graphVersion") && !/^v\d+\.\d+$/.test(config.wa.graphVersion)) {
-    throw new Error(`WA_GRAPH_VERSION mora izgledati kao "v23.0", a glasi "${config.wa.graphVersion}"`);
+    throw new Error('Nedostaju ili su neispravne postavke u .env:\n  - ' + missing.join('\n  - '));
   }
 }
 
-module.exports = { loadConfig, requireKeys, ROOT };
+function deepMerge(target, src) {
+  for (const [k, v] of Object.entries(src || {})) {
+    if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Set)) target[k] = deepMerge(target[k] || {}, v);
+    else target[k] = v;
+  }
+  return target;
+}

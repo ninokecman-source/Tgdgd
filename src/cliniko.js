@@ -1,119 +1,104 @@
-"use strict";
-// Izvor termina: Cliniko API (samo čitanje). Dohvaća se isključivo ono što
-// treba za podsjetnik – vrijeme termina, ime i broj pacijenta. Dijagnoze,
-// bilješke i vrsta terapije se ne dohvaćaju (poglavlje 5).
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-class ClinikoError extends Error {
-  constructor(message, status) {
-    super(message);
-    this.name = "ClinikoError";
+export class ClinikoError extends Error {
+  constructor(status, body) {
+    super(`Cliniko API ${status}: ${String(body).slice(0, 300)}`);
     this.status = status;
   }
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function idFromLink(obj, kind) {
-  const href = obj?.links?.self || "";
-  const m = new RegExp(`/${kind}/(\\d+)`).exec(href);
-  return m ? m[1] : null;
-}
-
-function baseUrlForKey(apiKey) {
-  // Ključ završava oznakom sharda (npr. "...-eu1"); stari ključevi je nemaju.
-  const m = /-([a-z]{2}\d+)$/.exec(apiKey || "");
-  return m ? `https://api.${m[1]}.cliniko.com/v1` : "https://api.cliniko.com/v1";
-}
-
-function toAppointment(a) {
-  return {
-    id: String(a.id),
-    startsAt: a.starts_at,
-    cancelled: Boolean(a.cancelled_at),
-    archived: Boolean(a.archived_at || a.deleted_at),
-    didNotArrive: Boolean(a.did_not_arrive),
-    patientId: idFromLink(a.patient, "patients"),
-    businessId: idFromLink(a.business, "businesses"),
-  };
-}
-
-class ClinikoClient {
-  constructor({ apiKey, userAgent, fetchImpl = fetch, sleepImpl = sleep }) {
-    this.base = baseUrlForKey(apiKey);
-    this.auth = `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`;
+/**
+ * Minimalni Cliniko API klijent.
+ * Dokumentacija: https://docs.api.cliniko.com/
+ *  - Basic auth: API ključ kao korisničko ime, prazna lozinka
+ *  - Shard (au1, uk1, ...) je na kraju API ključa
+ *  - User-Agent mora sadržavati naziv i kontakt e-mail
+ *  - Limit: 200 zahtjeva / min -> 429 + X-RateLimit-Reset
+ */
+export class ClinikoClient {
+  constructor({ apiKey, userAgent, baseUrl }) {
+    const shard = apiKey.includes('-') ? apiKey.split('-').pop() : 'au1';
+    this.baseUrl = (baseUrl || `https://api.${shard}.cliniko.com/v1`).replace(/\/$/, '');
+    this.auth = 'Basic ' + Buffer.from(apiKey + ':').toString('base64');
     this.userAgent = userAgent;
-    this.fetch = fetchImpl;
-    this.sleep = sleepImpl;
+    this.patientCache = new Map();
   }
 
-  async get(urlOrPath, { allow404 = false } = {}) {
-    const url = urlOrPath.startsWith("http") ? urlOrPath : `${this.base}${urlOrPath}`;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      let res;
-      try {
-        res = await this.fetch(url, {
-          headers: { Authorization: this.auth, Accept: "application/json", "User-Agent": this.userAgent },
-          signal: AbortSignal.timeout(30000),
-        });
-      } catch (err) {
-        if (attempt === 3) throw new ClinikoError(`Cliniko nedostupan: ${err.message}`, null);
-        await this.sleep(1000 * 2 ** attempt);
+  async request(pathOrUrl, { method = 'GET', body } = {}) {
+    const url = pathOrUrl.startsWith('http') ? pathOrUrl : this.baseUrl + pathOrUrl;
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch(url, {
+        method,
+        headers: {
+          Authorization: this.auth,
+          'User-Agent': this.userAgent,
+          Accept: 'application/json',
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (res.status === 429 && attempt < 5) {
+        const reset = Number(res.headers.get('x-ratelimit-reset'));
+        const wait = reset ? Math.max(1000, reset * 1000 - Date.now()) : 2000 * 2 ** attempt;
+        await sleep(Math.min(wait, 65_000));
         continue;
       }
-      if (res.status === 404 && allow404) return null;
-      if (res.status === 429 || res.status >= 500) {
-        if (attempt === 3) throw new ClinikoError(`Cliniko HTTP ${res.status}`, res.status);
-        const wait = Number(res.headers.get("retry-after")) * 1000 || 1000 * 2 ** attempt;
-        await this.sleep(wait);
+      if (res.status >= 500 && attempt < 3) {
+        await sleep(1000 * 2 ** attempt);
         continue;
       }
-      if (!res.ok) {
-        const hint = res.status === 401 ? " (provjeri CLINIKO_API_KEY)" : "";
-        throw new ClinikoError(`Cliniko HTTP ${res.status}${hint}`, res.status);
-      }
+      if (!res.ok) throw new ClinikoError(res.status, await res.text());
+      if (res.status === 204) return null;
       return res.json();
     }
-    throw new ClinikoError("Cliniko: iscrpljeni pokušaji", null);
   }
 
-  // Svi termini koji počinju u [from, to). Otkazani se filtriraju kasnije.
-  async listAppointments(from, to) {
-    const q = new URLSearchParams();
-    q.append("q[]", `starts_at:>=${from.toISOString()}`);
-    q.append("q[]", `starts_at:<${to.toISOString()}`);
-    q.append("per_page", "100");
-    q.append("sort", "starts_at");
-    let url = `/individual_appointments?${q}`;
-    const out = [];
+  async *paginate(path, key) {
+    let url = path;
     while (url) {
-      const data = await this.get(url);
-      for (const a of data.individual_appointments || []) out.push(toAppointment(a));
-      url = data.links?.next || null;
+      const data = await this.request(url);
+      for (const item of data?.[key] || []) yield item;
+      url = data?.links?.next || null;
     }
-    return out;
   }
 
-  // null ako je termin obrisan.
-  async getAppointment(id) {
-    const data = await this.get(`/individual_appointments/${encodeURIComponent(id)}`, { allow404: true });
-    return data ? toAppointment(data) : null;
+  static rangeQuery(fromUtc, toUtc) {
+    const p = new URLSearchParams();
+    p.append('q[]', `starts_at:>=${fromUtc}`);
+    p.append('q[]', `starts_at:<${toUtc}`);
+    p.append('per_page', '100');
+    return p.toString();
   }
 
-  async getPatient(id) {
-    const p = await this.get(`/patients/${encodeURIComponent(id)}`, { allow404: true });
-    if (!p) return null;
-    return {
-      id: String(p.id),
-      firstName: p.preferred_first_name || p.first_name || "",
-      lastName: p.last_name || "",
-      phones: (p.patient_phone_numbers || []).map((n) => ({ type: n.phone_type || "", number: n.number || "" })),
-    };
+  individualAppointments(fromUtc, toUtc) {
+    return this.paginate(`/individual_appointments?${ClinikoClient.rangeQuery(fromUtc, toUtc)}`, 'individual_appointments');
   }
 
-  // Za provjeru ključa (npm run alat -- provjera).
-  getUser() {
-    return this.get("/user");
+  groupAppointments(fromUtc, toUtc) {
+    return this.paginate(`/group_appointments?${ClinikoClient.rangeQuery(fromUtc, toUtc)}`, 'group_appointments');
+  }
+
+  attendees(groupAppointmentId) {
+    return this.paginate(`/group_appointments/${groupAppointmentId}/attendees?per_page=100`, 'attendees');
+  }
+
+  async patientByLink(link) {
+    if (!this.patientCache.has(link)) this.patientCache.set(link, await this.request(link));
+    return this.patientCache.get(link);
+  }
+
+  getIndividualAppointment(id) {
+    return this.request(`/individual_appointments/${id}`);
+  }
+
+  updateIndividualAppointment(id, fields) {
+    return this.request(`/individual_appointments/${id}`, { method: 'PATCH', body: fields });
+  }
+
+  currentUser() {
+    return this.request('/user');
   }
 }
 
-module.exports = { ClinikoClient, ClinikoError, baseUrlForKey };
+/** ID iz Cliniko poveznice, npr. .../patients/12345 -> "12345" */
+export const idFromLink = (link) => String(link || '').split('/').filter(Boolean).pop() || null;

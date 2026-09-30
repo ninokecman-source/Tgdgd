@@ -1,5 +1,6 @@
-# Caddy sam nabavi i obnavlja Let's Encrypt certifikat (G-30: nikad self-signed).
-#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
-api.proprio.hr {
+# Caddy automatski nabavlja i obnavlja HTTPS certifikat (Let's Encrypt).
+# Kopirati u /etc/caddy/Caddyfile, zamijeniti domenu, pa: sudo systemctl reload caddy
+wa.proprio.hr {
+	encode gzip
 	reverse_proxy 127.0.0.1:3000
 }
