@@ -2,12 +2,12 @@
 
 Vlastita integracija koja pacijentima Proprio Centra šalje **WhatsApp podsjetnik dan prije termina**
 iz Clinikoa, prima njihove odgovore (gumbi *Potvrđujem* / *Trebam promjenu*) i recepciji daje
-jednostavnu stranicu s pregledom.
+stranicu s porukama pacijenata (inbox s odgovaranjem) i pregledom podsjetnika.
 
 - Bez vanjskih biblioteka – samo Node.js 22.13+ (ugrađeni SQLite, HTTP, Intl). Nema `npm install`.
 - Šalje se **izravno preko Meta WhatsApp Cloud API-ja**, bez posrednika. Broj klinike prelazi s aplikacije
   na mobitelu na API (poglavlje 2.1).
-- Testirano: 13 automatskih testova (`npm test`), uključujući promjenu sata, duplikate, potpis webhooka.
+- Testirano: 21 automatski test (`npm test`), uključujući promjenu sata, duplikate, potpis webhooka i inbox.
 
 ---
 
@@ -19,7 +19,7 @@ jednostavnu stranicu s pregledom.
  (sutrašnji termini, API)       (mali server)  ◄─────────────────────────  (Meta API)   ◄── gumb / odgovor
                                      │                webhook
                                      ├── baza (SQLite): tko je dobio, isporuka, odgovor
-                                     └── /status  → stranica za recepciju
+                                     └── /status  → recepcija: poruke pacijenata + pregled podsjetnika
 ```
 
 1. Svaki sat od 10 do 19 h servis iz Clinikoa uzme **sutrašnje** termine (individualne i grupne).
@@ -32,7 +32,10 @@ jednostavnu stranicu s pregledom.
    i (opcionalno) upiše napomenu u termin u Clinikou. Ako pacijent umjesto gumba napiše poruku,
    prepoznaju se samo jasni slučajevi („Dolazim”, „Ne mogu doći”, „Otkazujem”); poruka s nijekanjem
    nikad se ne bilježi kao potvrda.
-6. Sve ostale poruke pacijenata recepcija i dalje vidi i odgovara **u aplikaciji na mobitelu**.
+6. Sve poruke pacijenata stižu u **inbox na stranici recepcije** (`/status`) – broj više nije u aplikaciji
+   na mobitelu. Recepcija ih čita i odgovara unutar 24 h od zadnje poruke pacijenta (pravilo WhatsAppa);
+   nakon toga pacijenta treba nazvati. Slike, glasovne poruke i dokumenti se ne prikazuju – samo
+   napomena da su stigli.
 
 Poruka pacijentu (predložak):
 
@@ -165,7 +168,7 @@ Sve je opisano u `.env.example`. Najvažnije:
 | `CONSENT_MODE` | `allowlist` (pilot), `custom_field` (rad), `all` |
 | `REMINDER_HOURS` | sati slanja, zadano `10-19` |
 | `REMINDER_DAYS_AHEAD` | `1` = podsjetnik dan prije |
-| `STATUS_TOKEN` | lozinka za stranicu recepcije |
+| `RECEPTION_PASSWORD` | lozinka za stranicu recepcije (korisničko ime `recepcija`) |
 | `TEST_PHONE` | ako je upisan, **sve** poruke idu na taj broj (za testiranje) |
 | `DRY_RUN` | `true` = ništa se ne šalje |
 
@@ -184,7 +187,9 @@ WhatsApp traži da pacijent pristane primati poruke na WhatsApp. Tri načina:
 
 Ostalo:
 - U poruci su samo ime, datum i sat – **nikakvi zdravstveni podaci**.
-- Slobodan tekst pacijenata servis **ne sprema**; zapisi se brišu nakon `RETENTION_DAYS` (zadano 90 dana).
+- Poruke pacijenata spremaju se za inbox recepcije i brišu se, kao i ostali zapisi, nakon
+  `RETENTION_DAYS` (zadano 90 dana). Stranica je zaštićena lozinkom i dostupna samo preko HTTPS-a.
+- U odgovorima pacijentima nikad ne pišite dijagnozu, nalaz ni terapiju.
 - U logovima su brojevi djelomično skriveni (`38598***4567`).
 - Dopunite politiku privatnosti i evidenciju obrade (Meta kao izvršitelj obrade, prijenos podataka izvan EU).
 
@@ -195,6 +200,7 @@ Ostalo:
 1. U Clinikou napravite **testnog pacijenta** sa svojim mobitelom i zakažite mu lažni termin za sutra.
    `CONSENT_MODE=allowlist`, u `consent.txt` samo njegov broj → `npm run preview`, pa `npm run send`.
    Provjerite tekst, datum, sat i gumbe; kliknite gumb i pogledajte `/status`. Termin zatim otkažite.
+   Pošaljite i običnu poruku na broj klinike i odgovorite na nju sa stranice `/status`.
 2. U `consent.txt` dodajte 10–20 pacijenata (djelatnici, stalni pacijenti) → 1–2 tjedna.
 3. Dodajte polje privole u Cliniko, `CONSENT_MODE=custom_field`.
 4. U Clinikou isključite SMS podsjetnike za pacijente koji dobivaju WhatsApp (ili ih ostavite kao rezervu).
@@ -205,9 +211,16 @@ Nakon svake promjene `.env`: `sudo systemctl restart proprio-whatsapp`.
 
 ## 7. Svakodnevno korištenje
 
-- **Recepcija:** `https://wa.proprio.hr/status?token=STATUS_TOKEN` (spremite kao oznaku u pregledniku).
-  Prikazuje danas, sutra i prekosutra. **Označeni redovi** = nazvati pacijenta
-  (nema mobitela, nema privole, poruka nije isporučena ili pacijent traži promjenu).
+- **Recepcija:** `https://wa.proprio.hr/status` – preglednik traži korisničko ime `recepcija` i lozinku
+  (`RECEPTION_PASSWORD`). Držite stranicu otvorenu na računalu recepcije: osvježava se svaku minutu,
+  a broj neodgovorenih poruka piše u naslovu kartice. **Obavijesti na mobitelu više nema** – broj nije
+  u aplikaciji.
+  - **Poruke pacijenata:** svaki razgovor s imenom (iz Clinika ili WhatsApp profila) i brojem za poziv.
+    *Pošalji* odgovara pacijentu i zatvara razgovor; *Riješeno* ga zatvara bez odgovora. Kad pacijent
+    opet napiše, razgovor se sam ponovno otvori. Nakon 24 h od zadnje poruke pacijenta WhatsApp ne
+    dopušta slobodan odgovor – tada pacijenta nazovite.
+  - **Podsjetnici:** danas, sutra i prekosutra. **Označeni redovi** = nazvati pacijenta
+    (nema mobitela, nema privole, poruka nije isporučena ili pacijent traži promjenu).
 - **Ručno slanje / provjera (na serveru):**
   ```bash
   npm run preview -- --date=2026-10-01    # što bi se poslalo za taj dan
@@ -227,7 +240,7 @@ Nakon svake promjene `.env`: `sudo systemctl restart proprio-whatsapp`.
 | `WhatsApp 132001` | predložak ne postoji / nije odobren / kriv jezik | provjeriti naziv i `hr` u WhatsApp Manageru |
 | `WhatsApp 132000` | broj varijabli ne odgovara | predložak mora imati točno {{1}} {{2}} {{3}} |
 | `WhatsApp 131026` | broj nema WhatsApp | recepcija nazove; ispraviti broj u Clinikou |
-| `WhatsApp 131047` | slobodna poruka nakon 24 h | automatski odgovori šalju se samo odmah nakon klika – normalno ne bi smjelo |
+| `WhatsApp 131047` | slobodna poruka više od 24 h nakon zadnje poruke pacijenta | stranica to ne dopušta; nazovite pacijenta |
 | `WhatsApp 131049/131048` | Meta ograničila poruke / pacijenti blokiraju | provjeriti privole i tekst |
 | `WhatsApp 190` | token istekao ili opozvan | novi System User token (poglavlje 2.1, korak 5) |
 | Mnogo "nema mobitela" | broj upisan kao fiksni ili neispravno | ispraviti broj u Clinikou (tip "Mobile") |
@@ -245,7 +258,7 @@ Detaljan katalog grešaka: `whatsapp_business_integracija_klinika.txt` (poglavlj
 
 ```
 src/
-  server.js     HTTP server (webhook, /status, /health) + raspored slanja
+  server.js     HTTP server (webhook, /status s prijavom, /health) + raspored slanja
   cli.js        naredbe: check, reminders, status
   reminders.js  dohvat termina, odabir pacijenata, slanje
   cliniko.js    Cliniko API klijent (paginacija, 429 limit, User-Agent)
@@ -255,7 +268,7 @@ src/
   phone.js      normalizacija hrvatskih brojeva, prepoznavanje mobitela
   time.js       vremenska zona Europe/Zagreb, promjena sata, hrvatski datumi
   db.js         SQLite baza (ugrađena u Node.js)
-  status.js     stranica za recepciju
+  status.js     stranica za recepciju (inbox poruka + pregled podsjetnika)
 test/           automatski testovi (npm test) s lažnim Cliniko i WhatsApp serverom
 deploy/         systemd servis i Caddy (HTTPS)
 ```

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { log, maskPhone } from './log.js';
+import { iso } from './time.js';
 
 // Mala slova, bez kvačica ("Doći ću" i "doci cu" su isto; đ se ne rastavlja kroz NFD).
 const norm = (s) =>
@@ -13,7 +14,7 @@ const NEGATION = /\b(ne|nisam|nismo|necu)\b/;
  * Gumbi se prepoznaju po točnom tekstu. Slobodan tekst: najprije se traži
  * otkazivanje ili promjena, a potvrda samo ako u poruci nema nijekanja –
  * "Ne dolazim" nikad ne smije postati potvrda. Nejasno ostaje 'other' i
- * recepcija to pročita u aplikaciji.
+ * recepcija to pročita u inboxu.
  */
 export function classifyReply(text, wa) {
   const t = norm(text);
@@ -34,6 +35,18 @@ export function verifySignature(rawBody, header, appSecret) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+const MEDIA = { image: 'slika', video: 'video', audio: 'glasovna poruka', document: 'dokument', sticker: 'naljepnica', location: 'lokacija', contacts: 'kontakt' };
+
+/** Tekst za inbox recepcije. Slike, glasovne poruke i dokumenti se ne preuzimaju. */
+function inboxBody(m, text) {
+  if (m.type === 'text') return text;
+  if (m.type === 'button' || m.type === 'interactive') return `[odgovor gumbom] ${text || ''}`.trim();
+  if (m.type === 'reaction') return `[reakcija ${m.reaction?.emoji || ''}]`;
+  const extra = m[m.type]?.caption || m.document?.filename || m.location?.name || '';
+  const what = MEDIA[m.type] || m.type;
+  return `[${what} – ne prikazuje se ovdje; zamolite pacijenta da napiše tekstom ili nazovite]${extra ? ' ' + extra : ''}`;
+}
+
 /** Obrada jednog webhook paketa (format WhatsApp Cloud API-ja). */
 export async function handlePayload(payload, { cfg, db, wa, cliniko }) {
   for (const entry of payload?.entry || []) {
@@ -43,7 +56,9 @@ export async function handlePayload(payload, { cfg, db, wa, cliniko }) {
       for (const st of v.statuses || []) {
         const err = st.errors?.[0];
         const msg = err ? `${err.title || ''} ${err.error_data?.details || ''}`.trim() : null;
-        if (db.updateDelivery(st.id, st.status, err?.code ?? null, msg) && st.status === 'failed') {
+        const changed = db.updateDelivery(st.id, st.status, err?.code ?? null, msg) ||
+          db.updateMessageDelivery(st.id, st.status, err ? `${err.code} ${msg}` : null);
+        if (changed && st.status === 'failed') {
           log.warn(`Isporuka nije uspjela (${maskPhone(st.recipient_id)}): ${err?.code} ${err?.title || ''}`);
         }
       }
@@ -60,18 +75,33 @@ export async function handlePayload(payload, { cfg, db, wa, cliniko }) {
 
         const since = new Date(Date.now() - 3 * 86400_000).toISOString();
         const reminder = (m.context?.id && db.byWamid(m.context.id)) || db.latestForPhone(m.from, since);
-        if (!reminder) continue;
+        const kind = reminder ? classifyReply(text, cfg.wa) : null;
 
-        const kind = classifyReply(text, cfg.wa);
-        // Slobodan tekst se ne sprema (GDPR) – recepcija ga vidi u aplikaciji na mobitelu.
-        if (!kind || (kind === 'other' && !isButton)) continue;
+        // Broj klinike nije u aplikaciji na mobitelu: sve ide u inbox recepcije. Pažnju ne traže
+        // samo potvrda gumbom i reakcija – ali i one otvaraju 24-satni prozor za odgovor.
+        const profileName = (v.contacts || []).find((c) => c.wa_id === m.from)?.profile?.name || null;
+        db.addInbound({
+          wamid: m.id,
+          phone: m.from,
+          body: inboxBody(m, text),
+          profileName,
+          at: m.timestamp ? iso(new Date(Number(m.timestamp) * 1000)) : iso(new Date()),
+          attention: !(m.type === 'reaction' || (isButton && kind === 'confirmed')),
+        });
+
+        if (!reminder || !kind || (kind === 'other' && !isButton)) continue;
 
         db.setReply(reminder.id, kind, isButton ? String(text).slice(0, 100) : null);
         log.info(`Odgovor pacijenta ${reminder.patient_id}: ${kind}`);
 
         const autoText = kind === 'confirmed' ? cfg.wa.replyConfirm : kind === 'change_requested' ? cfg.wa.replyChange : '';
         if (autoText && wa && !cfg.dryRun) {
-          await wa.sendText(m.from, autoText).catch((e) => log.error('Automatski odgovor nije poslan:', e.message));
+          try {
+            const wamid = await wa.sendText(m.from, autoText);
+            db.addOutbound({ wamid, phone: m.from, body: autoText, at: iso(new Date()) });
+          } catch (e) {
+            log.error('Automatski odgovor nije poslan:', e.message);
+          }
         }
         if (cfg.cliniko.writeNotes && cliniko && kind !== 'other') {
           await writeNote(cliniko, reminder, kind).catch((e) => log.error('Upis napomene u Cliniko nije uspio:', e.message));

@@ -45,6 +45,25 @@ export function openDb(dbPath) {
       phone       TEXT,
       created_at  TEXT NOT NULL DEFAULT (${NOW})
     );
+    -- Inbox recepcije: broj klinike više nije u aplikaciji na mobitelu, pa se poruke čitaju ovdje.
+    CREATE TABLE IF NOT EXISTS messages (
+      id          INTEGER PRIMARY KEY,
+      wamid       TEXT UNIQUE,
+      phone       TEXT NOT NULL,
+      direction   TEXT NOT NULL,              -- in / out
+      body        TEXT,
+      status      TEXT,                       -- izlazne: sent / delivered / read / failed
+      error       TEXT,
+      created_at  TEXT NOT NULL               -- UTC ISO, bez milisekundi
+    );
+    CREATE INDEX IF NOT EXISTS idx_msg_phone ON messages(phone, created_at);
+    CREATE TABLE IF NOT EXISTS conversations (
+      phone         TEXT PRIMARY KEY,
+      profile_name  TEXT,                     -- ime s WhatsApp profila
+      last_in_at    TEXT NOT NULL,            -- zadnja poruka pacijenta (24-satni prozor za odgovor)
+      attention_id  INTEGER,                  -- zadnja poruka (messages.id) koju recepcija treba pročitati
+      resolved_id   INTEGER                   -- do koje poruke je recepcija riješila razgovor
+    );
   `);
 
   const q = {
@@ -71,6 +90,28 @@ export function openDb(dbPath) {
     forDates: db.prepare('SELECT * FROM reminders WHERE local_date IN (SELECT value FROM json_each(?)) ORDER BY starts_at, patient_name'),
     purgeRem: db.prepare('DELETE FROM reminders WHERE created_at < ?'),
     purgeIn: db.prepare('DELETE FROM inbound WHERE created_at < ?'),
+    purgeMsg: db.prepare('DELETE FROM messages WHERE created_at < ?'),
+    purgeConv: db.prepare('DELETE FROM conversations WHERE last_in_at < ?'),
+    msgInsert: db.prepare(`INSERT OR IGNORE INTO messages (wamid, phone, direction, body, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)`),
+    convUpsert: db.prepare(`INSERT INTO conversations (phone, profile_name, last_in_at, attention_id)
+      VALUES (:phone, :profile_name, :at, :attention_id)
+      ON CONFLICT(phone) DO UPDATE SET
+        profile_name = COALESCE(excluded.profile_name, profile_name),
+        last_in_at = MAX(last_in_at, excluded.last_in_at),
+        attention_id = CASE WHEN excluded.attention_id IS NULL THEN attention_id
+                            ELSE MAX(COALESCE(attention_id, 0), excluded.attention_id) END`),
+    msgByWamid: db.prepare('SELECT * FROM messages WHERE wamid = ?'),
+    msgStatus: db.prepare('UPDATE messages SET status = ?, error = COALESCE(?, error) WHERE wamid = ?'),
+    conv: db.prepare('SELECT * FROM conversations WHERE phone = ?'),
+    openConvs: db.prepare(`SELECT c.*, (SELECT r.patient_name FROM reminders r WHERE r.phone = c.phone
+        ORDER BY r.created_at DESC LIMIT 1) AS patient_name
+      FROM conversations c
+      WHERE c.attention_id IS NOT NULL AND (c.resolved_id IS NULL OR c.resolved_id < c.attention_id)
+      ORDER BY c.attention_id DESC`),
+    thread: db.prepare(`SELECT * FROM (SELECT * FROM messages WHERE phone = ? ORDER BY created_at DESC, id DESC LIMIT ?)
+      ORDER BY created_at, id`),
+    resolve: db.prepare('UPDATE conversations SET resolved_id = MAX(COALESCE(resolved_id, 0), ?) WHERE phone = ?'),
   };
 
   const tx = (fn) => (...args) => {
@@ -145,7 +186,32 @@ export function openDb(dbPath) {
     /** true ako je dolazna poruka nova (Meta zna isti webhook poslati više puta). */
     recordInbound: (wamid, phone) => q.inboundInsert.run(wamid, phone ?? null).changes === 1,
     forDates: (dates) => q.forDates.all(JSON.stringify(dates)),
-    purgeOlderThan: (iso) => q.purgeRem.run(iso).changes + q.purgeIn.run(iso).changes,
+    purgeOlderThan: (iso) =>
+      q.purgeRem.run(iso).changes + q.purgeIn.run(iso).changes + q.purgeMsg.run(iso).changes + q.purgeConv.run(iso).changes,
+
+    // ---- inbox recepcije ----
+    /** Dolazna poruka. attention=false za ono što ne traži odgovor (potvrda gumbom, reakcija). */
+    // Pažnja se bilježi rednim brojem poruke, ne vremenom: poruka koja stigne nakon što je
+    // recepcija otvorila stranicu uvijek je "novija" od onoga što je riješeno.
+    addInbound: tx(({ wamid, phone, body, profileName = null, at, attention = true }) => {
+      const info = q.msgInsert.run(wamid, phone, 'in', body ?? null, null, at);
+      if (!info.changes) return;
+      q.convUpsert.run({ phone, profile_name: profileName, at, attention_id: attention ? Number(info.lastInsertRowid) : null });
+    }),
+    addOutbound: ({ wamid, phone, body, at }) => q.msgInsert.run(wamid, phone, 'out', body ?? null, 'sent', at),
+    /** Isti redoslijed kao kod podsjetnika: read se ne vraća na delivered, failed je konačan. */
+    updateMessageDelivery(wamid, status, errMsg) {
+      const row = q.msgByWamid.get(wamid);
+      if (!row || row.direction !== 'out' || row.status === 'failed') return false;
+      if (status !== 'failed' && (RANK[status] || 0) <= (RANK[row.status] || 0)) return false;
+      q.msgStatus.run(status, errMsg ?? null, wamid);
+      return true;
+    },
+    conversation: (phone) => q.conv.get(phone),
+    openConversations: () => q.openConvs.all(),
+    thread: (phone, limit = 12) => q.thread.all(phone, limit),
+    /** seenId = attention_id koji je recepcija vidjela; novija poruka ostaje otvorena. */
+    resolve: (phone, seenId) => q.resolve.run(seenId, phone).changes === 1,
     close: () => db.close(),
   };
 }

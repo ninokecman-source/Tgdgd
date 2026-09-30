@@ -98,7 +98,7 @@ test('nijekanje nikad ne postaje potvrda', () => {
   for (const t of ['Dolazim', 'Doći ću', 'doci cu', 'potvrdujem', 'Dolazim, ali kasnim 10 minuta']) {
     assert.equal(classifyReply(t, wa), 'confirmed', t);
   }
-  // nejasno -> recepcija pročita u aplikaciji
+  // nejasno -> recepcija pročita u inboxu
   for (const t of ['Dolazim, ne brinite', 'Ne znam hoću li doći', 'Nisam siguran']) {
     assert.equal(classifyReply(t, wa), 'other', t);
   }

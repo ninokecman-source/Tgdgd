@@ -49,7 +49,7 @@ export function loadConfig(overrides = {}) {
     hours: parseHours(env.REMINDER_HOURS || '10-19'),
     port: int(env.PORT, 3000),
     webhookPath: (env.WEBHOOK_PATH || '/whatsapp/webhook').replace(/\/$/, ''),
-    statusToken: env.STATUS_TOKEN || '',
+    receptionPassword: env.RECEPTION_PASSWORD || '',
     dbPath: rel(env.DB_PATH || './data/proprio-whatsapp.db'),
     retentionDays: int(env.RETENTION_DAYS, 90),
     dryRun: bool(env.DRY_RUN, false),

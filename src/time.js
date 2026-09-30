@@ -52,7 +52,8 @@ export function localMidnightUtc(dateStr, zone) {
   return new Date(t);
 }
 
-const iso = (d) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+/** UTC ISO bez milisekundi, npr. "2026-10-01T12:30:00Z" (isti oblik kao Cliniko i baza). */
+export const iso = (d) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 
 /** { fromUtc, toUtc } za cijeli lokalni dan. */
 export function dayRangeUtc(dateStr, zone) {

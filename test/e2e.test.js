@@ -118,7 +118,7 @@ function makeCtx(dbFile) {
     consent: { mode: 'allowlist', file: consentFile },
     timezone: 'Europe/Zagreb',
     dbPath: dbFile || path.join(dir, 'test.db'),
-    statusToken: 'stok',
+    receptionPassword: 'tajna',
     dryRun: false,
     testPhone: '',
   });
@@ -220,7 +220,7 @@ test('HTTP server: webhook verifikacija, potpis, statusi, odgovori, stranica sta
   assert.equal(ctx.db.byWamid(ivoRow.wamid).delivery, 'failed');
 
   // stranica statusa
-  assert.equal((await fetch(`${base}/status?token=krivo`)).status, 403);
+  assert.equal((await fetch(`${base}/status`)).status, 401); // bez prijave
   const html = statusHtml(ctx.db, 'Europe/Zagreb');
   assert.ok(html.includes('<html'));
   const rows = ctx.db.forDates([DAY]);
@@ -232,6 +232,88 @@ test('HTTP server: webhook verifikacija, potpis, statusi, odgovori, stranica sta
   assert.equal(h.status, 503);
   assert.match((await h.json()).problems[0], /401/);
   ctx.lastRun = null;
+});
+
+test('inbox recepcije: prijava, poruka, odgovor unutar 24 h, riješeno', async () => {
+  const auth = { Authorization: 'Basic ' + Buffer.from('recepcija:tajna').toString('base64') };
+  const post = async (payload) => {
+    const body = JSON.stringify(payload);
+    const sig = 'sha256=' + crypto.createHmac('sha256', 'appsecret').update(body).digest('hex');
+    await fetch(`${base}/whatsapp/webhook`, { method: 'POST', body, headers: { 'X-Hub-Signature-256': sig } });
+    await ctx.pending;
+  };
+  const form = (p, fields) => fetch(`${base}${p}`, {
+    method: 'POST', redirect: 'manual', body: new URLSearchParams(fields),
+    headers: { ...auth, 'Content-Type': 'application/x-www-form-urlencoded' },
+  });
+  const flash = (r) => decodeURIComponent(r.headers.get('location') || '');
+  const isOpen = (phone) => ctx.db.openConversations().some((c) => c.phone === phone);
+  const PH = '385921234567';
+  const ts = String(Math.floor(Date.now() / 1000));
+  const text = (id, body) => ({ entry: [{ changes: [{ value: {
+    contacts: [{ wa_id: PH, profile: { name: 'Marko' } }],
+    messages: [{ id, from: PH, timestamp: ts, type: 'text', text: { body } }],
+  } }] }] });
+
+  await post(text('in.x1', 'Imate li slobodan termin u petak? <b>hitno</b>'));
+
+  // prijava
+  assert.equal((await fetch(`${base}/status`)).status, 401);
+  const wrong = { Authorization: 'Basic ' + Buffer.from('recepcija:krivo').toString('base64') };
+  assert.equal((await fetch(`${base}/status`, { headers: wrong })).status, 401);
+  let html = await (await fetch(`${base}/status`, { headers: auth })).text();
+  assert.ok(html.includes('Imate li slobodan termin u petak? &lt;b&gt;hitno&lt;/b&gt;')); // escapirano
+  assert.ok(html.includes('Marko'));
+  assert.ok(html.includes('href="tel:+385921234567"'));
+  const csrf = /name="_csrf" value="([0-9a-f]+)"/.exec(html)[1];
+
+  // obrazac bez tokena stranice -> odbijeno
+  assert.equal((await form('/status/reply', { phone: PH, text: 'x' })).status, 403);
+
+  // odgovor unutar 24 h: ode pacijentu, razgovor je riješen
+  const before = sent.length;
+  let r = await form('/status/reply', { _csrf: csrf, phone: PH, seen: ctx.db.conversation(PH).attention_id, text: 'Imamo u 10:00, odgovara li Vam?' });
+  assert.equal(r.status, 303);
+  assert.match(flash(r), /Odgovor poslan/);
+  assert.equal(sent.length, before + 1);
+  assert.deepEqual([sent.at(-1).to, sent.at(-1).text.body], [PH, 'Imamo u 10:00, odgovara li Vam?']);
+  assert.equal(isOpen(PH), false);
+  assert.deepEqual(ctx.db.thread(PH).map((m) => m.direction), ['in', 'out']);
+
+  // neuspjela isporuka odgovora vidi se u razgovoru
+  const replyWamid = ctx.db.thread(PH).at(-1).wamid;
+  await post({ entry: [{ changes: [{ value: { statuses: [{ id: replyWamid, status: 'failed', recipient_id: PH, errors: [{ code: 131026, title: 'Message undeliverable' }] }] } }] }] });
+  assert.equal(ctx.db.thread(PH).at(-1).status, 'failed');
+
+  // nova poruka ponovno otvara razgovor; "Riješeno" ga zatvara
+  await post(text('in.x2', 'Odgovara, hvala'));
+  assert.equal(isOpen(PH), true);
+  html = await (await fetch(`${base}/status`, { headers: auth })).text();
+  assert.ok(html.includes('NIJE ISPORUČENO'));
+  r = await form('/status/resolve', { _csrf: csrf, phone: PH, seen: ctx.db.conversation(PH).attention_id });
+  assert.match(flash(r), /riješeno/);
+  assert.equal(isOpen(PH), false);
+
+  // "Riješeno" sa stare stranice ne skriva poruku koja je u međuvremenu stigla
+  const staleSeen = ctx.db.conversation(PH).attention_id;
+  await post(text('in.x3', 'Još jedno pitanje'));
+  await form('/status/resolve', { _csrf: csrf, phone: PH, seen: staleSeen });
+  assert.equal(isOpen(PH), true);
+
+  // više od 24 h od zadnje poruke pacijenta: nema slobodnog odgovora
+  ctx.db.raw.prepare('UPDATE conversations SET last_in_at = ? WHERE phone = ?').run('2026-01-01T00:00:00Z', PH);
+  html = await (await fetch(`${base}/status`, { headers: auth })).text();
+  assert.match(html, /više od 24 h/);
+  const n = sent.length;
+  r = await form('/status/reply', { _csrf: csrf, phone: PH, text: 'kasno' });
+  assert.match(flash(r), /24 h/);
+  assert.equal(sent.length, n);
+
+  // potvrda gumbom ne traži recepciju (ali je u razgovoru); pisana promjena termina traži
+  assert.equal(isOpen('385981111111'), false);
+  assert.deepEqual(ctx.db.thread('385981111111').map((m) => `${m.direction}:${m.body}`), ['in:[odgovor gumbom] Potvrđujem', 'out:Hvala!']);
+  const ivo = ctx.db.openConversations().find((c) => c.phone === '385912222222');
+  assert.equal(ivo.patient_name, 'Ivan Ivić'); // ime iz Clinika preko podsjetnika
 });
 
 test('premješten termin dobiva novi podsjetnik', async () => {
