@@ -20,14 +20,8 @@ export const cleanParam = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().sli
 export class WhatsAppClient {
   constructor(wa) {
     this.wa = wa;
-    if (wa.provider === '360dialog') {
-      this.url = (wa.baseUrl || 'https://waba-v2.360dialog.io') + '/messages';
-      this.headers = { 'D360-API-KEY': wa.d360ApiKey };
-    } else {
-      const base = wa.baseUrl || 'https://graph.facebook.com';
-      this.url = `${base}/${wa.graphVersion}/${wa.phoneNumberId}/messages`;
-      this.headers = { Authorization: `Bearer ${wa.token}` };
-    }
+    this.url = (wa.baseUrl || 'https://waba-v2.360dialog.io') + '/messages';
+    this.headers = { 'D360-API-KEY': wa.d360ApiKey };
   }
 
   async send(payload) {

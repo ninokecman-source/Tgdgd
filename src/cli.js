@@ -27,16 +27,9 @@ async function check(cfg) {
     console.log('✘ WhatsApp:', e.message);
     return;
   }
-  if (cfg.wa.provider === 'meta') {
-    const url = `https://graph.facebook.com/${cfg.wa.graphVersion}/${cfg.wa.phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`;
-    const data = await (await fetch(url, { headers: { Authorization: `Bearer ${cfg.wa.token}` } })).json();
-    if (data.error) console.log(`✘ WhatsApp (Meta): ${data.error.code} ${data.error.message}`);
-    else console.log(`✔ WhatsApp (Meta): ${data.verified_name} ${data.display_phone_number}, kvaliteta: ${data.quality_rating}`);
-  } else {
-    const res = await fetch('https://waba-v2.360dialog.io/v1/configs/webhook', { headers: { 'D360-API-KEY': cfg.wa.d360ApiKey } });
-    const text = await res.text();
-    console.log(res.ok ? `✔ WhatsApp (360dialog): API ključ radi. Webhook: ${text}` : `✘ WhatsApp (360dialog): HTTP ${res.status} ${text}`);
-  }
+  const res = await fetch('https://waba-v2.360dialog.io/v1/configs/webhook', { headers: { 'D360-API-KEY': cfg.wa.d360ApiKey } });
+  const text = await res.text();
+  console.log(res.ok ? `✔ WhatsApp (360dialog): API ključ radi. Webhook: ${text}` : `✘ WhatsApp (360dialog): HTTP ${res.status} ${text}`);
 }
 
 async function main() {

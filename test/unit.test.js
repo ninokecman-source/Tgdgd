@@ -4,9 +4,8 @@ import { normalizePhone, isMobileNumber, pickMobile } from '../src/phone.js';
 import { customFieldConsent, hasConsent } from '../src/consent.js';
 import { dayRangeUtc, formatForTemplate, addDays, parseHours, todayIn } from '../src/time.js';
 import { groupByPatient, targetDate } from '../src/reminders.js';
-import { classifyReply, verifySignature } from '../src/webhook.js';
+import { classifyReply } from '../src/webhook.js';
 import { cleanParam } from '../src/whatsapp.js';
-import crypto from 'node:crypto';
 
 test('normalizacija brojeva', () => {
   assert.equal(normalizePhone('098 123 4567'), '385981234567');
@@ -79,16 +78,11 @@ test('jedan podsjetnik po pacijentu – najraniji termin', () => {
   assert.equal(p7.appointments.length, 2);
 });
 
-test('prepoznavanje odgovora i potpis', () => {
+test('prepoznavanje odgovora', () => {
   const wa = { buttonConfirm: 'Potvrđujem', buttonChange: 'Trebam promjenu' };
   assert.equal(classifyReply('Potvrđujem', wa), 'confirmed');
   assert.equal(classifyReply('trebam promjenu', wa), 'change_requested');
   assert.equal(classifyReply('Moram otkazati, bolestan sam', wa), 'change_requested');
   assert.equal(classifyReply('Kolika je cijena?', wa), 'other');
-  const body = Buffer.from('{"a":1}');
-  const sig = 'sha256=' + crypto.createHmac('sha256', 's3cret').update(body).digest('hex');
-  assert.ok(verifySignature(body, sig, 's3cret'));
-  assert.ok(!verifySignature(body, sig, 'krivo'));
-  assert.ok(!verifySignature(body, undefined, 's3cret'));
   assert.equal(cleanParam('  Ana\n\tMarija   '), 'Ana Marija');
 });

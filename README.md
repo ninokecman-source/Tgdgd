@@ -123,7 +123,7 @@ curl -X POST https://waba-v2.360dialog.io/v1/configs/webhook \
   -H "D360-API-KEY: VAŠ_KLJUČ" -H "Content-Type: application/json" \
   -d '{"url":"https://wa.proprio.hr/whatsapp/webhook/7f3c9a1e5b2d4c8f9e0a"}'
 ```
-Dugačka tajna putanja štiti webhook (360dialog ne potpisuje poruke kao Meta).
+Dugačka tajna putanja štiti webhook – 360dialog ne potpisuje poruke, pa je putanja jedina zaštita.
 
 ---
 
@@ -137,7 +137,6 @@ Sve je opisano u `.env.example`. Najvažnije:
 | `CLINIKO_USER_AGENT` | Naziv + **ispravan e-mail**, npr. `Proprio WhatsApp podsjetnici (info@proprio.hr)` – Cliniko inače blokira |
 | `CLINIKO_INCLUDE_GROUP` | `true` = i grupni programi |
 | `CLINIKO_WRITE_NOTES` | `true` = potvrda pacijenta upisuje se u napomenu termina |
-| `WA_PROVIDER` | `360dialog` (preporuka, coexistence) ili `meta` |
 | `D360_API_KEY` | API ključ iz 360dialog Huba |
 | `WA_TEMPLATE_NAME` / `WA_TEMPLATE_LANG` | točno kao u odobrenom predlošku |
 | `CONSENT_MODE` | `allowlist` (pilot), `custom_field` (rad), `all` |
@@ -223,8 +222,8 @@ src/
   cli.js        naredbe: check, reminders, status
   reminders.js  dohvat termina, odabir pacijenata, slanje
   cliniko.js    Cliniko API klijent (paginacija, 429 limit, User-Agent)
-  whatsapp.js   slanje predloška/teksta (360dialog ili Meta), ponavljanje kod privremenih grešaka
-  webhook.js    statusi isporuke, odgovori pacijenata, provjera potpisa
+  whatsapp.js   slanje predloška/teksta preko 360dialoga, ponavljanje kod privremenih grešaka
+  webhook.js    statusi isporuke, odgovori pacijenata
   consent.js    privola (allowlist / Cliniko polje)
   phone.js      normalizacija hrvatskih brojeva, prepoznavanje mobitela
   time.js       vremenska zona Europe/Zagreb, promjena sata, hrvatski datumi
@@ -233,7 +232,3 @@ src/
 test/           automatski testovi (npm test) s lažnim Cliniko i WhatsApp serverom
 deploy/         systemd servis i Caddy (HTTPS)
 ```
-
-Prelazak na izravni Meta Cloud API: `WA_PROVIDER=meta` + `WA_TOKEN`, `WA_PHONE_NUMBER_ID`,
-`WA_APP_SECRET`, `WA_VERIFY_TOKEN` (potpis webhooka se tada provjerava automatski).
-Napomena: izravno preko Mete coexistence nije dostupan bez partnera – tada treba zaseban broj.

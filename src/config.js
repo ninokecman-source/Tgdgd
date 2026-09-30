@@ -26,13 +26,7 @@ export function loadConfig(overrides = {}) {
       writeNotes: bool(env.CLINIKO_WRITE_NOTES, false),
     },
     wa: {
-      provider: (env.WA_PROVIDER || '360dialog').toLowerCase(),
       d360ApiKey: env.D360_API_KEY || '',
-      token: env.WA_TOKEN || '',
-      phoneNumberId: env.WA_PHONE_NUMBER_ID || '',
-      graphVersion: env.WA_GRAPH_VERSION || 'v23.0',
-      appSecret: env.WA_APP_SECRET || '',
-      verifyToken: env.WA_VERIFY_TOKEN || '',
       baseUrl: env.WA_BASE_URL || '', // samo za testove
       templateName: env.WA_TEMPLATE_NAME || 'podsjetnik_termin',
       templateLang: env.WA_TEMPLATE_LANG || 'hr',
@@ -67,20 +61,7 @@ export function assertConfig(cfg, parts) {
     if (!cfg.cliniko.apiKey) missing.push('CLINIKO_API_KEY');
     if (!/\(.+@.+\)/.test(cfg.cliniko.userAgent)) missing.push('CLINIKO_USER_AGENT (mora sadržavati e-mail u zagradama)');
   }
-  if (parts.includes('whatsapp')) {
-    if (cfg.wa.provider === '360dialog') {
-      if (!cfg.wa.d360ApiKey) missing.push('D360_API_KEY');
-    } else if (cfg.wa.provider === 'meta') {
-      if (!cfg.wa.token) missing.push('WA_TOKEN');
-      if (!cfg.wa.phoneNumberId) missing.push('WA_PHONE_NUMBER_ID');
-    } else {
-      missing.push('WA_PROVIDER (dozvoljeno: 360dialog ili meta)');
-    }
-  }
-  if (parts.includes('webhook') && cfg.wa.provider === 'meta') {
-    if (!cfg.wa.appSecret) missing.push('WA_APP_SECRET');
-    if (!cfg.wa.verifyToken) missing.push('WA_VERIFY_TOKEN');
-  }
+  if (parts.includes('whatsapp') && !cfg.wa.d360ApiKey) missing.push('D360_API_KEY');
   if (!['custom_field', 'allowlist', 'all'].includes(cfg.consent.mode)) {
     missing.push('CONSENT_MODE (custom_field, allowlist ili all)');
   }

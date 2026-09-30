@@ -3,7 +3,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -111,7 +110,7 @@ function makeCtx(dbFile) {
   fs.writeFileSync(consentFile, '# pilot\n1\n+385 91 222 2222\n3\n5\n6\n');
   const cfg = loadConfig({
     cliniko: { apiKey: 'TESTKEY-uk1', userAgent: 'Proprio test (test@proprio.hr)', baseUrl: `http://127.0.0.1:${cliniko.address().port}/v1`, includeGroup: true, writeNotes: true },
-    wa: { provider: '360dialog', d360ApiKey: 'D360TEST', baseUrl: `http://127.0.0.1:${wa.address().port}`, appSecret: 'appsecret', verifyToken: 'vtok', replyConfirm: 'Hvala!', replyChange: 'Javit ćemo se.' },
+    wa: { d360ApiKey: 'D360TEST', baseUrl: `http://127.0.0.1:${wa.address().port}`, replyConfirm: 'Hvala!', replyChange: 'Javit ćemo se.' },
     consent: { mode: 'allowlist', file: consentFile },
     timezone: 'Europe/Zagreb',
     dbPath: dbFile || path.join(dir, 'test.db'),
@@ -163,30 +162,21 @@ test('ponovno pokretanje ne šalje duplikate; neuspjelo se ponovi', async () => 
   assert.equal(s2.alreadySent, 4);
 });
 
-test('HTTP server: webhook verifikacija, potpis, statusi, odgovori, stranica statusa', async () => {
+test('HTTP server: webhook, statusi, odgovori, stranica statusa', async () => {
   app = createServer(ctx);
   await new Promise((r) => app.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${app.address().port}`;
 
-  // Meta verifikacija
-  let r = await fetch(`${base}/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=vtok&hub.challenge=12345`);
-  assert.equal(r.status, 200);
-  assert.equal(await r.text(), '12345');
-  r = await fetch(`${base}/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=krivo&hub.challenge=1`);
-  assert.equal(r.status, 403);
+  // 360dialog šalje samo POST
+  assert.equal((await fetch(`${base}/whatsapp/webhook`)).status, 405);
 
-  const post = async (payload, secret = 'appsecret') => {
-    const body = JSON.stringify(payload);
-    const sig = 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');
-    const res = await fetch(`${base}/whatsapp/webhook`, { method: 'POST', body, headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': sig } });
+  const post = async (payload) => {
+    const res = await fetch(`${base}/whatsapp/webhook`, { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
     await ctx.pending;
     return res.status;
   };
   const anaRow = ctx.db.forDates([DAY]).find((x) => x.patient_name === 'Ana Anić');
   const ivoRow = ctx.db.forDates([DAY]).find((x) => x.patient_name === 'Ivan Ivić');
-
-  // krivi potpis
-  assert.equal(await post({ entry: [] }, 'krivi'), 401);
 
   // statusi: read pa delivered (obrnuti redoslijed) – ostaje read
   const st = (id, status) => ({ entry: [{ changes: [{ value: { statuses: [{ id, status, recipient_id: '385981111111' }] } }] }] });
