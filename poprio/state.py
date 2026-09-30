@@ -197,13 +197,19 @@ class StateStore:
             )
         )
 
-    def mark_sending(self, cliniko_invoice_id):
+    def mark_sending(self, cliniko_invoice_id, cliniko_number=None):
         """Bilježi da zahtjev prema Solu kreće. Od ovog trenutka prekid procesa
-        znači da se ne zna je li dokument nastao; prije njega se zna da nije."""
+        znači da se ne zna je li dokument nastao; prije njega se zna da nije.
+
+        Uz to sprema broj računa: ako proces stane baš tu, to je jedini podatak
+        po kojem se dokument može prepoznati u Solu."""
         with self.conn:
             self.conn.execute(
-                "UPDATE processed_invoices SET solo_attempted = 1 WHERE cliniko_invoice_id = ?",
-                (str(cliniko_invoice_id),),
+                """UPDATE processed_invoices
+                   SET solo_attempted = 1,
+                       cliniko_number = COALESCE(?, cliniko_number)
+                   WHERE cliniko_invoice_id = ?""",
+                (str(cliniko_number) if cliniko_number else None, str(cliniko_invoice_id)),
             )
 
     def recover_unsent_claims(self, older_than_minutes=None):
@@ -247,13 +253,12 @@ class StateStore:
 
         Samo oni kod kojih je zahtjev prema Solu stvarno krenuo; ostale je
         `recover_unsent_claims` već vratio u red."""
-        return [
-            row[0]
-            for row in self.conn.execute(
-                "SELECT cliniko_invoice_id FROM processed_invoices "
-                "WHERE status = 'pending' AND solo_attempted = 1"
+        return list(
+            self.conn.execute(
+                "SELECT cliniko_invoice_id, cliniko_number, processed_at "
+                "FROM processed_invoices WHERE status = 'pending' AND solo_attempted = 1"
             )
-        ]
+        )
 
     def alert_due(self, alert_key, min_interval_hours):
         """True ako za taj problem još nije poslana obavijest ili je prošlo

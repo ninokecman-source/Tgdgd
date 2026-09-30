@@ -509,15 +509,11 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
 
         stavke = build_stavke(config, invoice, invoice_items)
 
-        # Oznaka izvornog Cliniko računa ostaje zapisana na samom Solo dokumentu
-        # (vidljiva je i na PDF-u). Ako lokalna baza ikad zakaže, po njoj se
-        # ručno vidi je li neki Cliniko račun već fiskaliziran.
-        napomene = f"Cliniko #{cliniko_id}"
-
-        # Od ove točke nadalje prekid procesa znači stvarnu dvojbu - dokument
-        # je u Solu možda nastao. Sve prije nje je sigurno bez posljedica, pa
-        # se takav zapis može vratiti u red sam (vidi recover_unsent_claims).
-        state.mark_sending(cliniko_id)
+        # Na dokument ne ide nikakva interna oznaka - račun koji pacijent dobije
+        # ostaje čist. Veza prema Clinku živi u bazi na serveru i u njenim
+        # dnevnim kopijama; broj računa se sprema neposredno prije slanja, pa
+        # se dokument može prepoznati u Solu i ako proces stane baš tu.
+        state.mark_sending(cliniko_id, invoice.get("number"))
 
         if document_type == "ponuda":
             racun = solo.create_ponuda(
@@ -527,7 +523,6 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
                 kupac_naziv=kupac_naziv,
                 kupac_oib=patient_oib,
                 kupac_adresa=patient_address,
-                napomene=napomene,
                 stavke=stavke,
             )
         else:
@@ -539,7 +534,6 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
                 kupac_naziv=kupac_naziv,
                 kupac_oib=patient_oib,
                 kupac_adresa=patient_address,
-                napomene=napomene,
                 stavke=stavke,
             )
     except MissingPaymentMarker as e:
@@ -789,11 +783,11 @@ def print_status(config):
         if zaustavljeni:
             print(
                 "\nPAŽNJA: ovi su zaustavljeni nakon što je zahtjev prema Solu već "
-                "krenuo,\npa se ne zna je li dokument nastao. Provjeri u Solu ima li "
-                "dokument\ns napomenom \"Cliniko #<id>\" prije nego ih vratiš u red:"
+                "krenuo,\npa se ne zna je li dokument nastao. Usporedi ih s dokumentima "
+                "u Solu\noko navedenog vremena prije nego ih vratiš u red:"
             )
-            for cliniko_id in zaustavljeni:
-                print(f"  {cliniko_id}")
+            for cliniko_id, broj, kada in zaustavljeni:
+                print(f"  #{broj or '?':<8} {kada}   (Cliniko id {cliniko_id})")
         elif redovi.get("pending"):
             print(
                 "\n(`pending` bez upozorenja je račun koji se upravo obrađuje - "
@@ -905,23 +899,24 @@ def report_stuck_invoices(state, config, alerter):
 
     pending = state.pending_claims()
     if pending:
+        popis = "\n".join(
+            f"  Cliniko račun #{broj or '?'} (zaustavljen {kada})" for _, broj, kada in pending
+        )
         alerter.problem(
-            "pending:" + ",".join(pending),
+            "pending:" + ",".join(cid for cid, _, _ in pending),
             "Računi zaustavljeni usred slanja",
-            "Ovi Cliniko računi zaustavljeni su usred slanja u Solo:\n\n"
-            + "\n".join(f"  {p}" for p in pending)
+            "Ovi Cliniko računi zaustavljeni su usred slanja u Solo:\n\n" + popis
             + "\n\nNe zna se je li dokument u Solu nastao ili nije, pa ih ne ponavljam "
-              "sam (mogao bi nastati duplikat fiskalnog računa). Provjeri u Solu postoji "
-              "li dokument s napomenom \"Cliniko #<id>\" i razriješi prema README-u "
-              "(sekcija \"Zaustavljeni računi\").",
+              "sam (mogao bi nastati duplikat fiskalnog računa). Usporedi taj račun u "
+              "Clinku s dokumentima u Solu oko navedenog vremena i razriješi prema "
+              "README-u (sekcija \"Zaustavljeni računi\").",
         )
         print(
-            "[UPOZORENJE] Računi zaustavljeni usred slanja: " + ", ".join(pending) + "\n"
-            "  Proces je prekinut nakon što je račun zauzet, a prije potvrde da je\n"
-            "  dokument nastao - ne zna se je li u Solu nastao ili nije. Neću ih\n"
-            "  ponavljati sam jer bi mogao nastati duplikat fiskalnog računa.\n"
-            "  Provjeri u Solu postoji li dokument s napomenom \"Cliniko #<id>\" i\n"
-            "  razriješi prema uputama u README-u (sekcija \"Zaustavljeni računi\").",
+            "[UPOZORENJE] Računi zaustavljeni usred slanja:\n" + popis + "\n"
+            "  Proces je prekinut nakon što je zahtjev prema Solu već krenuo - ne zna\n"
+            "  se je li dokument nastao. Neću ih ponavljati sam jer bi mogao nastati\n"
+            "  duplikat fiskalnog računa. Usporedi račun u Clinku s dokumentima u Solu\n"
+            "  oko navedenog vremena (README, sekcija \"Zaustavljeni računi\").",
             file=sys.stderr,
         )
 

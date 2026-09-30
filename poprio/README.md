@@ -247,19 +247,19 @@ svakome tko do njega dođe (npr. push u registry).
 * * * * * cd /opt/poprio && venv/bin/python sync.py >> sync.log 2>&1
 ```
 
-## Oznaka izvornog Cliniko računa
+## Veza između Cliniko računa i dokumenta u Solu
 
-Svaki dokument koji skripta kreira u Solu nosi u napomeni oznaku
-`Cliniko #<id>` — npr. `Cliniko #2018168603207010009`. Napomena se
-**ispisuje na PDF-u** koji pacijent dobije.
+Na dokument u Solu ne ide nikakva interna oznaka — račun koji pacijent
+dobije ostaje čist. Veza između dva sustava živi u bazi na serveru
+(`state.sqlite3`), koja uz svaki Cliniko račun pamti broj i ID dokumenta
+nastalog u Solu, te u njenim dnevnim kopijama.
 
-Svrha je mogućnost ručne provjere: ako lokalna baza ikad zakaže ili se
-posumnja u duplikat, u Solu se po toj oznaci vidi iz kojeg je Cliniko
-računa svaki dokument nastao. Bez nje ta veza ne postoji nigdje osim u
-lokalnoj SQLite bazi.
+Ranije je svaki dokument nosio napomenu `Cliniko #<id>`, kao treći sloj
+zaštite za slučaj gubitka baze. Uklonjena je namjerno: interni ID se u
+Clinku ionako ne može pretražiti, pa je na računu bio samo šum.
 
-Oznaka se postavlja u `sync.py`, u varijabli `napomene` — ako je ikad ne
-želiš na PDF-u, ondje se uklanja (uz gubitak te mogućnosti provjere).
+`SoloClient` i dalje prima `napomene`, pa se po potrebi lako vrati —
+`sync.py` ga jednostavno više ne prosljeđuje.
 
 ## Samo jedna instanca odjednom
 
@@ -492,13 +492,15 @@ Tada se **stvarno ne zna** je li dokument u Solu nastao ili nije, pa ga
 skripta neće sama ponoviti (mogao bi nastati duplikat fiskalnog računa)
 nego to javi pri svakom pokretanju.
 
-Razrješava se ručno — provjeri postoji li u Solu dokument s napomenom
-`Cliniko #<id>`:
+Razrješava se ručno. `--status` ispiše broj takvog računa i vrijeme kad je
+zaustavljen; usporedi taj račun u Clinku (pacijent, iznos) s dokumentima u
+Solu nastalima oko tog vremena:
 
 ```bash
-# koji su zaustavljeni
+# koji su zaustavljeni, s brojem računa i vremenom
 sudo -u poprio sqlite3 /var/lib/poprio/state.sqlite3 \
-  "SELECT cliniko_invoice_id FROM processed_invoices WHERE status='pending';"
+  "SELECT cliniko_invoice_id, cliniko_number, processed_at
+   FROM processed_invoices WHERE status='pending' AND solo_attempted=1;"
 
 # dokument POSTOJI u Solu -> račun je fiskaliziran, označi zapis gotovim
 sudo -u poprio sqlite3 /var/lib/poprio/state.sqlite3 \
