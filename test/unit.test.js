@@ -6,7 +6,8 @@ import { dayRangeUtc, formatForTemplate, addDays, parseHours, todayIn } from '..
 import { groupByPatient, targetDate } from '../src/reminders.js';
 import { classifyReply } from '../src/webhook.js';
 import { loadConfig, assertConfig } from '../src/config.js';
-import { cleanParam } from '../src/whatsapp.js';
+import { cleanParam, isAccountError } from '../src/whatsapp.js';
+import { openDb } from '../src/db.js';
 
 test('normalizacija brojeva', () => {
   assert.equal(normalizePhone('098 123 4567'), '385981234567');
@@ -108,4 +109,32 @@ test('webhook mora imati tajnu putanju (360dialog ne potpisuje poruke)', () => {
   assert.throws(check('/whatsapp/webhook'), /WEBHOOK_PATH/);
   assert.throws(check('/whatsapp/webhook/kratko'), /WEBHOOK_PATH/);
   assert.doesNotThrow(check('/whatsapp/webhook/7f3c9a1e5b2d4c8f9e0a1b2c3d4e5f60'));
+});
+
+test('pokušaji: greška pacijenta 3 puta pa stop, novi broj ispočetka, greška računa se ne broji', () => {
+  const db = openDb(':memory:');
+  const row = { reminder_key: '6|2026-10-01T15:00:00Z', patient_id: '6', patient_name: 'Greška Broj', phone: '385976666666', starts_at: '2026-10-01T15:00:00Z', local_date: '2026-10-01', appointments: '[]' };
+  for (let i = 0; i < 3; i++) {
+    assert.equal(db.claim(row), true);
+    db.markFailed(row.reminder_key, 131026, 'Message undeliverable');
+  }
+  assert.equal(db.claim(row), false);
+  const fixed = { ...row, phone: '385976666667' }; // broj ispravljen u Clinikou
+  assert.equal(db.claim(fixed), true);
+  assert.equal(db.get(row.reminder_key).attempts, 1);
+  for (let i = 0; i < 5; i++) {
+    db.markDeferred(row.reminder_key, 401, 'Invalid api key');
+    assert.equal(db.claim(fixed), true);
+  }
+  assert.equal(db.get(row.reminder_key).attempts, 1);
+});
+
+test('koje greške nisu do pacijenta', () => {
+  const e = (code, httpStatus) => ({ code, httpStatus });
+  for (const x of [e(401, 401), e(403, 403), e(132001, 404), e(131042, 400), e(130429, 429), e(131000, 500), e('NETWORK', 0), e(190, 401)]) {
+    assert.ok(isAccountError(x), JSON.stringify(x));
+  }
+  for (const x of [e(131026, 400), e(131056, 400), e(131008, 400), e(132005, 400), e(100, 400)]) {
+    assert.ok(!isAccountError(x), JSON.stringify(x));
+  }
 });

@@ -3,6 +3,7 @@ import { pickMobile } from './phone.js';
 import { hasConsent, loadAllowlist } from './consent.js';
 import { dayRangeUtc, todayIn, addDays, formatForTemplate } from './time.js';
 import { log, maskPhone } from './log.js';
+import { isAccountError } from './whatsapp.js';
 
 export const targetDate = (zone, daysAhead, now = new Date()) => addDays(todayIn(zone, now), daysAhead);
 
@@ -55,7 +56,7 @@ export async function runReminders({ cfg, cliniko, wa, db, date, dryRun = cfg.dr
 
   const appts = await collectAppointments(cliniko, range, cfg.cliniko.includeGroup);
   const groups = groupByPatient(appts);
-  const summary = { date: localDate, appointments: appts.length, patients: groups.length, sent: 0, alreadySent: 0, failed: 0, noPhone: 0, noConsent: 0, preview: [] };
+  const summary = { date: localDate, appointments: appts.length, patients: groups.length, sent: 0, alreadySent: 0, failed: 0, deferred: 0, accountError: null, noPhone: 0, noConsent: 0, preview: [] };
 
   for (const g of groups) {
     const patient = await cliniko.patientByLink(g.patientLink);
@@ -106,9 +107,17 @@ export async function runReminders({ cfg, cliniko, wa, db, date, dryRun = cfg.dr
       summary.sent++;
       log.info(`Poslan podsjetnik: pacijent ${g.patientId}, ${datum} ${sat}, ${maskPhone(to)}`);
     } catch (err) {
-      db.markFailed(row.reminder_key, err.code ?? 'ERR', err.message);
-      summary.failed++;
-      log.error(`Podsjetnik NIJE poslan: pacijent ${g.patientId} (${maskPhone(to)}): ${err.message}`);
+      if (isAccountError(err)) {
+        // Nije do pacijenta: ponovit će se u sljedećem krugu, čim se uzrok ukloni.
+        db.markDeferred(row.reminder_key, err.code ?? 'ERR', err.message);
+        summary.deferred++;
+        summary.accountError = err.message;
+        log.error(`Podsjetnik NIJE poslan (greška računa/postavki, ponovit će se): pacijent ${g.patientId}: ${err.message}`);
+      } else {
+        db.markFailed(row.reminder_key, err.code ?? 'ERR', err.message);
+        summary.failed++;
+        log.error(`Podsjetnik NIJE poslan: pacijent ${g.patientId} (${maskPhone(to)}): ${err.message}`);
+      }
     }
   }
   return summary;

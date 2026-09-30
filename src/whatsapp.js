@@ -14,6 +14,16 @@ const TRANSIENT = new Set([1, 2, 4, 80007, 130429, 131000, 131016, 131056, 13300
 export const isTransient = (err) =>
   TRANSIENT.has(Number(err?.code)) || Number(err?.httpStatus) >= 500 || err?.name === 'TypeError';
 
+// Greške računa, ključa, predloška, plaćanja, limita ili ispada servisa – pogodile bi
+// svakog pacijenta, pa mu ne troše pokušaje (katalog grešaka, poglavlje 6 uputa).
+// 131056 (previše poruka istom broju) je vezana uz pacijenta.
+const ACCOUNT = new Set([10, 190, 200, 368, 131005, 131031, 131042, 131048, 131051, 132000, 132001, 132012, 132015, 132016, 133010, 80007, 130429]);
+export const isAccountError = (err) =>
+  ACCOUNT.has(Number(err?.code)) ||
+  [401, 403].includes(Number(err?.httpStatus)) ||
+  err?.code === 'NETWORK' ||
+  (isTransient(err) && Number(err?.code) !== 131056);
+
 /** Čisti vrijednost varijable predloška (greška 132007: novi redovi, tabovi, >4 razmaka). */
 export const cleanParam = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
 

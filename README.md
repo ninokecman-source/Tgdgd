@@ -212,6 +212,10 @@ Nakon svake promjene `.env`: `sudo systemctl restart proprio-whatsapp`.
 | Mnogo "nema mobitela" | broj upisan kao fiksni ili neispravno | ispraviti broj u Clinikou (tip "Mobile") |
 | Odgovori se ne bilježe | webhook nije prijavljen ili kriva putanja | ponoviti korak 3.1, `journalctl -u proprio-whatsapp -f` |
 
+**Ponovni pokušaji:**
+- Greške koje **nisu do pacijenta** ne troše njegove pokušaje. To su neispravan 360dialog ključ, nepostojeći ili pauziran predložak, plaćanje, limiti i ispad servisa. Podsjetnik se sam pošalje u sljedećem krugu (svaki sat) čim se uzrok ukloni, a `/health` do tada javlja grešku.
+- Greške **vezane uz pacijenta** (npr. 131026 – broj nema WhatsApp) pokušavaju se najviše 3 puta. Ako recepcija ispravi broj u Clinikou, pokušava se ponovno na novi broj.
+
 Detaljan katalog grešaka: `whatsapp_business_integracija_klinika.txt` (poglavlje 6).
 
 ---

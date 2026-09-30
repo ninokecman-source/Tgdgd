@@ -52,11 +52,15 @@ export function openDb(dbPath) {
     insert: db.prepare(`INSERT INTO reminders
       (reminder_key, patient_id, patient_name, phone, starts_at, local_date, appointments, status, attempts)
       VALUES (:reminder_key, :patient_id, :patient_name, :phone, :starts_at, :local_date, :appointments, :status, :attempts)`),
+    // Novi broj (npr. ispravljen u Clinikou nakon 131026) = pokušaji kreću ispočetka.
     reset: db.prepare(`UPDATE reminders SET patient_name=:patient_name, phone=:phone, appointments=:appointments,
-      status=:status, attempts=attempts + :attempts, error_code=NULL, error_message=NULL, updated_at=${NOW}
+      status=:status, attempts=CASE WHEN phone IS NOT :phone THEN :attempts ELSE attempts + :attempts END,
+      error_code=NULL, error_message=NULL, updated_at=${NOW}
       WHERE reminder_key=:reminder_key`),
     sent: db.prepare(`UPDATE reminders SET status='sent', wamid=?, delivery='sent', updated_at=${NOW} WHERE reminder_key=?`),
     failed: db.prepare(`UPDATE reminders SET status='failed', error_code=?, error_message=?, updated_at=${NOW} WHERE reminder_key=?`),
+    deferred: db.prepare(`UPDATE reminders SET status='failed', attempts=MAX(attempts - 1, 0), error_code=?, error_message=?,
+      updated_at=${NOW} WHERE reminder_key=?`),
     byWamid: db.prepare('SELECT * FROM reminders WHERE wamid = ?'),
     latestForPhone: db.prepare(`SELECT * FROM reminders WHERE phone = ? AND status='sent' AND created_at >= ?
       ORDER BY created_at DESC LIMIT 1`),
@@ -98,7 +102,8 @@ export function openDb(dbPath) {
     /**
      * Atomski "zauzme" podsjetnik za slanje. Vraća true ako ga treba poslati.
      * Ne šalje ponovno ako je već poslan, ako se upravo šalje, ili ako je
-     * već 3 puta neuspješno pokušan (trajna greška – recepcija vidi na /status).
+     * već 3 puta neuspješno pokušan na isti broj (greška vezana uz pacijenta –
+     * recepcija vidi na /status). Ako je broj u međuvremenu promijenjen, pokušava se opet.
      */
     claim: tx((row) => {
       const existing = q.get.get(row.reminder_key);
@@ -107,7 +112,7 @@ export function openDb(dbPath) {
         return true;
       }
       if (DONE.has(existing.status)) return false;
-      if (existing.status === 'failed' && existing.attempts >= MAX_ATTEMPTS) return false;
+      if (existing.status === 'failed' && existing.attempts >= MAX_ATTEMPTS && existing.phone === row.phone) return false;
       resetRow(row, 'sending', 1);
       return true;
     }),
@@ -121,6 +126,8 @@ export function openDb(dbPath) {
 
     markSent: (key, wamid) => q.sent.run(wamid, key),
     markFailed: (key, code, msg) => q.failed.run(String(code), String(msg).slice(0, 500), key),
+    /** Neuspjeh koji nije do pacijenta (ključ, predložak, ispad): ne troši mu pokušaj. */
+    markDeferred: (key, code, msg) => q.deferred.run(String(code), String(msg).slice(0, 500), key),
     get: (key) => q.get.get(key),
     byWamid: (wamid) => q.byWamid.get(wamid),
     latestForPhone: (phone, sinceIso) => q.latestForPhone.get(phone, sinceIso),

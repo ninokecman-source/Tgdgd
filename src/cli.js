@@ -57,7 +57,11 @@ async function main() {
           else console.log(`  ${p.alreadySent ? '(već poslano) ' : ''}${p.patient} -> ${p.to}: ime="${p.params[0]}", datum="${p.params[1]}", sat="${p.params[2]}"`);
         }
       } else {
-        console.log(`Poslano: ${s.sent} | već poslano ranije: ${s.alreadySent} | greške: ${s.failed}`);
+        console.log(`Poslano: ${s.sent} | već poslano ranije: ${s.alreadySent} | greške pacijenta: ${s.failed} | odgođeno: ${s.deferred}`);
+        if (s.accountError) {
+          console.log(`\n✘ Greška računa/postavki (nije do pacijenata, ponovit će se): ${s.accountError}`);
+          process.exitCode = 1;
+        }
       }
       console.log(`Bez mobitela: ${s.noPhone} | bez privole: ${s.noConsent}`);
       return;

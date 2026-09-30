@@ -19,6 +19,7 @@ let cliniko, wa, app, base;
 const sent = [];
 const patched = [];
 let failNextFor = null; // broj za koji WhatsApp vraća grešku
+let failAll = null; // { status, body } – greška za svaku poruku (npr. neispravan API ključ)
 
 function listen(handler) {
   return new Promise((resolve) => {
@@ -90,6 +91,7 @@ before(async () => {
   wa = await listen(async (req, res) => {
     assert.equal(req.headers['d360-api-key'], 'D360TEST');
     const body = JSON.parse(await readBody(req));
+    if (failAll) return json(res, failAll.status, failAll.body);
     if (body.to === failNextFor) {
       return json(res, 400, { error: { code: 131026, message: 'Message undeliverable' } });
     }
@@ -219,4 +221,24 @@ test('premješten termin dobiva novi podsjetnik', async () => {
   const row = { reminder_key: '1|2026-10-01T09:00:00Z', patient_id: '1', patient_name: 'Ana Anić', phone: '385981111111', starts_at: '2026-10-01T09:00:00Z', local_date: DAY, appointments: '[]' };
   assert.equal(ctx.db.claim(row), true); // novo vrijeme = novi ključ
   assert.equal(ctx.db.claim(row), false);
+});
+
+test('greška računa (ključ, predložak) ne troši pokušaje; nakon popravka podsjetnici odu', async () => {
+  const c = makeCtx();
+  const before = sent.length;
+  failAll = { status: 401, body: { meta: { success: false, http_code: 401, developer_message: 'Invalid api key' } } };
+  for (let i = 0; i < 4; i++) {
+    const s = await runReminders({ ...c, date: DAY });
+    assert.equal(s.sent, 0);
+    assert.equal(s.failed, 0);
+    assert.equal(s.deferred, 4);
+    assert.match(s.accountError, /401/);
+  }
+  failAll = { status: 404, body: { error: { code: 132001, message: 'Template name does not exist in the translation' } } };
+  assert.equal((await runReminders({ ...c, date: DAY })).deferred, 4);
+  failAll = null;
+  const s = await runReminders({ ...c, date: DAY });
+  assert.equal(s.sent, 4, JSON.stringify(s));
+  assert.equal(s.accountError, null);
+  assert.equal(sent.length, before + 4);
 });
