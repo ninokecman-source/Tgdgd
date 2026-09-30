@@ -27,9 +27,10 @@ async function check(cfg) {
     console.log('✘ WhatsApp:', e.message);
     return;
   }
-  const res = await fetch('https://waba-v2.360dialog.io/v1/configs/webhook', { headers: { 'D360-API-KEY': cfg.wa.d360ApiKey } });
-  const text = await res.text();
-  console.log(res.ok ? `✔ WhatsApp (360dialog): API ključ radi. Webhook: ${text}` : `✘ WhatsApp (360dialog): HTTP ${res.status} ${text}`);
+  const url = `https://graph.facebook.com/${cfg.wa.graphVersion}/${cfg.wa.phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,platform_type`;
+  const data = await (await fetch(url, { headers: { Authorization: `Bearer ${cfg.wa.token}` } })).json();
+  if (data.error) console.log(`✘ WhatsApp: ${data.error.code} ${data.error.message}`);
+  else console.log(`✔ WhatsApp: ${data.verified_name} ${data.display_phone_number}, kvaliteta: ${data.quality_rating}, platforma: ${data.platform_type}`);
 }
 
 async function main() {

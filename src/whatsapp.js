@@ -14,7 +14,7 @@ const TRANSIENT = new Set([1, 2, 4, 80007, 130429, 131000, 131016, 131056, 13300
 export const isTransient = (err) =>
   TRANSIENT.has(Number(err?.code)) || Number(err?.httpStatus) >= 500 || err?.name === 'TypeError';
 
-// Greške računa, ključa, predloška, plaćanja, limita ili ispada servisa – pogodile bi
+// Greške računa, tokena, predloška, plaćanja, limita ili ispada servisa – pogodile bi
 // svakog pacijenta, pa mu ne troše pokušaje (katalog grešaka, poglavlje 6 uputa).
 // 131056 (previše poruka istom broju) je vezana uz pacijenta.
 const ACCOUNT = new Set([10, 190, 200, 368, 131005, 131031, 131042, 131048, 131051, 132000, 132001, 132012, 132015, 132016, 133010, 80007, 130429]);
@@ -30,8 +30,9 @@ export const cleanParam = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().sli
 export class WhatsAppClient {
   constructor(wa) {
     this.wa = wa;
-    this.url = (wa.baseUrl || 'https://waba-v2.360dialog.io') + '/messages';
-    this.headers = { 'D360-API-KEY': wa.d360ApiKey };
+    const base = wa.baseUrl || 'https://graph.facebook.com';
+    this.url = `${base}/${wa.graphVersion}/${wa.phoneNumberId}/messages`;
+    this.headers = { Authorization: `Bearer ${wa.token}` };
   }
 
   async send(payload) {

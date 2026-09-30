@@ -3,6 +3,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -89,7 +90,8 @@ before(async () => {
   });
 
   wa = await listen(async (req, res) => {
-    assert.equal(req.headers['d360-api-key'], 'D360TEST');
+    assert.equal(req.headers.authorization, 'Bearer WATEST');
+    assert.equal(req.url, '/v23.0/PNID/messages');
     const body = JSON.parse(await readBody(req));
     if (failAll) return json(res, failAll.status, failAll.body);
     if (body.to === failNextFor) {
@@ -112,7 +114,7 @@ function makeCtx(dbFile) {
   fs.writeFileSync(consentFile, '# pilot\n1\n+385 91 222 2222\n3\n5\n6\n');
   const cfg = loadConfig({
     cliniko: { apiKey: 'TESTKEY-uk1', userAgent: 'Proprio test (test@proprio.hr)', baseUrl: `http://127.0.0.1:${cliniko.address().port}/v1`, includeGroup: true, writeNotes: true },
-    wa: { d360ApiKey: 'D360TEST', baseUrl: `http://127.0.0.1:${wa.address().port}`, replyConfirm: 'Hvala!', replyChange: 'Javit ćemo se.' },
+    wa: { token: 'WATEST', phoneNumberId: 'PNID', graphVersion: 'v23.0', baseUrl: `http://127.0.0.1:${wa.address().port}`, appSecret: 'appsecret', verifyToken: 'vtok-dugi-nasumicni', replyConfirm: 'Hvala!', replyChange: 'Javit ćemo se.' },
     consent: { mode: 'allowlist', file: consentFile },
     timezone: 'Europe/Zagreb',
     dbPath: dbFile || path.join(dir, 'test.db'),
@@ -164,19 +166,29 @@ test('ponovno pokretanje ne šalje duplikate; neuspjelo se ponovi', async () => 
   assert.equal(s2.alreadySent, 4);
 });
 
-test('HTTP server: webhook, statusi, odgovori, stranica statusa', async () => {
+test('HTTP server: webhook verifikacija, potpis, statusi, odgovori, stranica statusa', async () => {
   app = createServer(ctx);
   await new Promise((r) => app.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${app.address().port}`;
 
-  // 360dialog šalje samo POST
-  assert.equal((await fetch(`${base}/whatsapp/webhook`)).status, 405);
+  // Meta provjera adrese
+  let r = await fetch(`${base}/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=vtok-dugi-nasumicni&hub.challenge=12345`);
+  assert.equal(r.status, 200);
+  assert.equal(await r.text(), '12345');
+  r = await fetch(`${base}/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=krivo&hub.challenge=1`);
+  assert.equal(r.status, 403);
 
-  const post = async (payload) => {
-    const res = await fetch(`${base}/whatsapp/webhook`, { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } });
+  const post = async (payload, secret = 'appsecret') => {
+    const body = JSON.stringify(payload);
+    const headers = { 'Content-Type': 'application/json' };
+    if (secret) headers['X-Hub-Signature-256'] = 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');
+    const res = await fetch(`${base}/whatsapp/webhook`, { method: 'POST', body, headers });
     await ctx.pending;
     return res.status;
   };
+  // bez potpisa ili s krivim potpisom -> odbijeno
+  assert.equal(await post({ entry: [] }, null), 401);
+  assert.equal(await post({ entry: [] }, 'krivi'), 401);
   const anaRow = ctx.db.forDates([DAY]).find((x) => x.patient_name === 'Ana Anić');
   const ivoRow = ctx.db.forDates([DAY]).find((x) => x.patient_name === 'Ivan Ivić');
 
@@ -231,13 +243,13 @@ test('premješten termin dobiva novi podsjetnik', async () => {
 test('greška računa (ključ, predložak) ne troši pokušaje; nakon popravka podsjetnici odu', async () => {
   const c = makeCtx();
   const before = sent.length;
-  failAll = { status: 401, body: { meta: { success: false, http_code: 401, developer_message: 'Invalid api key' } } };
+  failAll = { status: 401, body: { error: { code: 190, message: 'Invalid OAuth access token' } } };
   for (let i = 0; i < 4; i++) {
     const s = await runReminders({ ...c, date: DAY });
     assert.equal(s.sent, 0);
     assert.equal(s.failed, 0);
     assert.equal(s.deferred, 4);
-    assert.match(s.accountError, /401/);
+    assert.match(s.accountError, /190/);
   }
   failAll = { status: 404, body: { error: { code: 132001, message: 'Template name does not exist in the translation' } } };
   assert.equal((await runReminders({ ...c, date: DAY })).deferred, 4);

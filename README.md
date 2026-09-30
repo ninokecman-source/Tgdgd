@@ -5,7 +5,8 @@ iz Clinikoa, prima njihove odgovore (gumbi *Potvrđujem* / *Trebam promjenu*) i 
 jednostavnu stranicu s pregledom.
 
 - Bez vanjskih biblioteka – samo Node.js 22.13+ (ugrađeni SQLite, HTTP, Intl). Nema `npm install`.
-- Postojeći WhatsApp Business broj **ostaje u aplikaciji na mobitelu** (coexistence preko 360dialoga).
+- Šalje se **izravno preko Meta WhatsApp Cloud API-ja**, bez posrednika. Broj klinike prelazi s aplikacije
+  na mobitelu na API (poglavlje 2.1).
 - Testirano: 13 automatskih testova (`npm test`), uključujući promjenu sata, duplikate, potpis webhooka.
 
 ---
@@ -15,7 +16,7 @@ jednostavnu stranicu s pregledom.
 ```
             svaki sat 10–19 h                       odobreni predložak
  Cliniko  ───────────────────►  ovaj servis  ─────────────────────────►  WhatsApp  ──►  pacijent
- (sutrašnji termini, API)       (mali server)  ◄─────────────────────────  (360dialog)  ◄── gumb / odgovor
+ (sutrašnji termini, API)       (mali server)  ◄─────────────────────────  (Meta API)   ◄── gumb / odgovor
                                      │                webhook
                                      ├── baza (SQLite): tko je dobio, isporuka, odgovor
                                      └── /status  → stranica za recepciju
@@ -45,23 +46,39 @@ Poruka pacijentu (predložak):
 | # | Što | Gdje | Tko |
 |---|-----|------|-----|
 | 1 | Verificirana tvrtka u Meti | business.facebook.com → Sigurnosni centar | admin |
-| 2 | 360dialog račun + spajanje postojećeg broja (coexistence) | hub.360dialog.com | admin |
-| 3 | 360dialog API ključ | 360dialog Hub → broj → API key | admin |
-| 4 | Odobren predložak `podsjetnik_termin` (hr, UTILITY) | WhatsApp Manager ili 360dialog Hub | admin |
+| 2 | Meta aplikacija + broj prebačen na Cloud API (poglavlje 2.1) | developers.facebook.com | admin |
+| 3 | Trajni token, Phone number ID, App secret | Business Settings, App Dashboard | admin |
+| 4 | Odobren predložak `podsjetnik_termin` (hr, UTILITY) | WhatsApp Manager | admin |
 | 5 | Cliniko API ključ | Cliniko → My Info → Manage API keys | admin |
 | 6 | Mali server u EU + (pod)domena, npr. `wa.proprio.hr` | npr. Hetzner Cloud, DNS kod registrara | informatičar |
 
-### 2.1 Spajanje broja preko 360dialoga (coexistence)
-1. Registrirajte se na **hub.360dialog.com** (izravni klijent) i odaberite plan.
-2. Pokrenite spajanje broja, prijavite se Meta računom tvrtke i odaberite opciju za **postojeći
-   WhatsApp Business app broj** (coexistence). U aplikaciji na mobitelu potvrdite povezivanje
-   (obično skeniranjem QR koda) i po želji dozvolite prijenos povijesti poruka.
-3. Uvjeti: aplikacija WhatsApp Business novija verzija, broj aktivno korišten barem 7 dana,
-   aplikaciju na mobitelu **otvoriti barem svakih 13 dana** (inače se veza prekida).
-4. U Hubu generirajte **API ključ** za broj → to je `D360_API_KEY`.
+### 2.1 Prebacivanje broja na Meta Cloud API
+Postojeći broj klinike prelazi s aplikacije WhatsApp Business na API. **Nakon toga se na tom broju
+više ne koristi aplikacija na mobitelu** – sve poruke pacijenata recepcija čita i odgovara na
+stranici `/status` (poglavlje 7).
+
+1. **developers.facebook.com → My Apps → Create App** (tip *Business*), povežite je s Business
+   portfoliom tvrtke i dodajte proizvod **WhatsApp**. Na testnom broju koji dobijete najprije
+   isprobajte slanje – prije diranja pravog broja.
+2. U aplikaciji WhatsApp Business na mobitelu napravite **sigurnosnu kopiju chatova**
+   (Postavke → Chatovi → Sigurnosna kopija), zatim **Postavke → Račun → Izbriši račun**.
+   Pričekajte nekoliko minuta.
+3. **WhatsApp → API Setup → Add phone number**: prikazno ime *Proprio Centar* (kao na webu),
+   potvrda SMS-om ili pozivom, postavite **6-znamenkasti PIN** i spremite ga.
+4. Registrirajte broj na Cloud API (jednom):
+   ```bash
+   curl -X POST "https://graph.facebook.com/v23.0/PHONE_NUMBER_ID/register" \
+     -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" \
+     -d '{"messaging_product":"whatsapp","pin":"123456"}'
+   ```
+5. **Trajni token:** Business Settings → Users → System users → Add (uloga Admin) →
+   Assign assets (aplikacija i WhatsApp račun, *Full control*) → Generate token s dozvolama
+   `whatsapp_business_messaging` i `whatsapp_business_management`, rok **Never** → `WA_TOKEN`.
+   Phone number ID (API Setup) → `WA_PHONE_NUMBER_ID`; App secret (Settings → Basic) → `WA_APP_SECRET`.
+6. **WhatsApp Manager → Billing:** dodajte karticu (podsjetnici se naplaćuju po poruci).
 
 ### 2.2 Predložak poruke
-U WhatsApp Manageru (business.facebook.com → WhatsApp Manager → Predlošci) ili u 360dialog Hubu:
+U WhatsApp Manageru (business.facebook.com → WhatsApp Manager → Predlošci):
 
 - Naziv: `podsjetnik_termin` · Kategorija: **Utility** · Jezik: **Croatian (hr)**
 - Tijelo:
@@ -116,16 +133,19 @@ sudo systemctl enable --now proprio-whatsapp
 journalctl -u proprio-whatsapp -f         # logovi
 ```
 
-### 3.1 Webhook (da odgovori pacijenata stižu u servis)
-U `.env` postavite `WEBHOOK_PATH` na dugu nasumičnu putanju (bez nje se servis ne pokreće), npr.
-`/whatsapp/webhook/7f3c9a1e5b2d4c8f9e0a` (generirajte s `openssl rand -hex 16`), pa je prijavite 360dialogu:
+### 3.1 Webhook (da poruke pacijenata stižu u servis)
+1. U `.env` upišite `WA_APP_SECRET` i `WA_VERIFY_TOKEN` (dugi nasumični niz: `openssl rand -hex 16`).
+   Bez njih se servis ne pokreće.
+2. **App Dashboard → WhatsApp → Configuration → Webhook:** Callback URL
+   `https://wa.proprio.hr/whatsapp/webhook`, Verify token isti kao `WA_VERIFY_TOKEN` → *Verify and save*.
+3. Pod *Webhook fields* pretplatite **messages**.
+4. Pretplatite aplikaciju na WhatsApp račun (jednom; WABA ID je na stranici API Setup):
+   ```bash
+   curl -X POST "https://graph.facebook.com/v23.0/WABA_ID/subscribed_apps" -H "Authorization: Bearer TOKEN"
+   ```
+5. Aplikaciju prebacite u **Live** (App Dashboard; traži poveznicu na politiku privatnosti).
 
-```bash
-curl -X POST https://waba-v2.360dialog.io/v1/configs/webhook \
-  -H "D360-API-KEY: VAŠ_KLJUČ" -H "Content-Type: application/json" \
-  -d '{"url":"https://wa.proprio.hr/whatsapp/webhook/7f3c9a1e5b2d4c8f9e0a"}'
-```
-Dugačka tajna putanja štiti webhook – 360dialog ne potpisuje poruke, pa je putanja jedina zaštita.
+Servis provjerava Metin potpis svakog poziva (App Secret), pa lažni pozivi ne prolaze.
 
 ---
 
@@ -139,7 +159,8 @@ Sve je opisano u `.env.example`. Najvažnije:
 | `CLINIKO_USER_AGENT` | Naziv + **ispravan e-mail**, npr. `Proprio WhatsApp podsjetnici (info@proprio.hr)` – Cliniko inače blokira |
 | `CLINIKO_INCLUDE_GROUP` | `true` = i grupni programi |
 | `CLINIKO_WRITE_NOTES` | `true` = potvrda pacijenta upisuje se u napomenu termina |
-| `D360_API_KEY` | API ključ iz 360dialog Huba |
+| `WA_TOKEN`, `WA_PHONE_NUMBER_ID` | trajni System User token i ID broja (poglavlje 2.1) |
+| `WA_APP_SECRET`, `WA_VERIFY_TOKEN` | provjera webhooka (poglavlje 3.1) |
 | `WA_TEMPLATE_NAME` / `WA_TEMPLATE_LANG` | točno kao u odobrenom predlošku |
 | `CONSENT_MODE` | `allowlist` (pilot), `custom_field` (rad), `all` |
 | `REMINDER_HOURS` | sati slanja, zadano `10-19` |
@@ -165,7 +186,7 @@ Ostalo:
 - U poruci su samo ime, datum i sat – **nikakvi zdravstveni podaci**.
 - Slobodan tekst pacijenata servis **ne sprema**; zapisi se brišu nakon `RETENTION_DAYS` (zadano 90 dana).
 - U logovima su brojevi djelomično skriveni (`38598***4567`).
-- Dopunite politiku privatnosti i evidenciju obrade (Meta i 360dialog kao izvršitelji obrade, DPA s 360dialogom).
+- Dopunite politiku privatnosti i evidenciju obrade (Meta kao izvršitelj obrade, prijenos podataka izvan EU).
 
 ---
 
@@ -193,7 +214,7 @@ Nakon svake promjene `.env`: `sudo systemctl restart proprio-whatsapp`.
   npm run send -- --date=2026-10-01       # pošalji (preskače već poslane)
   npm run status -- --date=2026-10-01     # tablica zapisa
   ```
-- **Zdravlje servisa:** `https://wa.proprio.hr/health`. Vraća 200 kad je sve u redu, a 503 s opisom problema ako zadnji krug slanja nije uspio (Cliniko, 360dialog ključ, predložak, ispad) ili je slanje zapelo. Dodajte ga u besplatni uptime monitor (npr. UptimeRobot) s obavijesti na e-mail.
+- **Zdravlje servisa:** `https://wa.proprio.hr/health`. Vraća 200 kad je sve u redu, a 503 s opisom problema ako zadnji krug slanja nije uspio (Cliniko, WhatsApp token, predložak, ispad) ili je slanje zapelo. Dodajte ga u besplatni uptime monitor (npr. UptimeRobot) s obavijesti na e-mail.
 
 ---
 
@@ -208,12 +229,12 @@ Nakon svake promjene `.env`: `sudo systemctl restart proprio-whatsapp`.
 | `WhatsApp 131026` | broj nema WhatsApp | recepcija nazove; ispraviti broj u Clinikou |
 | `WhatsApp 131047` | slobodna poruka nakon 24 h | automatski odgovori šalju se samo odmah nakon klika – normalno ne bi smjelo |
 | `WhatsApp 131049/131048` | Meta ograničila poruke / pacijenti blokiraju | provjeriti privole i tekst |
-| Veza s aplikacijom na mobitelu prekinuta | aplikacija neotvorena > 13 dana | otvoriti aplikaciju; ponovno spojiti u 360dialog Hubu |
+| `WhatsApp 190` | token istekao ili opozvan | novi System User token (poglavlje 2.1, korak 5) |
 | Mnogo "nema mobitela" | broj upisan kao fiksni ili neispravno | ispraviti broj u Clinikou (tip "Mobile") |
 | Odgovori se ne bilježe | webhook nije prijavljen ili kriva putanja | ponoviti korak 3.1, `journalctl -u proprio-whatsapp -f` |
 
 **Ponovni pokušaji:**
-- Greške koje **nisu do pacijenta** ne troše njegove pokušaje. To su neispravan 360dialog ključ, nepostojeći ili pauziran predložak, plaćanje, limiti i ispad servisa. Podsjetnik se sam pošalje u sljedećem krugu (svaki sat) čim se uzrok ukloni, a `/health` do tada javlja grešku.
+- Greške koje **nisu do pacijenta** ne troše njegove pokušaje. To su neispravan token, nepostojeći ili pauziran predložak, plaćanje, limiti i ispad servisa. Podsjetnik se sam pošalje u sljedećem krugu (svaki sat) čim se uzrok ukloni, a `/health` do tada javlja grešku.
 - Greške **vezane uz pacijenta** (npr. 131026 – broj nema WhatsApp) pokušavaju se najviše 3 puta. Ako recepcija ispravi broj u Clinikou, pokušava se ponovno na novi broj.
 
 Detaljan katalog grešaka: `whatsapp_business_integracija_klinika.txt` (poglavlje 6).
@@ -228,8 +249,8 @@ src/
   cli.js        naredbe: check, reminders, status
   reminders.js  dohvat termina, odabir pacijenata, slanje
   cliniko.js    Cliniko API klijent (paginacija, 429 limit, User-Agent)
-  whatsapp.js   slanje predloška/teksta preko 360dialoga, ponavljanje kod privremenih grešaka
-  webhook.js    statusi isporuke, odgovori pacijenata
+  whatsapp.js   slanje predloška/teksta izravno preko Meta Cloud API-ja, ponavljanje kod privremenih grešaka
+  webhook.js    provjera potpisa, statusi isporuke, odgovori pacijenata
   consent.js    privola (allowlist / Cliniko polje)
   phone.js      normalizacija hrvatskih brojeva, prepoznavanje mobitela
   time.js       vremenska zona Europe/Zagreb, promjena sata, hrvatski datumi

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { log, maskPhone } from './log.js';
 
 // Mala slova, bez kvačica ("Doći ću" i "doci cu" su isto; đ se ne rastavlja kroz NFD).
@@ -24,7 +25,16 @@ export function classifyReply(text, wa) {
   return 'other';
 }
 
-/** Obrada jednog webhook paketa (360dialog prosljeđuje format WhatsApp Cloud API-ja). */
+/** Meta potpisuje svaki webhook App Secretom (X-Hub-Signature-256) – provjera nad sirovim tijelom. */
+export function verifySignature(rawBody, header, appSecret) {
+  if (!header || !appSecret) return false;
+  const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(rawBody).digest('hex');
+  const a = Buffer.from(String(header));
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/** Obrada jednog webhook paketa (format WhatsApp Cloud API-ja). */
 export async function handlePayload(payload, { cfg, db, wa, cliniko }) {
   for (const entry of payload?.entry || []) {
     for (const change of entry.changes || []) {
@@ -82,12 +92,28 @@ async function writeNote(cliniko, reminder, kind) {
 }
 
 /**
- * HTTP obrada webhooka (bez Expressa). 360dialog šalje samo POST i ne potpisuje
- * poruke – webhook štiti tajna putanja (WEBHOOK_PATH).
+ * HTTP obrada webhooka (bez Expressa).
+ * GET  – Meta provjerava adresu (hub.challenge)
+ * POST – događaji; bez ispravnog potpisa ništa se ne obrađuje
  */
 export function handleWebhookRequest(req, res, rawBody, url, ctx) {
+  const { cfg } = ctx;
+  if (req.method === 'GET') {
+    const p = url.searchParams;
+    if (p.get('hub.mode') === 'subscribe' && cfg.wa.verifyToken && p.get('hub.verify_token') === cfg.wa.verifyToken) {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      return res.end(p.get('hub.challenge') ?? '');
+    }
+    res.writeHead(403);
+    return res.end();
+  }
   if (req.method !== 'POST') {
     res.writeHead(405);
+    return res.end();
+  }
+  if (!verifySignature(rawBody, req.headers['x-hub-signature-256'], cfg.wa.appSecret)) {
+    log.warn('Webhook s neispravnim potpisom odbijen.');
+    res.writeHead(401);
     return res.end();
   }
   let payload;

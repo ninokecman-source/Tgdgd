@@ -4,10 +4,11 @@ import { normalizePhone, isMobileNumber, pickMobile } from '../src/phone.js';
 import { customFieldConsent, hasConsent } from '../src/consent.js';
 import { dayRangeUtc, formatForTemplate, addDays, parseHours, todayIn } from '../src/time.js';
 import { groupByPatient, targetDate } from '../src/reminders.js';
-import { classifyReply } from '../src/webhook.js';
+import { classifyReply, verifySignature } from '../src/webhook.js';
 import { loadConfig, assertConfig } from '../src/config.js';
 import { cleanParam, isAccountError } from '../src/whatsapp.js';
 import { openDb } from '../src/db.js';
+import crypto from 'node:crypto';
 
 test('normalizacija brojeva', () => {
   assert.equal(normalizePhone('098 123 4567'), '385981234567');
@@ -103,12 +104,23 @@ test('nijekanje nikad ne postaje potvrda', () => {
   }
 });
 
-test('webhook mora imati tajnu putanju (360dialog ne potpisuje poruke)', () => {
-  const cfg = (webhookPath) => loadConfig({ webhookPath, wa: { d360ApiKey: 'k' }, cliniko: { apiKey: 'k', userAgent: 'x (a@b.hr)' } });
-  const check = (p) => () => assertConfig(cfg(p), ['cliniko', 'whatsapp', 'webhook']);
-  assert.throws(check('/whatsapp/webhook'), /WEBHOOK_PATH/);
-  assert.throws(check('/whatsapp/webhook/kratko'), /WEBHOOK_PATH/);
-  assert.doesNotThrow(check('/whatsapp/webhook/7f3c9a1e5b2d4c8f9e0a1b2c3d4e5f60'));
+test('potpis webhooka (Meta X-Hub-Signature-256)', () => {
+  const body = Buffer.from('{"a":1}');
+  const sig = 'sha256=' + crypto.createHmac('sha256', 's3cret').update(body).digest('hex');
+  assert.ok(verifySignature(body, sig, 's3cret'));
+  assert.ok(!verifySignature(Buffer.from('{"a":2}'), sig, 's3cret'));
+  assert.ok(!verifySignature(body, sig, 'krivo'));
+  assert.ok(!verifySignature(body, undefined, 's3cret'));
+  assert.ok(!verifySignature(body, sig, ''));
+});
+
+test('webhook se ne pokreće bez App Secreta i dugog verify tokena', () => {
+  const cfg = (wa) => loadConfig({ wa: { token: 't', phoneNumberId: 'p', ...wa }, cliniko: { apiKey: 'k', userAgent: 'x (a@b.hr)' } });
+  const check = (wa) => () => assertConfig(cfg(wa), ['cliniko', 'whatsapp', 'webhook']);
+  assert.throws(check({ appSecret: '', verifyToken: 'a'.repeat(32) }), /WA_APP_SECRET/);
+  assert.throws(check({ appSecret: 's', verifyToken: 'kratko' }), /WA_VERIFY_TOKEN/);
+  assert.doesNotThrow(check({ appSecret: 's', verifyToken: '7f3c9a1e5b2d4c8f9e0a1b2c3d4e5f60' }));
+  assert.throws(() => assertConfig(loadConfig({ wa: { token: '', phoneNumberId: '' } }), ['whatsapp']), /WA_TOKEN[\s\S]*WA_PHONE_NUMBER_ID/);
 });
 
 test('pokušaji: greška pacijenta 3 puta pa stop, novi broj ispočetka, greška računa se ne broji', () => {

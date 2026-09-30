@@ -26,7 +26,11 @@ export function loadConfig(overrides = {}) {
       writeNotes: bool(env.CLINIKO_WRITE_NOTES, false),
     },
     wa: {
-      d360ApiKey: env.D360_API_KEY || '',
+      token: env.WA_TOKEN || '',
+      phoneNumberId: env.WA_PHONE_NUMBER_ID || '',
+      graphVersion: env.WA_GRAPH_VERSION || 'v23.0',
+      appSecret: env.WA_APP_SECRET || '',
+      verifyToken: env.WA_VERIFY_TOKEN || '',
       baseUrl: env.WA_BASE_URL || '', // samo za testove
       templateName: env.WA_TEMPLATE_NAME || 'podsjetnik_termin',
       templateLang: env.WA_TEMPLATE_LANG || 'hr',
@@ -61,11 +65,14 @@ export function assertConfig(cfg, parts) {
     if (!cfg.cliniko.apiKey) missing.push('CLINIKO_API_KEY');
     if (!/\(.+@.+\)/.test(cfg.cliniko.userAgent)) missing.push('CLINIKO_USER_AGENT (mora sadržavati e-mail u zagradama)');
   }
-  if (parts.includes('whatsapp') && !cfg.wa.d360ApiKey) missing.push('D360_API_KEY');
-  // 360dialog ne potpisuje poruke: bez tajne putanje bilo tko tko pogodi adresu
-  // mogao bi lažirati potvrde pacijenata.
-  if (parts.includes('webhook') && !/^[A-Za-z0-9_-]{16,}$/.test(cfg.webhookPath.split('/').pop())) {
-    missing.push('WEBHOOK_PATH (mora završavati dugim nasumičnim dijelom, npr. /whatsapp/webhook/ + rezultat naredbe "openssl rand -hex 16")');
+  if (parts.includes('whatsapp')) {
+    if (!cfg.wa.token) missing.push('WA_TOKEN');
+    if (!cfg.wa.phoneNumberId) missing.push('WA_PHONE_NUMBER_ID');
+  }
+  if (parts.includes('webhook')) {
+    // Bez App Secreta ne može se provjeriti potpis, pa bi bilo tko mogao lažirati odgovore pacijenata.
+    if (!cfg.wa.appSecret) missing.push('WA_APP_SECRET');
+    if (cfg.wa.verifyToken.length < 16) missing.push('WA_VERIFY_TOKEN (dugi nasumični niz, npr. rezultat naredbe "openssl rand -hex 16")');
   }
   if (!['custom_field', 'allowlist', 'all'].includes(cfg.consent.mode)) {
     missing.push('CONSENT_MODE (custom_field, allowlist ili all)');
