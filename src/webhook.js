@@ -2,7 +2,7 @@ import { log, maskPhone } from './log.js';
 
 // Mala slova, bez kvačica ("Doći ću" i "doci cu" su isto; đ se ne rastavlja kroz NFD).
 const norm = (s) =>
-  String(s ?? '').trim().toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  String(s ?? '').trim().toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/\p{M}/gu, '');
 
 const CHANGE = /promjen|promijen|otkaz|pomak|pomakn|premjest|ne mogu|ne mozemo|necu|ne cu|ne dolaz|ne stig|ne stiz|sprijecen|bolest/;
 const CONFIRM = /potvr|dolazim|dolazimo|doci cu/;
