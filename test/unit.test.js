@@ -5,6 +5,7 @@ import { customFieldConsent, hasConsent } from '../src/consent.js';
 import { dayRangeUtc, formatForTemplate, addDays, parseHours, todayIn } from '../src/time.js';
 import { groupByPatient, targetDate } from '../src/reminders.js';
 import { classifyReply } from '../src/webhook.js';
+import { loadConfig, assertConfig } from '../src/config.js';
 import { cleanParam } from '../src/whatsapp.js';
 
 test('normalizacija brojeva', () => {
@@ -85,4 +86,12 @@ test('prepoznavanje odgovora', () => {
   assert.equal(classifyReply('Moram otkazati, bolestan sam', wa), 'change_requested');
   assert.equal(classifyReply('Kolika je cijena?', wa), 'other');
   assert.equal(cleanParam('  Ana\n\tMarija   '), 'Ana Marija');
+});
+
+test('webhook mora imati tajnu putanju (360dialog ne potpisuje poruke)', () => {
+  const cfg = (webhookPath) => loadConfig({ webhookPath, wa: { d360ApiKey: 'k' }, cliniko: { apiKey: 'k', userAgent: 'x (a@b.hr)' } });
+  const check = (p) => () => assertConfig(cfg(p), ['cliniko', 'whatsapp', 'webhook']);
+  assert.throws(check('/whatsapp/webhook'), /WEBHOOK_PATH/);
+  assert.throws(check('/whatsapp/webhook/kratko'), /WEBHOOK_PATH/);
+  assert.doesNotThrow(check('/whatsapp/webhook/7f3c9a1e5b2d4c8f9e0a1b2c3d4e5f60'));
 });

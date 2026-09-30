@@ -62,6 +62,11 @@ export function assertConfig(cfg, parts) {
     if (!/\(.+@.+\)/.test(cfg.cliniko.userAgent)) missing.push('CLINIKO_USER_AGENT (mora sadržavati e-mail u zagradama)');
   }
   if (parts.includes('whatsapp') && !cfg.wa.d360ApiKey) missing.push('D360_API_KEY');
+  // 360dialog ne potpisuje poruke: bez tajne putanje bilo tko tko pogodi adresu
+  // mogao bi lažirati potvrde pacijenata.
+  if (parts.includes('webhook') && !/^[A-Za-z0-9_-]{16,}$/.test(cfg.webhookPath.split('/').pop())) {
+    missing.push('WEBHOOK_PATH (mora završavati dugim nasumičnim dijelom, npr. /whatsapp/webhook/ + rezultat naredbe "openssl rand -hex 16")');
+  }
   if (!['custom_field', 'allowlist', 'all'].includes(cfg.consent.mode)) {
     missing.push('CONSENT_MODE (custom_field, allowlist ili all)');
   }

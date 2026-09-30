@@ -115,7 +115,7 @@ journalctl -u proprio-whatsapp -f         # logovi
 ```
 
 ### 3.1 Webhook (da odgovori pacijenata stižu u servis)
-U `.env` postavite `WEBHOOK_PATH` na dugu nasumičnu putanju, npr.
+U `.env` postavite `WEBHOOK_PATH` na dugu nasumičnu putanju (bez nje se servis ne pokreće), npr.
 `/whatsapp/webhook/7f3c9a1e5b2d4c8f9e0a` (generirajte s `openssl rand -hex 16`), pa je prijavite 360dialogu:
 
 ```bash
