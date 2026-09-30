@@ -88,6 +88,20 @@ test('prepoznavanje odgovora', () => {
   assert.equal(cleanParam('  Ana\n\tMarija   '), 'Ana Marija');
 });
 
+test('nijekanje nikad ne postaje potvrda', () => {
+  const wa = { buttonConfirm: 'Potvrđujem', buttonChange: 'Trebam promjenu' };
+  for (const t of ['Ne dolazim', 'Otkazujem, ne dolazim', 'Sutra ne dolazim, bolestan sam', 'Neću doći', 'necu doci', 'Ne mogu potvrditi dolazak', 'Ne stignem sutra']) {
+    assert.equal(classifyReply(t, wa), 'change_requested', t);
+  }
+  for (const t of ['Dolazim', 'Doći ću', 'doci cu', 'potvrdujem', 'Dolazim, ali kasnim 10 minuta']) {
+    assert.equal(classifyReply(t, wa), 'confirmed', t);
+  }
+  // nejasno -> recepcija pročita u aplikaciji
+  for (const t of ['Dolazim, ne brinite', 'Ne znam hoću li doći', 'Nisam siguran']) {
+    assert.equal(classifyReply(t, wa), 'other', t);
+  }
+});
+
 test('webhook mora imati tajnu putanju (360dialog ne potpisuje poruke)', () => {
   const cfg = (webhookPath) => loadConfig({ webhookPath, wa: { d360ApiKey: 'k' }, cliniko: { apiKey: 'k', userAgent: 'x (a@b.hr)' } });
   const check = (p) => () => assertConfig(cfg(p), ['cliniko', 'whatsapp', 'webhook']);

@@ -1,12 +1,26 @@
 import { log, maskPhone } from './log.js';
 
-const norm = (s) => String(s ?? '').trim().toLowerCase();
+// Mala slova, bez kvačica ("Doći ću" i "doci cu" su isto; đ se ne rastavlja kroz NFD).
+const norm = (s) =>
+  String(s ?? '').trim().toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+const CHANGE = /promjen|promijen|otkaz|pomak|pomakn|premjest|ne mogu|ne mozemo|necu|ne cu|ne dolaz|ne stig|ne stiz|sprijecen|bolest/;
+const CONFIRM = /potvr|dolazim|dolazimo|doci cu/;
+const NEGATION = /\b(ne|nisam|nismo|necu)\b/;
+
+/**
+ * Gumbi se prepoznaju po točnom tekstu. Slobodan tekst: najprije se traži
+ * otkazivanje ili promjena, a potvrda samo ako u poruci nema nijekanja –
+ * "Ne dolazim" nikad ne smije postati potvrda. Nejasno ostaje 'other' i
+ * recepcija to pročita u aplikaciji.
+ */
 export function classifyReply(text, wa) {
   const t = norm(text);
   if (!t) return null;
-  if (t === norm(wa.buttonConfirm) || /potvr|dolazim|doći ću|dolazimo/.test(t)) return 'confirmed';
-  if (t === norm(wa.buttonChange) || /promjen|otkaz|ne mogu|pomak/.test(t)) return 'change_requested';
+  if (t === norm(wa.buttonConfirm)) return 'confirmed';
+  if (t === norm(wa.buttonChange)) return 'change_requested';
+  if (CHANGE.test(t)) return 'change_requested';
+  if (CONFIRM.test(t) && !NEGATION.test(t)) return 'confirmed';
   return 'other';
 }
 

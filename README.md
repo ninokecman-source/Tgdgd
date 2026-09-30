@@ -28,7 +28,9 @@ jednostavnu stranicu s pregledom.
    - ima privolu (vidi poglavlje 5).
 4. Ista poruka se **nikad ne šalje dvaput**. Ako se termin premjesti na drugo vrijeme, pacijent dobije novi podsjetnik.
 5. Kad pacijent klikne gumb, servis to zabilježi, po želji pošalje kratki automatski odgovor
-   i (opcionalno) upiše napomenu u termin u Clinikou.
+   i (opcionalno) upiše napomenu u termin u Clinikou. Ako pacijent umjesto gumba napiše poruku,
+   prepoznaju se samo jasni slučajevi („Dolazim”, „Ne mogu doći”, „Otkazujem”); poruka s nijekanjem
+   nikad se ne bilježi kao potvrda.
 6. Sve ostale poruke pacijenata recepcija i dalje vidi i odgovara **u aplikaciji na mobitelu**.
 
 Poruka pacijentu (predložak):
