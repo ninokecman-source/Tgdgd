@@ -11,6 +11,19 @@ import { zonedParts, ymd } from './time.js';
 import { log } from './log.js';
 
 const MAX_BODY = 2 * 1024 * 1024;
+const STUCK_MS = 30 * 60_000;
+
+/**
+ * Stanje za uptime monitor: 503 ako zadnji krug slanja nije uspio (Cliniko,
+ * ključ, predložak, ispad) ili ako slanje traje predugo. Greška jednog
+ * pacijenta (npr. broj bez WhatsAppa) nije kvar servisa.
+ */
+export function healthStatus(ctx, now = Date.now()) {
+  const problems = [];
+  if (ctx.lastRun?.error) problems.push(`Zadnji krug slanja (${ctx.lastRun.at}): ${ctx.lastRun.error}`);
+  if (ctx.runningSince && now - ctx.runningSince > STUCK_MS) problems.push('Slanje traje duže od 30 minuta – zapelo je');
+  return { ok: problems.length === 0, problems, lastRun: ctx.lastRun || null };
+}
 
 export function createServer(ctx) {
   const { cfg } = ctx;
@@ -29,8 +42,9 @@ export function createServer(ctx) {
         const p = url.pathname.replace(/\/$/, '') || '/';
         if (p === cfg.webhookPath) return handleWebhookRequest(req, res, body, url, ctx);
         if (p === '/health') {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ ok: true, lastRun: ctx.lastRun || null }));
+          const h = healthStatus(ctx);
+          res.writeHead(h.ok ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+          return res.end(JSON.stringify(h));
         }
         if (p === '/status') {
           if (!cfg.statusToken || url.searchParams.get('token') !== cfg.statusToken) {
@@ -81,19 +95,23 @@ async function main() {
   assertConfig(cfg, ['cliniko', 'whatsapp', 'webhook']);
   const ctx = { cfg, db: openDb(cfg.dbPath), cliniko: new ClinikoClient(cfg.cliniko), wa: new WhatsAppClient(cfg.wa) };
 
-  let running = false;
   const job = async () => {
-    if (running) return;
-    running = true;
+    if (ctx.runningSince) return;
+    ctx.runningSince = Date.now();
     try {
       ctx.cliniko.patientCache.clear();
       const s = await runReminders(ctx);
-      ctx.lastRun = { at: new Date().toISOString(), date: s.date, sent: s.sent, alreadySent: s.alreadySent, failed: s.failed, noPhone: s.noPhone, noConsent: s.noConsent };
-      log.info(`Podsjetnici za ${s.date}: poslano ${s.sent}, već ranije ${s.alreadySent}, greške ${s.failed}, bez mobitela ${s.noPhone}, bez privole ${s.noConsent}`);
+      ctx.lastRun = {
+        at: new Date().toISOString(), date: s.date, sent: s.sent, alreadySent: s.alreadySent, failed: s.failed,
+        deferred: s.deferred, noPhone: s.noPhone, noConsent: s.noConsent, error: s.accountError,
+      };
+      log.info(`Podsjetnici za ${s.date}: poslano ${s.sent}, već ranije ${s.alreadySent}, greške pacijenta ${s.failed}, ` +
+        `odgođeno ${s.deferred}, bez mobitela ${s.noPhone}, bez privole ${s.noConsent}`);
     } catch (e) {
+      ctx.lastRun = { at: new Date().toISOString(), error: e.message };
       log.error('Slanje podsjetnika prekinuto:', e.message);
     } finally {
-      running = false;
+      ctx.runningSince = null;
     }
   };
   const purge = () => {

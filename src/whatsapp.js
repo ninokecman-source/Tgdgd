@@ -41,6 +41,7 @@ export class WhatsAppClient {
         method: 'POST',
         headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', ...payload }),
+        signal: AbortSignal.timeout(30_000),
       });
     } catch (e) {
       throw new WhatsAppError('NETWORK', e.message, null, 0);

@@ -36,6 +36,7 @@ export class ClinikoClient {
           ...(body ? { 'Content-Type': 'application/json' } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(30_000), // bez toga zapeli zahtjev zauvijek blokira slanje
       });
       if (res.status === 429 && attempt < 5) {
         const reset = Number(res.headers.get('x-ratelimit-reset'));

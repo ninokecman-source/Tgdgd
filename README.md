@@ -193,7 +193,7 @@ Nakon svake promjene `.env`: `sudo systemctl restart proprio-whatsapp`.
   npm run send -- --date=2026-10-01       # pošalji (preskače već poslane)
   npm run status -- --date=2026-10-01     # tablica zapisa
   ```
-- **Zdravlje servisa:** `https://wa.proprio.hr/health` (može se dodati u besplatni uptime monitor).
+- **Zdravlje servisa:** `https://wa.proprio.hr/health`. Vraća 200 kad je sve u redu, a 503 s opisom problema ako zadnji krug slanja nije uspio (Cliniko, 360dialog ključ, predložak, ispad) ili je slanje zapelo. Dodajte ga u besplatni uptime monitor (npr. UptimeRobot) s obavijesti na e-mail.
 
 ---
 

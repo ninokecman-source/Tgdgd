@@ -215,6 +215,11 @@ test('HTTP server: webhook, statusi, odgovori, stranica statusa', async () => {
   assert.equal(rows.length, 6);
   assert.deepEqual(rows.map((x) => x.status).sort(), ['sent', 'sent', 'sent', 'sent', 'skipped_no_consent', 'skipped_no_phone']);
   assert.equal((await fetch(`${base}/health`)).status, 200);
+  ctx.lastRun = { at: new Date().toISOString(), error: 'WhatsApp 401: Unauthorized' };
+  const h = await fetch(`${base}/health`);
+  assert.equal(h.status, 503);
+  assert.match((await h.json()).problems[0], /401/);
+  ctx.lastRun = null;
 });
 
 test('premješten termin dobiva novi podsjetnik', async () => {

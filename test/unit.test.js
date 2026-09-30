@@ -138,3 +138,15 @@ test('koje greške nisu do pacijenta', () => {
     assert.ok(!isAccountError(x), JSON.stringify(x));
   }
 });
+
+test('/health: greška zadnjeg kruga ili zapelo slanje = kvar', async () => {
+  const { healthStatus } = await import('../src/server.js');
+  const now = Date.parse('2026-10-01T10:00:00Z');
+  assert.equal(healthStatus({}, now).ok, true); // tek pokrenut, još nije bilo kruga
+  assert.equal(healthStatus({ lastRun: { at: 'x', sent: 3, failed: 1, error: null } }, now).ok, true); // greška pacijenta nije kvar
+  const bad = healthStatus({ lastRun: { at: '2026-10-01T09:00:00Z', error: 'Cliniko API 401: Unauthorized' } }, now);
+  assert.equal(bad.ok, false);
+  assert.match(bad.problems[0], /Cliniko API 401/);
+  assert.equal(healthStatus({ runningSince: now - 31 * 60_000 }, now).ok, false);
+  assert.equal(healthStatus({ runningSince: now - 5 * 60_000 }, now).ok, true);
+});
