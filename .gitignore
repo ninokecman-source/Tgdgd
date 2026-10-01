@@ -11,3 +11,6 @@ __pycache__/
 
 bank_solo/config.json
 bank_solo/*.sqlite3
+cezih/config.json
+*.pem
+*.p12

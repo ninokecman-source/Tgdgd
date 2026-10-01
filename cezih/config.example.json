@@ -1,0 +1,13 @@
+{
+  "base_url": "https://TEST-ADRESA-OD-CEZIH-a/fhir",
+  "client_cert": "/putanja/do/klinika.crt.pem",
+  "client_key": "/putanja/do/klinika.key.pem",
+  "ca_bundle": null,
+  "token_url": null,
+  "client_id": null,
+  "client_secret": null,
+  "scope": null,
+  "organizacija_id": "HZZO sifra ustanove",
+  "timeout": 30,
+  "retries": 3
+}
