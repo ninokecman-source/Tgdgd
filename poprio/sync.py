@@ -608,6 +608,19 @@ def retry_failed(config, cliniko, solo, state, alerter=None):
             continue
         try:
             invoice = cliniko.get_invoice(cliniko_id)
+        except requests.exceptions.HTTPError as e:
+            # 404 znači da računa u Clinku više nema - obrisan je. To nije kvar
+            # nego odluka osoblja; najčešće se tako "ispravlja" račun kojem je
+            # nedostajala oznaka načina plaćanja. Bez ovoga bi takav zapis
+            # trošio pokušaje i zauvijek stajao među neuspjelima, tražeći
+            # pažnju za nešto što se ne može ni popraviti ni ponoviti.
+            if e.response is not None and e.response.status_code == 404:
+                state.mark_deleted(cliniko_id, "račun je obrisan u Clinku")
+                print(f"[OBRISAN] Cliniko račun {cliniko_id} više ne postoji u "
+                      f"Clinku - zatvaram ga, nema što fiskalizirati.")
+                continue
+            report_failure(config, state, cliniko_id, e, alerter)
+            continue
         except Exception as e:
             report_failure(config, state, cliniko_id, e, alerter)
             continue
@@ -759,10 +772,11 @@ def print_status(config):
             "failed": "nije uspjelo, pokušava se ponovno",
             "pending": "u obradi ili zaustavljeno",
             "skipped": "preskočeno (nema što fiskalizirati)",
+            "deleted": "račun obrisan u Clinku",
         }
         print(f"Zadnja provjera do: {state.get_watermark()}")
         print(f"Ukupno računa u bazi: {ukupno}\n")
-        for status in ("done", "waiting", "failed", "pending", "skipped"):
+        for status in ("done", "waiting", "failed", "pending", "skipped", "deleted"):
             if redovi.get(status):
                 print(f"  {redovi[status]:>4}  {status:<8} — {opis[status]}")
 

@@ -159,6 +159,20 @@ class StateStore:
         ).fetchone()
         return row[0] if row else 0
 
+    def mark_deleted(self, cliniko_invoice_id, reason):
+        """Račun koji je u Clinku obrisan.
+
+        Nema ga više što čekati ni ponavljati, a nije ni greška - osoblje ga je
+        maknulo, obično zato što je pogrešno izdan. Zatvara se kao zasebno
+        stanje, da se vidi zašto je nestao iz obrade i da ne troši pokušaje."""
+        with self.conn:
+            self.conn.execute(
+                """UPDATE processed_invoices
+                   SET status = 'deleted', last_error = ?, processed_at = datetime('now')
+                   WHERE cliniko_invoice_id = ?""",
+                (str(reason)[:500], str(cliniko_invoice_id)),
+            )
+
     def mark_skipped(self, cliniko_invoice_id, reason, cliniko_number=None):
         """Račun na kojem nema ničega za fiskalizirati (npr. sadrži samo oznaku
         načina plaćanja od 0 EUR). Nije greška, ali ni dokument ne nastaje - pa

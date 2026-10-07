@@ -460,6 +460,21 @@ Svaki račun je u jednom od stanja:
 | `skipped` | nema nijedne stavke osim oznaka | ništa — nema se što fiskalizirati |
 | `pending` | proces prekinut **usred** slanja | ne dira — traži ljudsku provjeru |
 
+### Obrisani računi u Clinku
+
+Ako račun u Clinku bude obrisan, Cliniko na upit po njegovom ID-u vraća 404.
+To nije kvar nego odluka osoblja — najčešće se tako „ispravlja" račun kojem je
+nedostajala oznaka načina plaćanja: umjesto da se oznaka doda, račun se obriše
+i izda novi.
+
+Takav zapis se zatvara kao `deleted`, bez trošenja pokušaja i bez javljanja.
+Nema ga što ponavljati, a ostaje vidljiv u `--status` da se vidi zašto je
+nestao iz obrade.
+
+Ako je račun **već bio fiskaliziran** pa tek onda obrisan u Clinku, dokument u
+Solu ostaje i to je ispravno — fiskalni račun se ne poništava brisanjem izvora
+nego stornom.
+
 ### Zaglavljeni računi (potrošeni pokušaji)
 
 Skripta ih više ne pokušava sama jer uzrok očito nije prolazan. Log kaže
