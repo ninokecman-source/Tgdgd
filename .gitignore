@@ -2,10 +2,14 @@ config.json
 processed_uids.json
 sent_reminders.json
 log_check_state.json
+napravljeni_certifikati.json
 sent_reports.json
 log.txt
 *.xlsx
 !template_admin_sheet.xlsx
+
+# Potvrdnice: licencirani fontovi i Emmettov znak - ne idu u javni repozitorij
+potvrdnica*.html
 __pycache__/
 *.pyc
 

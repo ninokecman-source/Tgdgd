@@ -288,6 +288,50 @@ Skripte uz to same paze na dvije zamke koje sinkronizacija donosi:
 
 Oba slučaja idu u log kao `[!]`, pa ih pokupi i provjera logova.
 
+## Potvrdnice nakon tečaja (`napravi_certifikate.py`)
+
+Dan nakon tečaja za svakog polaznika nastane EMMETT Statement of Attainment
+u PDF-u. Ništa se ne šalje — datoteke samo nastanu i čekaju te:
+
+```
+<output_dir>/Certifikati/Split Modul 1&2 2026/Ana Anić.pdf
+```
+
+Mapa se zove po **mjestu, kodu tečaja i godini**, a datoteka po polazniku.
+Mjesto, kod tečaja, datumi i imena čitaju se iz tablice; **datum na
+potvrdnici je zadnji dan tečaja**, ispisan engleski („Issued on the 11th day
+of October 2026.").
+
+| Kod tečaja u tablici | Predložak |
+|---|---|
+| Modul 1&2 | `potvrdnica modul 1 i 2.html` |
+| Modul 3, 4, 5, 6 | `potvrdnica modul 3-6.html` (modul se upisuje sam) |
+
+Oba predloška stoje uz Excel tablice, kao i `lokacija split.docx`. Izvedeni
+su iz potvrdnica u Claude Designu — kad ih ondje promijeniš, treba ih
+ponovno izvesti; ne uređuju se ručno. **Nisu u gitu**: nose licencirani font
+i Emmettov znak, a repozitorij je javan.
+
+Za **Ponavljanje M6 i Praktičarski dan** potvrdnice nema — ta se tablica
+preskače uz poruku u logu.
+
+PDF iscrtava Chrome u pozadini. Traži se na uobičajenim mjestima; ako ga
+imaš drugdje, upiši `"chrome_path"` u `config.json`. Polaznik bez email
+adrese svejedno dobiva potvrdnicu — za nju adresa ne treba.
+
+```bash
+python3 napravi_certifikate.py --pregled    # pokaži što bi napravio
+python3 napravi_certifikate.py              # napravi PDF-ove
+python3 napravi_certifikate.py --ponovno    # i za tečaj koji je već obrađen
+```
+
+Napravljeno se pamti u `napravljeni_certifikati.json`, pa se isti tečaj ne
+obrađuje dvaput. U cron ide jednom dnevno, uz `posalji_tablicu.py`:
+
+```
+30 8 * * * cd /putanja/do/ovog/foldera && /usr/bin/python3 napravi_certifikate.py >> log.txt 2>&1
+```
+
 ## Što se događa kad nešto pukne
 
 Sustav je posložen tako da **radije ne napravi ništa nego da napravi krivo**.
