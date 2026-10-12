@@ -80,18 +80,7 @@ def datumi_rijecima(dates_text: str) -> str:
     modul = iz_glavnog_foldera("send_reminders")
     if modul is None:
         return dates_text
-
-    prvi, zadnji = modul.parse_course_dates(dates_text)
-    if prvi is None:
-        return dates_text
-
-    if prvi == zadnji:
-        return f"{prvi.day}. {MJESECI_GENITIV[prvi.month - 1]} {prvi.year}."
-    if prvi.month == zadnji.month:
-        return (f"{prvi.day}. i {zadnji.day}. {MJESECI_GENITIV[prvi.month - 1]} "
-                f"{zadnji.year}.")
-    return (f"{prvi.day}. {MJESECI_GENITIV[prvi.month - 1]} i "
-            f"{zadnji.day}. {MJESECI_GENITIV[zadnji.month - 1]} {zadnji.year}.")
+    return modul.datumi_rijecima(dates_text)
 
 
 # Zadani tekstovi potvrde. Koriste se kad ih config.json ne navodi - tako

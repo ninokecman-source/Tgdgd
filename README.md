@@ -332,6 +332,55 @@ obrađuje dvaput. U cron ide jednom dnevno, uz `posalji_tablicu.py`:
 30 8 * * * cd /putanja/do/ovog/foldera && /usr/bin/python3 napravi_certifikate.py >> log.txt 2>&1
 ```
 
+## Slanje potvrdnica (`posalji_certifikate.py`)
+
+Potvrdnice se **ne šalju same** — ideš ti, kad odlučiš. Skripta uzme PDF-ove
+iz mape tečaja, iz tablice pročita adrese i svakome pošalje njegovu, i samo
+njegovu, potvrdnicu u privitku. Kopija ide tebi u Bcc, da imaš trag u Sentu.
+
+```bash
+python3 posalji_certifikate.py                  # pokaži kome bi poslao
+python3 posalji_certifikate.py --posalji        # pošalji
+python3 posalji_certifikate.py --posalji --tecaj Split    # samo taj tečaj
+```
+
+Bez `--posalji` se **ništa ne šalje** — ispiše se popis primatelja i cijela
+poruka kakva bi otišla prvome na popisu. Tako uvijek prvo vidiš što ideš
+poslati.
+
+Tekst stoji u `mail uz certifikat.docx` uz tablice (kao i ostali tekstovi);
+ako ga nema, koristi se ugrađeni. Dostupni podaci: `{first_name}`,
+`{last_name}`, `{course_code}`, `{location}`, `{dates}`,
+`{datumi_rijecima}` („10. i 11. listopada 2026."), `{instructor_name}`.
+
+Polaznik bez adrese u tablici, ili bez napravljene potvrdnice, javi se u
+ispisu i preskoči. Poslano se pamti u `poslani_certifikati.json`, pa nitko
+ne dobiva potvrdnicu dvaput.
+
+### Kraća naredba
+
+Da ne tipkaš punu putanju, dodaj ovo u `~/.zshrc`:
+
+```sh
+certifikati() (
+  cd /Users/ninokecman/Tgdgd || return 1
+  PY=/Library/Developer/CommandLineTools/usr/bin/python3
+  case "$1" in
+    posalji) shift; "$PY" posalji_certifikate.py --posalji "$@" ;;
+    napravi) shift; "$PY" napravi_certifikate.py "$@" ;;
+    *)       "$PY" posalji_certifikate.py "$@" ;;
+  esac
+)
+```
+
+Pa onda:
+
+| Naredba | Što radi |
+|---|---|
+| `certifikati` | pokaže kome bi poslao i kako poruka izgleda |
+| `certifikati posalji` | pošalje |
+| `certifikati napravi` | napravi PDF-ove odmah, bez čekanja crona |
+
 ## Što se događa kad nešto pukne
 
 Sustav je posložen tako da **radije ne napravi ništa nego da napravi krivo**.

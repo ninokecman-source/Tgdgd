@@ -3,6 +3,7 @@ processed_uids.json
 sent_reminders.json
 log_check_state.json
 napravljeni_certifikati.json
+poslani_certifikati.json
 sent_reports.json
 log.txt
 *.xlsx

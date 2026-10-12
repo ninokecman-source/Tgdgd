@@ -120,6 +120,21 @@ def datum_rijecima(dan: date) -> str:
     return f"{dan.day}. {MJESECI_GENITIV[dan.month - 1]}"
 
 
+def datumi_rijecima(dates_text: str) -> str:
+    """'03.-04.10.2026.' -> '3. i 4. listopada 2026.' Ako se datum ne može
+    pročitati, vraća zapis kakav stoji u tablici."""
+    prvi, zadnji = parse_course_dates(dates_text)
+    if prvi is None:
+        return dates_text or ""
+    if prvi == zadnji:
+        return f"{prvi.day}. {MJESECI_GENITIV[prvi.month - 1]} {prvi.year}."
+    if prvi.month == zadnji.month:
+        return (f"{prvi.day}. i {zadnji.day}. {MJESECI_GENITIV[prvi.month - 1]} "
+                f"{zadnji.year}.")
+    return (f"{prvi.day}. {MJESECI_GENITIV[prvi.month - 1]} i "
+            f"{zadnji.day}. {MJESECI_GENITIV[zadnji.month - 1]} {zadnji.year}.")
+
+
 def iznosi_tecaja(config: dict, course_code: str) -> dict:
     """Cijena tečaja i, za tečajeve s akontacijom, koliko još preostaje.
     Vraća prazne stringove ako cijena nije podešena, da se u tekstu vidi da
