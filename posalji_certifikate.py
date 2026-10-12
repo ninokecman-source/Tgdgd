@@ -55,7 +55,7 @@ U privitku se nalazi vaša potvrdnica o završenom tečaju (Statement of Attainm
 
 Bilo mi je zadovoljstvo raditi s vama ovaj vikend. Ako vam tijekom rada iskrsne neko pitanje o naučenim tehnikama, slobodno mi se javite.
 
-Termine sljedećih modula možete pratiti ovdje:
+Termine sljedećih modula i prijavnicu možete pronaći ovdje:
 {link_termini}
 
 Želim vam puno uspjeha u radu.
