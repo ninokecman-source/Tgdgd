@@ -351,7 +351,9 @@ poslati.
 Tekst stoji u `mail uz certifikat.docx` uz tablice (kao i ostali tekstovi);
 ako ga nema, koristi se ugrađeni. Dostupni podaci: `{first_name}`,
 `{last_name}`, `{course_code}`, `{location}`, `{dates}`,
-`{datumi_rijecima}` („10. i 11. listopada 2026."), `{instructor_name}`.
+`{datumi_rijecima}` („10. i 11. listopada 2026."), `{instructor_name}` i
+`{link_termini}` — poveznica na termine sljedećih tečajeva, a sama adresa
+stoji u `config.json` pod `"course_dates_url"`.
 
 Polaznik bez adrese u tablici, ili bez napravljene potvrdnice, javi se u
 ispisu i preskoči. Poslano se pamti u `poslani_certifikati.json`, pa nitko

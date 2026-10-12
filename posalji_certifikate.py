@@ -14,6 +14,8 @@ kome bi što poslala - tako uvijek prvo vidiš popis.
 
 Tekst maila stoji u dokumentu 'mail uz certifikat.docx' uz Excel tablice
 (isti princip kao podsjetnici); ako ga nema, koristi se ugrađeni tekst.
+Poveznica na termine sljedećih tečajeva se upisuje kao {link_termini}, a
+sama adresa stoji u config.json pod "course_dates_url".
 
 Zapamti kome je poslano (poslani_certifikati.json), pa nitko ne dobiva
 potvrdnicu dvaput, koliko god puta skriptu pokrenuo.
@@ -51,7 +53,10 @@ hvala vam na sudjelovanju na tečaju Emmett tehnike za ljude - {course_code}, ko
 
 U privitku se nalazi vaša potvrdnica o završenom tečaju (Statement of Attainment), izdana od strane EMMETT Technique International Headquarters. Preporučujem da je spremite; trebat će vam kao dokaz o završenom modulu pri upisu na sljedeće stupnjeve edukacije.
 
-Bilo mi je zadovoljstvo raditi s vama ovaj vikend. Ako vam tijekom rada iskrsne neko pitanje o naučenim tehnikama, ili vas zanima kada se održavaju sljedeći moduli, slobodno mi se javite.
+Bilo mi je zadovoljstvo raditi s vama ovaj vikend. Ako vam tijekom rada iskrsne neko pitanje o naučenim tehnikama, slobodno mi se javite.
+
+Termine sljedećih modula možete pratiti ovdje:
+{link_termini}
 
 Želim vam puno uspjeha u radu.
 
@@ -161,7 +166,9 @@ def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool) -> int:
         print(f"  Nema kome slati (već poslano: {len(vec_poslano)}).")
         return 0
 
-    varijable = dict(info, datumi_rijecima=datumi_rijecima(info["dates"]))
+    varijable = dict(info,
+                     datumi_rijecima=datumi_rijecima(info["dates"]),
+                     link_termini=config.get("course_dates_url", ""))
 
     if not posalji:
         for p, pdf in cekaju:
