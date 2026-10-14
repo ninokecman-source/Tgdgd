@@ -13,8 +13,18 @@ preko `rclone`. Ti i dalje uređuješ tablice u Excelu kao i dosad.
 ```bash
 adduser --disabled-password --gecos "" emmett
 apt update
-apt install -y python3-venv rclone chromium fonts-liberation
+apt install -y python3-venv chromium fonts-liberation
 ```
+
+rclone iz `apt` je prestar (1.60) — bisync je ondje još bio nedozreo, a
+zastavice za rukovanje sukobima došle su tek u 1.66. Instaliraj službeni:
+
+```bash
+curl -fsSL https://rclone.org/install.sh | bash
+rclone version
+```
+
+Mora pisati 1.66 ili više.
 
 `fonts-liberation` nije sitnica: potvrdnice koriste Arial, a Liberation Sans
 mu je metrički istovjetan. Bez njega bi se razmaci na potvrdnici razišli.

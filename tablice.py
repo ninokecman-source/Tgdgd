@@ -27,10 +27,11 @@ PREDLOZAK = "template_admin_sheet.xlsx"
 _SUFIKS_KOPIJE = re.compile(r"^(?P<osnova>.+?)\s*(?:\(\d+\)|\d+)$")
 _OCITA_KOPIJA = re.compile(r"(conflicted copy|kopija|copy)", re.IGNORECASE)
 
-# rclone (Dropbox na serveru) sukob imenuje 'Modul 1&2 Split.xlsx.conflict1'.
-# Takva datoteka ne zavrsava na .xlsx pa je skripte ne vide - zato se trazi
-# izrijekom, kao i trag datoteke u oblaku.
-_SUKOB_RCLONE = re.compile(r"\.conflict\d*$", re.IGNORECASE)
+# rclone (Dropbox na serveru) sukob imenuje 'Modul 1&2 Split.xlsx.conflict1',
+# a izdanja starija od 1.66 '…xlsx..path1'. Takve datoteke ne zavrsavaju na
+# .xlsx pa ih skripte ne vide - zato se traze izrijekom, kao i trag datoteke
+# u oblaku.
+_SUKOB_RCLONE = re.compile(r"(\.conflict\d*|\.\.path\d+)$", re.IGNORECASE)
 
 
 def u_oblaku(mapa) -> dict:
