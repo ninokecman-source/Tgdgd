@@ -1,0 +1,51 @@
+{% extends "osnova.html" %}
+{% block naslov %}Stanje{% endblock %}
+{% block sadrzaj %}
+
+<h1>Stanje sustava</h1>
+
+<section>
+  <h2>Zadnji prolazi</h2>
+  <p class="tiho">Što je cron pokrenuo i kada.</p>
+  {% for p in podaci.prolazi %}
+  <div class="redak">
+    <div class="redak-ime">{{ p.posao }}</div>
+    <div class="redak-detalj tiho">{{ p.kada|vrijeme }} · {{ p.log }}</div>
+  </div>
+  {% endfor %}
+  {% if not podaci.prolazi %}<p class="tiho">U logovima nema nijednog zapisa.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Greške ({{ podaci.greske|length }})</h2>
+  {% if not podaci.greske %}<p class="tiho">Nijedna - logovi su čisti.</p>{% endif %}
+  {% for g in podaci.greske %}
+  <div class="redak duzan">
+    <div class="redak-detalj tiho">{{ g.kada|vrijeme }} · {{ g.posao or g.log }}</div>
+    <pre class="greska">{{ g.redak }}</pre>
+  </div>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Logovi</h2>
+  <dl class="parovi">
+    {% for l in podaci.logovi %}
+    <dt>{{ l.naziv }}</dt>
+    <dd>{% if l.ima %}{{ l.zadnja_izmjena|vrijeme }} ·
+        {% if l.velicina < 1024 %}{{ l.velicina }} B{% else %}{{ (l.velicina / 1024)|round|int }} kB{% endif %}
+        {% else %}ne postoji{% endif %}<br><span class="tiho">{{ l.put }}</span></dd>
+    {% endfor %}
+  </dl>
+</section>
+
+<section>
+  <h2>Snimka</h2>
+  <dl class="parovi">
+    <dt>Napravljena</dt><dd>{{ podaci.snimljeno|vrijeme }}</dd>
+    <dt>Folder s tablicama</dt><dd>{{ podaci.folder }}</dd>
+    <dt>Tečajeva</dt><dd>{{ podaci.tecajevi|length }}</dd>
+    <dt>Obrađenih mailova</dt><dd>{{ podaci.slanja.obradenih_mailova }}</dd>
+  </dl>
+</section>
+{% endblock %}

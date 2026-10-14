@@ -5,6 +5,7 @@ log_check_state.json
 napravljeni_certifikati.json
 poslani_certifikati.json
 sent_reports.json
+web/stanje.json
 log.txt
 *.xlsx
 !template_admin_sheet.xlsx

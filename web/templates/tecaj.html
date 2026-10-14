@@ -1,0 +1,62 @@
+{% extends "osnova.html" %}
+{% block naslov %}{{ tecaj.kod }} {{ tecaj.mjesto }}{% endblock %}
+{% block sadrzaj %}
+
+<h1>{{ tecaj.kod }} · {{ tecaj.mjesto }}</h1>
+<p class="tiho">{{ tecaj.datumi }} · {{ tecaj.instruktor }} · {{ tecaj.datoteka }}</p>
+
+<div class="plocice">
+  <div class="plocica"><span class="broj">{{ tecaj.polaznika }}</span><span class="natpis">polaznika</span></div>
+  <div class="plocica"><span class="broj">{{ tecaj.uplaceno|eur }}</span><span class="natpis">uplaćeno</span></div>
+  <div class="plocica {% if tecaj.duznika %}pazi{% endif %}">
+    <span class="broj">{{ tecaj.duznika }}</span><span class="natpis">nije platilo</span></div>
+</div>
+
+<section>
+  <h2>Polaznici</h2>
+  {% if not tecaj.polaznici %}<p class="tiho">U tablici još nema nikoga.</p>{% endif %}
+  {% for p in tecaj.polaznici %}
+  <div class="redak {% if p.manjka > 0 %}duzan{% endif %}">
+    <div class="redak-ime">
+      {{ loop.index }}. {{ p.ime }}
+      {% if p.nr %}<span class="znacka tiha">{{ p.nr }}</span>{% endif %}
+    </div>
+    <div class="redak-detalj tiho">
+      {% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% else %}bez adrese{% endif %}
+      {% if p.mobitel %}· <a href="tel:{{ p.mobitel }}">{{ p.mobitel }}</a>{% endif %}
+    </div>
+    <div class="redak-novac">
+      {{ p.uplaceno|eur }}
+      {% if p.manjka > 0 %}<span class="pazi-tekst">manjka {{ p.manjka|eur }}</span>{% endif %}
+    </div>
+    {% if p.biljeska %}<div class="redak-detalj">{{ p.biljeska }}</div>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Što je poslano</h2>
+  <dl class="parovi">
+    <dt>Podsjetnici</dt>
+    <dd>
+      {% if podsjetnici %}
+        {% for p in podsjetnici %}{{ p.dana_prije }} dana prije: {{ p.adresa }} poruka{% if not loop.last %}<br>{% endif %}{% endfor %}
+      {% else %}nijedan{% endif %}
+    </dd>
+    <dt>Tablica centrali</dt>
+    <dd>{% if tablica and tablica.poslano %}{{ tablica.poslano|datum }}
+        ({{ tablica.primatelji|join(', ') }}){% elif tablica and tablica.nepotpuno_od %}
+        nije poslana - nedostaje: {{ tablica.nedostaje|join(', ') }}
+      {% else %}nije poslana{% endif %}</dd>
+    <dt>Potvrdnice napravljene</dt>
+    <dd>{% if napravljeni %}{{ napravljeni.napravljeno|datum }} ·
+        {{ napravljeni.polaznici|length }} PDF-ova<br>
+        <span class="tiho">{{ napravljeni.mapa }}</span>
+      {% else %}nisu{% endif %}</dd>
+    <dt>Potvrdnice poslane</dt>
+    <dd>{% if poslani %}{{ poslani.poslano|length }} polaznika{% else %}nisu{% endif %}</dd>
+  </dl>
+</section>
+
+<p><a href="{{ url_for('pregled') }}">← svi tečajevi</a></p>
+{% endblock %}

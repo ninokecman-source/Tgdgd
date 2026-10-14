@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1d4e4a">
+<title>{% block naslov %}Emmett{% endblock %} · Emmett</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+{% if session.get('prijavljen') %}
+<header class="vrh">
+  <a class="znak" href="{{ url_for('pregled') }}">EMMETT</a>
+  <nav>
+    <a href="{{ url_for('pregled') }}" {% if request.path == '/' %}class="tu"{% endif %}>Tečajevi</a>
+    <a href="{{ url_for('uplate') }}" {% if request.path == '/uplate' %}class="tu"{% endif %}>Uplate</a>
+    <a href="{{ url_for('stanje') }}" {% if request.path == '/stanje' %}class="tu"{% endif %}>Stanje</a>
+    <a href="{{ url_for('odjava') }}">Odjava</a>
+  </nav>
+</header>
+{% endif %}
+
+<main>
+{% if podaci is defined and session.get('prijavljen') %}
+  {% if podaci.nema_snimke %}
+  <p class="traka lose">Nema snimke podataka. Pokreni na serveru:
+    <code>~/Tgdgd/server/pokreni.sh web/skupi.py</code></p>
+  {% elif podaci.zastarjelo %}
+  <p class="traka lose">Podaci su stari {{ podaci.starost_min }} min
+    ({{ podaci.snimljeno|vrijeme }}). Osvježavanje stoji - provjeri cron.</p>
+  {% endif %}
+{% endif %}
+
+{% block sadrzaj %}{% endblock %}
+</main>
+
+{% if podaci is defined and not podaci.nema_snimke and session.get('prijavljen') %}
+<footer>Podaci: {{ podaci.snimljeno|vrijeme }}{% if podaci.starost_min is not none %}
+  ({{ podaci.starost_min }} min)
+{% endif %}</footer>
+{% endif %}
+</body>
+</html>

@@ -24,5 +24,6 @@ SHELL=/bin/bash
 # Provjera logova - svaka 3 dana
 0 9 */3 * * $HOME/Tgdgd/server/pokreni.sh provjeri_logove.py >> $HOME/Tgdgd/log.txt 2>&1
 
-# Sinkronizacija i kad nema posla, da Dropbox ne zaostane
-*/20 * * * * flock -n $HOME/.emmett.lock $HOME/Tgdgd/server/sinkroniziraj.sh >/dev/null 2>&1
+# Sinkronizacija i kad nema posla, da Dropbox ne zaostane; uz nju se osvjezi
+# i snimka koju cita web pregled. Preskace se ako neki drugi posao radi.
+*/20 * * * * flock -n $HOME/.emmett.lock $HOME/Tgdgd/server/osvjezi.sh >/dev/null 2>>$HOME/Tgdgd/log.txt

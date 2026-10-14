@@ -1,0 +1,223 @@
+/* Web pregled Emmett sustava. Prvo mobitel - sve se gleda na iPhoneu. */
+
+:root {
+  --papir: #f6f5f2;
+  --ploha: #ffffff;
+  --tekst: #1b1c1a;
+  --tiho: #6a6c67;
+  --crta: #e2e0da;
+  --znak: #1d4e4a;
+  --pazi: #9a5b00;
+  --pazi-ploha: #fdf3e3;
+  --lose: #9a2b25;
+  --lose-ploha: #fcefee;
+  --radijus: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="light"]) {
+    --papir: #16181a;
+    --ploha: #1f2224;
+    --tekst: #eceae5;
+    --tiho: #9b9d98;
+    --crta: #31353a;
+    --znak: #7fc4ba;
+    --pazi: #e3a44b;
+    --pazi-ploha: #342a1a;
+    --lose: #f1958e;
+    --lose-ploha: #352020;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--papir);
+  color: var(--tekst);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+main { padding: 16px; max-width: 760px; margin: 0 auto; }
+
+/* --- Zaglavlje --- */
+
+.vrh {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--ploha);
+  border-bottom: 1px solid var(--crta);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.znak {
+  font-weight: 700;
+  letter-spacing: .14em;
+  color: var(--znak);
+  text-decoration: none;
+  font-size: 15px;
+}
+
+.vrh nav { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
+.vrh nav a { color: var(--tiho); text-decoration: none; font-size: 14px; }
+.vrh nav a.tu { color: var(--tekst); font-weight: 600; }
+
+footer {
+  padding: 20px 16px 32px;
+  text-align: center;
+  color: var(--tiho);
+  font-size: 13px;
+}
+
+h1 { font-size: 22px; margin: 4px 0 2px; }
+h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .08em;
+     color: var(--tiho); margin: 28px 0 10px; font-weight: 600; }
+h3 { font-size: 14px; color: var(--tiho); margin: 18px 0 8px; font-weight: 600; }
+
+a { color: var(--znak); }
+.tiho { color: var(--tiho); font-size: 14px; }
+code { font-size: 13px; background: var(--crta); padding: 1px 5px; border-radius: 5px; }
+
+/* --- Trake --- */
+
+.traka {
+  padding: 10px 12px;
+  border-radius: var(--radijus);
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+.traka.lose { background: var(--lose-ploha); color: var(--lose); }
+
+/* --- Pločice --- */
+
+.plocice {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+
+.plocica {
+  background: var(--ploha);
+  border: 1px solid var(--crta);
+  border-radius: var(--radijus);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-decoration: none;
+  color: inherit;
+}
+.plocica .broj { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.plocica .natpis { font-size: 12px; color: var(--tiho); text-transform: uppercase;
+                   letter-spacing: .05em; }
+.plocica.pazi { background: var(--pazi-ploha); border-color: var(--pazi); }
+.plocica.pazi .broj { color: var(--pazi); }
+.plocica.lose { background: var(--lose-ploha); border-color: var(--lose); }
+.plocica.lose .broj { color: var(--lose); }
+
+@media (min-width: 560px) {
+  .plocice { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* --- Kartice tečajeva --- */
+
+.kartica {
+  display: block;
+  background: var(--ploha);
+  border: 1px solid var(--crta);
+  border-radius: var(--radijus);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+.kartica-vrh { display: flex; align-items: center; gap: 8px; }
+.kartica-red { font-size: 14px; margin-top: 2px; }
+
+.znacka {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--tiho);
+  border: 1px solid var(--crta);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.znacka.sada { color: var(--znak); border-color: var(--znak); }
+.znacka.tiha { margin-left: 6px; }
+
+/* --- Redovi (polaznici, uplate, greške) --- */
+
+.redak {
+  background: var(--ploha);
+  border: 1px solid var(--crta);
+  border-radius: var(--radijus);
+  padding: 10px 12px;
+  margin-bottom: 6px;
+}
+.redak.duzan { border-left: 3px solid var(--pazi); }
+.redak-ime { font-weight: 550; }
+.redak-detalj { font-size: 13px; margin-top: 2px; word-break: break-word; }
+.redak-novac { font-size: 14px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.pazi-tekst { color: var(--pazi); }
+
+.greska {
+  margin: 6px 0 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--lose);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.popis { margin: 0; padding-left: 20px; font-size: 14px; }
+.popis .upozorenje { color: var(--pazi); margin-bottom: 4px; }
+
+/* --- Parovi naziv/vrijednost --- */
+
+.parovi { margin: 0; }
+.parovi dt { font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
+             color: var(--tiho); margin-top: 12px; }
+.parovi dd { margin: 2px 0 0; font-size: 14px; word-break: break-word; }
+
+/* --- Prijava --- */
+
+.prijava {
+  max-width: 340px;
+  margin: 12vh auto 0;
+  background: var(--ploha);
+  border: 1px solid var(--crta);
+  border-radius: var(--radijus);
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.prijava h1 { letter-spacing: .14em; color: var(--znak); text-align: center; margin: 0; }
+.prijava > .tiho { text-align: center; margin: 0 0 8px; }
+.prijava label { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
+                 color: var(--tiho); }
+.prijava input {
+  font-size: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--crta);
+  border-radius: 8px;
+  background: var(--papir);
+  color: var(--tekst);
+}
+.prijava button {
+  margin-top: 6px;
+  font-size: 16px;
+  padding: 11px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--znak);
+  color: var(--papir);
+  font-weight: 600;
+}

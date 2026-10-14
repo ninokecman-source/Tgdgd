@@ -1,0 +1,47 @@
+{% extends "osnova.html" %}
+{% block naslov %}Uplate{% endblock %}
+{% block sadrzaj %}
+
+<h1>Uplate</h1>
+
+<section>
+  <h2>Nije platilo ({{ duznici|length }})</h2>
+  <p class="tiho">Samo tečajevi koji još nisu prošli.</p>
+  {% if not duznici %}<p class="tiho">Svi su podmirili kotizaciju.</p>{% endif %}
+  {% for t, p in duznici %}
+  <div class="redak duzan">
+    <div class="redak-ime">{{ p.ime }}</div>
+    <div class="redak-detalj tiho">
+      <a href="{{ url_for('tecaj', oznaka=t.oznaka) }}">{{ t.kod }} · {{ t.mjesto }}</a>
+      · {{ t.datumi }}
+      {% if p.email %}<br><a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}
+    </div>
+    <div class="redak-novac">
+      {{ p.uplaceno|eur }} <span class="pazi-tekst">manjka {{ p.manjka|eur }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Proknjižene uplate</h2>
+  {% if not podaci.uplate.ima %}
+  <p class="tiho">Baza bankovne skripte nije nađena ({{ podaci.uplate.baza }}).</p>
+  {% else %}
+  <div class="plocice">
+    <div class="plocica"><span class="broj">{{ podaci.uplate.broj }}</span><span class="natpis">uplata</span></div>
+    <div class="plocica"><span class="broj">{{ podaci.uplate.ukupno|eur }}</span><span class="natpis">ukupno</span></div>
+    <div class="plocica {% if podaci.uplate.neprepoznate %}pazi{% endif %}">
+      <span class="broj">{{ podaci.uplate.neprepoznate }}</span><span class="natpis">neprepoznatih</span></div>
+  </div>
+  <h3>Zadnjih {{ podaci.uplate.zadnje|length }}</h3>
+  {% for u in podaci.uplate.zadnje %}
+  <div class="redak">
+    <div class="redak-ime">{{ u.ime or 'bez imena' }}</div>
+    <div class="redak-detalj tiho">{{ u.kada|vrijeme }}{% if u.ponuda %} · ponuda {{ u.ponuda }}{% endif %}</div>
+    <div class="redak-novac">{{ u.iznos|eur }}</div>
+  </div>
+  {% endfor %}
+  {% endif %}
+</section>
+{% endblock %}

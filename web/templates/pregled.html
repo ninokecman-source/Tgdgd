@@ -1,0 +1,63 @@
+{% extends "osnova.html" %}
+{% block naslov %}Tečajevi{% endblock %}
+{% block sadrzaj %}
+
+<div class="plocice">
+  <div class="plocica">
+    <span class="broj">{{ dolazi|length }}</span>
+    <span class="natpis">tečaja pred nama</span>
+  </div>
+  <div class="plocica">
+    <span class="broj">{{ prijavljenih }}</span>
+    <span class="natpis">prijavljenih</span>
+  </div>
+  <a class="plocica {% if duznika %}pazi{% endif %}" href="{{ url_for('uplate') }}">
+    <span class="broj">{{ duznika }}</span>
+    <span class="natpis">nije platilo</span>
+  </a>
+  <a class="plocica {% if podaci.greske %}lose{% endif %}" href="{{ url_for('stanje') }}">
+    <span class="broj">{{ podaci.greske|length }}</span>
+    <span class="natpis">grešaka u logu</span>
+  </a>
+</div>
+
+{% if podaci.upozorenja %}
+<section>
+  <h2>Upozorenja iz tablica</h2>
+  <ul class="popis">
+    {% for u in podaci.upozorenja %}<li class="upozorenje">{{ u }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section>
+  <h2>Pred nama</h2>
+  {% if not dolazi %}<p class="tiho">Nijedan tečaj nije u budućnosti.</p>{% endif %}
+  {% for t in dolazi %}
+  <a class="kartica" href="{{ url_for('tecaj', oznaka=t.oznaka) }}">
+    <div class="kartica-vrh">
+      <strong>{{ t.kod }} · {{ t.mjesto }}</strong>
+      {% if t.stanje == 'u toku' %}<span class="znacka sada">u toku</span>
+      {% elif t.dana_do is not none %}<span class="znacka">za {{ t.dana_do }} d</span>{% endif %}
+    </div>
+    <div class="kartica-red">{{ t.datumi }}</div>
+    <div class="kartica-red tiho">
+      {{ t.polaznika }} prijavljenih · {{ t.uplaceno|eur }}
+      {% if t.duznika %}· <span class="pazi-tekst">{{ t.duznika }} nije platilo</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Prošli tečajevi</h2>
+  {% for t in prosli %}
+  <a class="kartica" href="{{ url_for('tecaj', oznaka=t.oznaka) }}">
+    <div class="kartica-vrh"><strong>{{ t.kod }} · {{ t.mjesto }}</strong></div>
+    <div class="kartica-red">{{ t.datumi }}</div>
+    <div class="kartica-red tiho">{{ t.polaznika }} polaznika · {{ t.uplaceno|eur }}</div>
+  </a>
+  {% endfor %}
+</section>
+
+{% endblock %}

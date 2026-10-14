@@ -1,0 +1,7 @@
+{% extends "osnova.html" %}
+{% block naslov %}Nema te stranice{% endblock %}
+{% block sadrzaj %}
+<h1>Nema te stranice</h1>
+<p class="tiho">Možda je tečaj u međuvremenu preimenovan.
+  <a href="{{ url_for('pregled') }}">Natrag na tečajeve</a>.</p>
+{% endblock %}

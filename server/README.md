@@ -174,7 +174,8 @@ svejedno vraćaju u Dropbox, a izlazni status se prenosi dalje — pa ga
 uhvati provjera logova.
 
 Svakih 20 minuta ide i sinkronizacija bez posla, da Dropbox ne zaostane
-između cron termina. Ta se preskače ako brava nije slobodna.
+između cron termina — `server/osvjezi.sh`, koji uz sinkronizaciju osvježi i
+snimku za web pregled. Ta se preskače ako brava nije slobodna.
 
 ### Sukobi
 
@@ -190,3 +191,15 @@ Najlakše je izbjeći: ne drži tablicu otvorenu u Excelu dok server radi.
 Server radi na grani `server`, Mac na `emmett`. Tako promjene za server ne
 diraju Mac dok se ne pokažu ispravnima. Kad se ustali, spojit ćemo ih u
 jednu granu.
+
+---
+
+## Web pregled
+
+Uz poslove na serveru stoji i stranica za mobitel — tečajevi, prijavljeni,
+kome manjka uplata, što je poslano i greške iz logova. Samo za čitanje.
+
+Upute su u [`web/README.md`](../web/README.md). Ukratko: `gunicorn` sluša na
+`127.0.0.1:8099` pod systemd-om, nginx ga objavljuje preko HTTPS-a kao
+zaseban vhost pokraj Clinika, a podatke čita iz snimke koju svakih dvadeset
+minuta napravi `server/osvjezi.sh`.

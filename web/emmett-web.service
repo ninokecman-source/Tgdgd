@@ -1,0 +1,39 @@
+# Web pregled Emmett sustava. Kopiraj u /etc/systemd/system/ i pokreni:
+#
+#   sudo cp ~emmett/Tgdgd/web/emmett-web.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now emmett-web
+#
+# Sluša samo na 127.0.0.1 - prema svijetu ide isključivo kroz nginx, koji
+# drži HTTPS. Tako stranica nikad nije dostupna bez potvrde certifikata.
+
+[Unit]
+Description=Emmett web pregled
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=emmett
+Group=emmett
+WorkingDirectory=/home/emmett/Tgdgd
+ExecStart=/home/emmett/venv/bin/gunicorn \
+    --chdir /home/emmett/Tgdgd/web \
+    --bind 127.0.0.1:8099 \
+    --workers 2 \
+    --timeout 30 \
+    --access-logfile - \
+    app:app
+Restart=on-failure
+RestartSec=5
+
+# Aplikacija samo čita - nema razloga da smije bilo što više od toga.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+{% extends "osnova.html" %}
+{% block naslov %}Prijava{% endblock %}
+{% block sadrzaj %}
+<form class="prijava" method="post" action="{{ url_for('prijava') }}">
+  <h1>EMMETT</h1>
+  <p class="tiho">Pregled tečajeva i prijava</p>
+  {% if greska %}<p class="traka lose">{{ greska }}</p>{% endif %}
+  <input type="hidden" name="dalje" value="{{ dalje or '' }}">
+  <label>Korisnik
+    <input name="korisnik" autocomplete="username" autocapitalize="none" required autofocus>
+  </label>
+  <label>Lozinka
+    <input name="lozinka" type="password" autocomplete="current-password" required>
+  </label>
+  <button type="submit">Prijavi se</button>
+</form>
+{% endblock %}
