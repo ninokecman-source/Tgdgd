@@ -1,0 +1,28 @@
+# Emmett sustav na serveru - crontab korisnika `emmett`.
+# Ucitaj ga s:  crontab ~/Tgdgd/server/crontab.txt
+#
+# Server radi u UTC, a tecajevi i podsjetnici se racunaju po lokalnom danu,
+# pa TZ mora biti postavljen - inace podsjetnik ode dan ranije ili kasnije.
+TZ=Europe/Zagreb
+SHELL=/bin/bash
+
+# Prijave iz Zoha u Excel - svakih 6 sati
+0 */6 * * * $HOME/Tgdgd/server/pokreni.sh zoho_to_excel.py >> $HOME/Tgdgd/log.txt 2>&1
+
+# Bankovni izvodi i Solo ponude - svakih 6 sati, pola sata poslije
+30 */6 * * * $HOME/Tgdgd/server/pokreni.sh bank_solo/sync.py >> $HOME/Tgdgd/sync.log 2>&1
+
+# Podsjetnici polaznicima
+45 8 * * * $HOME/Tgdgd/server/pokreni.sh send_reminders.py >> $HOME/Tgdgd/log.txt 2>&1
+
+# Tablica centrali, dan nakon tecaja
+30 9 * * * $HOME/Tgdgd/server/pokreni.sh posalji_tablicu.py >> $HOME/Tgdgd/log.txt 2>&1
+
+# Potvrdnice, dan nakon tecaja
+0 10 * * * $HOME/Tgdgd/server/pokreni.sh napravi_certifikate.py >> $HOME/Tgdgd/log.txt 2>&1
+
+# Provjera logova - svaka 3 dana
+0 9 */3 * * $HOME/Tgdgd/server/pokreni.sh provjeri_logove.py >> $HOME/Tgdgd/log.txt 2>&1
+
+# Sinkronizacija i kad nema posla, da Dropbox ne zaostane
+*/20 * * * * flock -n $HOME/.emmett.lock $HOME/Tgdgd/server/sinkroniziraj.sh >/dev/null 2>&1

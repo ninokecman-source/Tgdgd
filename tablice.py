@@ -27,6 +27,11 @@ PREDLOZAK = "template_admin_sheet.xlsx"
 _SUFIKS_KOPIJE = re.compile(r"^(?P<osnova>.+?)\s*(?:\(\d+\)|\d+)$")
 _OCITA_KOPIJA = re.compile(r"(conflicted copy|kopija|copy)", re.IGNORECASE)
 
+# rclone (Dropbox na serveru) sukob imenuje 'Modul 1&2 Split.xlsx.conflict1'.
+# Takva datoteka ne zavrsava na .xlsx pa je skripte ne vide - zato se trazi
+# izrijekom, kao i trag datoteke u oblaku.
+_SUKOB_RCLONE = re.compile(r"\.conflict\d*$", re.IGNORECASE)
+
 
 def u_oblaku(mapa) -> dict:
     """{pravi naziv datoteke: put do traga} za sve datoteke koje je
@@ -40,6 +45,14 @@ def u_oblaku(mapa) -> dict:
             continue
         nadjeno[put.name[1:-len(".icloud")]] = put
     return nadjeno
+
+
+def sukobi_sinkronizacije(mapa) -> list:
+    """Datoteke koje je rclone ostavio kao sukob (…xlsx.conflict1)."""
+    mapa = Path(mapa)
+    if not mapa.is_dir():
+        return []
+    return sorted(p for p in mapa.iterdir() if _SUKOB_RCLONE.search(p.name))
 
 
 def _zasto_kopija(put: Path, postojeci: set):
@@ -69,6 +82,11 @@ def nadji(mapa, javi=print) -> list:
         javi(f"[!] {naziv} nije na disku nego u oblaku ({trag.name}) - "
              f"ne mogu je pročitati. Otvori folder u Finderu i pričekaj da se "
              f"preuzme, ili desni klik na folder -> Keep Downloaded.")
+
+    for put in sukobi_sinkronizacije(mapa):
+        javi(f"[!] {put.name} - sinkronizacija je zatekla dvije razlicite verzije "
+             f"iste datoteke. Usporedi je s originalom pa obrisi onu koja ne "
+             f"treba; dok postoji, podaci iz nje se nigdje ne koriste.")
 
     upotrebljive = []
     for put in svi:
