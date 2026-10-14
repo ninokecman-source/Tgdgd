@@ -7,6 +7,10 @@
 #
 # Prvo pokretanje IKAD mora biti s --resync, da rclone upamti polazno
 # stanje:  ./sinkroniziraj.sh --resync
+#
+# Razina NOTICE: uredan prolaz ne ispisuje nista, pa log ostaje citljiv i
+# provjera logova ne tone u rclone poruke. Greske i upozorenja se i dalje
+# vide.
 set -euo pipefail
 
 KORIJEN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,5 +24,5 @@ exec rclone bisync "$PRIJAVE_LOKALNO" "$DROPBOX_REMOTE" \
     --conflict-suffix conflict \
     --max-delete 25 \
     --check-access=false \
-    --log-level INFO \
+    --log-level NOTICE \
     "$@"
