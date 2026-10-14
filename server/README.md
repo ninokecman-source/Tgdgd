@@ -19,8 +19,10 @@ apt install -y python3-venv rclone chromium fonts-liberation
 `fonts-liberation` nije sitnica: potvrdnice koriste Arial, a Liberation Sans
 mu je metrički istovjetan. Bez njega bi se razmaci na potvrdnici razišli.
 
-Ako `apt install chromium` ne nađe paket, probaj `chromium-browser`. Zapamti
-koji put je ispao (`which chromium`), treba ti u 4. koraku.
+Na Ubuntu 26.04 `chromium` se instalira kao **snap**, a `apt` postavi
+`/usr/bin/chromium-browser` kao put do njega. To je u redu — skripta za
+potvrdnice privremenu datoteku piše uz sam PDF, ne u `/tmp`, baš zato što
+snap ima vlastiti `/tmp` i onaj pravi ne vidi.
 
 ## 2. Kod i Python (kao `emmett`)
 

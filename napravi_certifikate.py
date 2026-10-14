@@ -35,7 +35,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from datetime import date
 from pathlib import Path
 
@@ -140,14 +139,20 @@ def ime_datoteke(ime: str) -> str:
 def iscrtaj(chrome: str, html: str, pdf_put: Path, dodatno=()) -> None:
     """Chrome iscrta HTML u PDF. HTML ide u privremenu datoteku jer se
     predložak puni po polazniku. `dodatno` su zastavice iz config.json
-    ("chrome_args") - na Macu ne trebaju, služe za neobična okruženja."""
-    with tempfile.TemporaryDirectory() as privremeno:
-        izvor = Path(privremeno) / "potvrdnica.html"
+    ("chrome_args") - na Macu ne trebaju, služe za neobična okruženja.
+
+    Privremena datoteka namjerno nastaje UZ PDF, a ne u /tmp: Chromium
+    instaliran kao snap ima vlastiti /tmp i onaj pravi ne vidi, pa bi odande
+    pročitao prazno. Mapa odredišta mu je dostupna jer u nju i piše."""
+    izvor = pdf_put.with_suffix(".tmp.html")
+    try:
         izvor.write_text(html, encoding="utf-8")
         rezultat = subprocess.run(
             [chrome, "--headless", "--disable-gpu", "--no-pdf-header-footer",
              *dodatno, f"--print-to-pdf={pdf_put}", izvor.as_uri()],
             capture_output=True, text=True, timeout=180)
+    finally:
+        izvor.unlink(missing_ok=True)
     if not pdf_put.exists() or pdf_put.stat().st_size == 0:
         poruka = (rezultat.stderr or rezultat.stdout or "").strip().splitlines()
         kraj = poruka[-1] if poruka else f"Chrome je vratio {rezultat.returncode}"
