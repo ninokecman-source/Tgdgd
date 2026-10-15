@@ -221,3 +221,47 @@ code { font-size: 13px; background: var(--crta); padding: 1px 5px; border-radius
   color: var(--papir);
   font-weight: 600;
 }
+
+/* --- Tipke --- */
+
+.tipke { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.tipke form { margin: 0; }
+
+.tipka {
+  display: inline-block;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 11px 18px;
+  border: 1px solid var(--crta);
+  border-radius: 10px;
+  background: var(--ploha);
+  color: var(--tekst);
+  text-decoration: none;
+  cursor: pointer;
+}
+.tipka.glavna { background: var(--znak); border-color: var(--znak); color: var(--papir); }
+.tipka.tiha { color: var(--tiho); }
+
+.traka.radi { background: var(--pazi-ploha); color: var(--pazi); }
+.traka.pazi { background: var(--pazi-ploha); color: var(--pazi); }
+
+/* --- Ishod zadnjeg posla --- */
+
+.ishod {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--crta);
+  border-left: 3px solid var(--znak);
+  border-radius: var(--radijus);
+  background: var(--ploha);
+}
+.ishod.lose { border-left-color: var(--lose); }
+.ishod pre {
+  margin: 6px 0 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  max-height: 40vh;
+  overflow: auto;
+}

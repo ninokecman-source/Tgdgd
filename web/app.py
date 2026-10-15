@@ -20,6 +20,7 @@ ga objavljuje preko HTTPS-a (web/nginx-emmett.conf).
 import json
 import os
 import re
+import secrets
 import sys
 import time
 from datetime import datetime, timedelta
@@ -37,6 +38,12 @@ import lozinka
 KORIJEN = Path(__file__).resolve().parent.parent
 CONFIG = KORIJEN / "config.json"
 SNIMKA = Path(__file__).resolve().parent / "stanje.json"
+
+# Tipke na stranici ne rade posao, nego ovdje ostave zahtjev. Posao odradi
+# server/izvrsi.py, kojeg systemd pokrene čim se datoteka pojavi. Jedina mapa
+# u koju web smije pisati - vidi komentar u web/emmett-web.service.
+ZAHTJEVI = Path(os.environ.get("EMMETT_ZAHTJEVI", Path.home() / "zahtjevi"))
+ISHODI = Path(__file__).resolve().parent / "zahtjevi.json"
 
 # Snimka starija od ovoga znači da skupi.py nije prošao - cron stoji,
 # sinkronizacija je pukla ili je posao ostao zaglavljen na bravi.
@@ -79,6 +86,20 @@ promasaji = {}
 
 
 # --- Prijava ---------------------------------------------------------------
+
+
+def token() -> str:
+    """Tajna koja mora doći natrag uz svaki obrazac. Kolačić je SameSite=Lax,
+    pa tuđa stranica ionako ne može poslati obrazac u tvoje ime - ovo je
+    druga brava na istim vratima."""
+    if "token" not in session:
+        session["token"] = secrets.token_urlsafe(32)
+    return session["token"]
+
+
+def token_valja() -> bool:
+    poslano = request.form.get("token", "")
+    return bool(poslano) and secrets.compare_digest(poslano, session.get("token", ""))
 
 
 def treba_prijava(f):
@@ -184,6 +205,11 @@ def starost_minuta(kada: str):
         return None
 
 
+@app.context_processor
+def ugradi_token():
+    return {"token": token() if session.get("prijavljen") else ""}
+
+
 @app.template_filter("vrijeme")
 def filtar_vrijeme(vrijednost):
     """ISO zapis u '14.10.2026. 13:40'."""
@@ -213,6 +239,73 @@ def filtar_eur(vrijednost):
         return "-"
 
 
+# --- Zahtjevi (tipke) ------------------------------------------------------
+
+
+def ucitaj_ishode() -> list:
+    """Ishodi poslova koje je upisao server/izvrsi.py. Web ih samo čita."""
+    if not ISHODI.exists():
+        return []
+    try:
+        with open(ISHODI, encoding="utf-8") as f:
+            podaci = json.load(f)
+        return podaci if isinstance(podaci, list) else []
+    except (ValueError, OSError):
+        return []
+
+
+def zadnji_ishod(tablica: str):
+    nasi = [i for i in ucitaj_ishode() if i.get("tablica") == tablica]
+    if not nasi:
+        return None
+    ishod = max(nasi, key=lambda i: i.get("trazeno", ""))
+    ishod["u_tijeku"] = ishod.get("status") == "u tijeku"
+    return ishod
+
+
+def ceka_zahtjev(tablica: str) -> bool:
+    """Postoji li zahtjev koji još nije ni pokrenut."""
+    if not ZAHTJEVI.is_dir():
+        return False
+    for put in ZAHTJEVI.glob("*.json"):
+        try:
+            with open(put, encoding="utf-8") as f:
+                if json.load(f).get("tablica") == tablica:
+                    return True
+        except (ValueError, OSError):
+            continue
+    return False
+
+
+def zatrazi(posao: str, tablica: str) -> None:
+    ZAHTJEVI.mkdir(parents=True, exist_ok=True)
+    zahtjev = {"posao": posao, "tablica": tablica,
+               "trazio": config.get("web_user", "?"),
+               "kada": datetime.now().isoformat(timespec="seconds")}
+    naziv = f"{datetime.now():%Y%m%d-%H%M%S}-{secrets.token_hex(4)}.json"
+    # piši pod drugim nazivom pa preimenuj: systemd prati *.json, ne smije
+    # uloviti datoteku koja se još piše
+    privremeno = ZAHTJEVI / (naziv + ".pisem")
+    with open(privremeno, "w", encoding="utf-8") as f:
+        json.dump(zahtjev, f, ensure_ascii=False)
+    privremeno.replace(ZAHTJEVI / naziv)
+
+
+def nedobili(tecaj: dict, poslani) -> list:
+    """Polaznici s adresom kojima potvrdnica još nije poslana."""
+    vec = {a.lower() for a in (poslani or {}).get("poslano", [])}
+    return [p for p in tecaj["polaznici"]
+            if p["email"] and p["email"].lower() not in vec]
+
+
+def nadji_tecaj(oznaka: str):
+    podaci = snimka()
+    nadjen = next((t for t in podaci["tecajevi"] if t["oznaka"] == oznaka), None)
+    if nadjen is None:
+        abort(404)
+    return podaci, nadjen
+
+
 # --- Stranice --------------------------------------------------------------
 
 
@@ -233,18 +326,56 @@ def pregled():
 @app.route("/tecaj/<oznaka>")
 @treba_prijava
 def tecaj(oznaka):
-    podaci = snimka()
-    nadjen = next((t for t in podaci["tecajevi"] if t["oznaka"] == oznaka), None)
-    if nadjen is None:
-        abort(404)
+    podaci, nadjen = nadji_tecaj(oznaka)
     slanja = podaci.get("slanja", {})
     datoteka = nadjen["datoteka"]
+    poslani = slanja.get("certifikati_poslani", {}).get(datoteka)
+    ishod = zadnji_ishod(datoteka)
+    ceka = ceka_zahtjev(datoteka)
     return render_template(
         "tecaj.html", podaci=podaci, tecaj=nadjen,
         podsjetnici=slanja.get("podsjetnici", {}).get(datoteka, []),
         tablica=slanja.get("tablice", {}).get(datoteka),
         napravljeni=slanja.get("certifikati_napravljeni", {}).get(datoteka),
-        poslani=slanja.get("certifikati_poslani", {}).get(datoteka))
+        poslani=poslani,
+        cekaju=nedobili(nadjen, poslani),
+        ishod=ishod,
+        radi=ceka or bool(ishod and ishod.get("u_tijeku")))
+
+
+@app.route("/tecaj/<oznaka>/posalji", methods=["GET", "POST"])
+@treba_prijava
+def posalji(oznaka):
+    """Slanje potvrdnica - jedina tipka koja nešto šalje van, pa ide preko
+    zasebne potvrde s popisom primatelja."""
+    podaci, tecaj = nadji_tecaj(oznaka)
+    poslani = podaci.get("slanja", {}).get("certifikati_poslani", {}).get(tecaj["datoteka"])
+    cekaju = nedobili(tecaj, poslani)
+
+    if request.method == "POST":
+        if not token_valja():
+            abort(400)
+        if cekaju and not ceka_zahtjev(tecaj["datoteka"]):
+            zatrazi("posalji_certifikate", tecaj["datoteka"])
+        return redirect(url_for("tecaj", oznaka=oznaka))
+
+    return render_template("posalji.html", podaci=podaci, tecaj=tecaj,
+                           cekaju=cekaju,
+                           napravljeni=podaci.get("slanja", {})
+                           .get("certifikati_napravljeni", {})
+                           .get(tecaj["datoteka"]))
+
+
+@app.route("/tecaj/<oznaka>/pregled", methods=["POST"])
+@treba_prijava
+def pregled_slanja(oznaka):
+    """Pregled: pokaže kome bi se slalo, bez slanja."""
+    _, tecaj = nadji_tecaj(oznaka)
+    if not token_valja():
+        abort(400)
+    if not ceka_zahtjev(tecaj["datoteka"]):
+        zatrazi("pregled_certifikata", tecaj["datoteka"])
+    return redirect(url_for("tecaj", oznaka=oznaka))
 
 
 @app.route("/uplate")

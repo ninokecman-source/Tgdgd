@@ -1,0 +1,18 @@
+# Prati mapu u koju web stranica ostavlja zahtjeve (pritisak na tipku) i
+# pokrece emmett-zahtjev.service cim se u njoj nesto pojavi.
+#
+#   sudo cp ~emmett/Tgdgd/server/emmett-zahtjev.{path,service} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now emmett-zahtjev.path
+#
+# Zato je odziv na tipku trenutan, a ne na sljedeci otkucaj crona.
+
+[Unit]
+Description=Prati zahtjeve s Emmett web stranice
+
+[Path]
+PathExistsGlob=/home/emmett/zahtjevi/*.json
+Unit=emmett-zahtjev.service
+
+[Install]
+WantedBy=multi-user.target

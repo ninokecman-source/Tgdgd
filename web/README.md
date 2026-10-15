@@ -121,7 +121,32 @@ nešto na `0.0.0.0:443`, vrati se na 8443.
 Ako Tailscale na mobitelu isključiš, stranica se neće otvoriti. To nije
 kvar, nego cijela poanta.
 
-### 6. Cron
+### 6. Tipke (slanje potvrdnica)
+
+Kao `root`:
+
+```bash
+cp ~emmett/Tgdgd/server/emmett-zahtjev.path /etc/systemd/system/
+cp ~emmett/Tgdgd/server/emmett-zahtjev.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now emmett-zahtjev.path
+systemctl status emmett-zahtjev.path --no-pager | head -3
+```
+
+Provjera cijelog puta, kao `emmett`:
+
+```bash
+mkdir -p ~/zahtjevi
+# pritisak na tipku "Pregled, bez slanja" ovo napravi sam
+printf '{"posao":"pregled_certifikata","tablica":"Modul 1&2 Split.xlsx","trazio":"rucno"}' \
+    > ~/zahtjevi/proba.json
+sleep 20
+cat ~/Tgdgd/web/zahtjevi.json
+```
+
+Mora se vidjeti ishod sa statusom `gotovo` i ispisom posla.
+
+### 7. Cron
 
 Nova linija je već u `server/crontab.txt` (zamjenjuje golu sinkronizaciju):
 
@@ -138,9 +163,32 @@ tražiš rijetko; promijeni to s `web_session_days` u `config.json`.
 | Stranica | Što pokazuje |
 |---|---|
 | Tečajevi | tečajevi pred nama i prošli, broj prijavljenih, uplaćeno |
-| Tečaj | polaznici s adresama i uplatama, što im je poslano |
+| Tečaj | polaznici, uplate, što im je poslano, tipke za potvrdnice |
 | Uplate | kome manjka novac, proknjižene uplate iz banke |
 | Stanje | zadnji prolazi cron poslova, greške iz logova |
+
+### Slanje potvrdnica s mobitela
+
+Na stranici tečaja, ispod "Što je poslano":
+
+- **Pregled, bez slanja** — pokaže tko bi što dobio, ne šalje ništa.
+- **Pošalji potvrdnice** — vodi na potvrdu s popisom primatelja; tek tamo
+  drugi pritisak stvarno šalje.
+
+Dok posao traje, stranica se osvježava sama i pokaže ispis kad završi. Tko
+je potvrdnicu jednom dobio, neće je dobiti dvaput, koliko god puta
+pritisnuo — to pamti `poslani_certifikati.json`, isto kao i kod naredbe iz
+terminala.
+
+**Kako radi iznutra.** Stranica sama ne šalje ništa. Tipka ostavi datoteku
+sa zahtjevom u `~/zahtjevi`, systemd to primijeti (`emmett-zahtjev.path`) i
+pokrene `server/izvrsi.py`, koji posao odradi kroz `pokreni.sh` — dakle pod
+istom bravom i s istim pravima kao cron.
+
+Razlog je jednostavan: web je jedini proces ovdje koji sluša izvana. Ovako
+smije pisati samo u tu jednu mapu, a `izvrsi.py` prihvaća samo poslove sa
+svog kratkog popisa i samo tablice koje stvarno postoje. Ni da mu netko
+preotme vlast, web ne može poslati mail polazniku ni promijeniti tablicu.
 
 ## Sigurnost
 
@@ -161,6 +209,9 @@ Kroz stranicu idu imena, adrese, mailovi i telefoni polaznika, pa:
   ovlaštenja (`NoNewPrivileges`).
 - Lozinka je i dalje tu iako je mreža privatna: da izgubljen, otključan
   telefon ne znači i otvorenu kartoteku polaznika.
+- Tipke ne rade posao same, nego ga traže od zasebnog procesa (vidi gore).
+  Obrasci nose tajnu iz prijave, pa ih tuđa stranica ne može poslati umjesto
+  tebe.
 
 ## Kad nešto ne radi
 
@@ -170,6 +221,7 @@ Kroz stranicu idu imena, adrese, mailovi i telefoni polaznika, pa:
 | "Podaci su stari N min" | `crontab -l`, pa `tail ~/Tgdgd/log.txt` |
 | 502 Bad Gateway | `systemctl status emmett-web`, `journalctl -u emmett-web -n 50` |
 | Stranica se uopće ne otvara | je li Tailscale na mobitelu uključen? Pa `tailscale status` na serveru |
+| Tipka ništa ne napravi | `systemctl status emmett-zahtjev.path`, pa `ls ~/zahtjevi` — stoji li zahtjev neodrađen |
 | Prijava ne prolazi, a lozinka je dobra | ide li preko `https://`? Kolačić je `Secure`. |
 | Tečaj nedostaje | "Upozorenja iz tablica" na prvoj stranici — vjerojatno kopija ili sukob sinkronizacije |
 

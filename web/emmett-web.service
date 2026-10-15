@@ -33,10 +33,14 @@ RestartSec=5
 # umjesto da zbog nje popustimo zaštitu.
 
 # Aplikacija samo čita - nema razloga da smije bilo što više od toga.
+# Jedina iznimka je mapa sa zahtjevima: ondje tipke na stranici ostavljaju
+# zamolbu za posao, a posao odradi emmett-zahtjev.service. Web tako ne može
+# ni poslati mail ni dirati tablice, čak ni da mu netko preotme vlast.
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
+ReadWritePaths=/home/emmett/zahtjevi
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

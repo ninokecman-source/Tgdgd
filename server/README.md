@@ -203,3 +203,7 @@ Upute su u [`web/README.md`](../web/README.md). Ukratko: `gunicorn` sluša na
 `127.0.0.1:8099` pod systemd-om, Tailscale ga objavljuje preko HTTPS-a —
 samo unutar privatne mreže, nikad na internetu — a podatke čita iz snimke
 koju svakih dvadeset minuta napravi `server/osvjezi.sh`.
+
+Tipke na stranici ne rade posao same. Ostave zahtjev u `~/zahtjevi`, a
+`server/izvrsi.py` ga odradi kroz `pokreni.sh` — pod istom bravom kao i
+cron. Pokreće ga systemd čim se zahtjev pojavi (`emmett-zahtjev.path`).

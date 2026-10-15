@@ -1,5 +1,6 @@
 {% extends "osnova.html" %}
 {% block naslov %}{{ tecaj.kod }} {{ tecaj.mjesto }}{% endblock %}
+{% block zaglavlje %}{% if radi %}<meta http-equiv="refresh" content="6">{% endif %}{% endblock %}
 {% block sadrzaj %}
 
 <h1>{{ tecaj.kod }} · {{ tecaj.mjesto }}</h1>
@@ -56,6 +57,48 @@
     <dt>Potvrdnice poslane</dt>
     <dd>{% if poslani %}{{ poslani.poslano|length }} polaznika{% else %}nisu{% endif %}</dd>
   </dl>
+</section>
+
+<section>
+  <h2>Slanje potvrdnica</h2>
+
+  {% if radi %}
+  <p class="traka radi">Posao je u tijeku. Stranica se osvježava sama.</p>
+
+  {% elif not napravljeni %}
+  <p class="tiho">Potvrdnice još nisu napravljene — nastaju same dan nakon
+    tečaja, pa ih tek onda ima što slati.</p>
+
+  {% elif not cekaju %}
+  <p class="tiho">Svi polaznici s adresom su dobili svoju potvrdnicu.</p>
+  <form method="post" action="{{ url_for('pregled_slanja', oznaka=tecaj.oznaka) }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button class="tipka tiha" type="submit">Provjeri ponovno</button>
+  </form>
+
+  {% else %}
+  <p>Potvrdnicu još nije dobilo <strong>{{ cekaju|length }}</strong>
+    {{ 'polaznik' if cekaju|length == 1 else 'polaznika' }}.</p>
+  <div class="tipke">
+    <form method="post" action="{{ url_for('pregled_slanja', oznaka=tecaj.oznaka) }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="tipka tiha" type="submit">Pregled, bez slanja</button>
+    </form>
+    <a class="tipka glavna" href="{{ url_for('posalji', oznaka=tecaj.oznaka) }}">
+      Pošalji potvrdnice</a>
+  </div>
+  {% endif %}
+
+  {% if ishod %}
+  <div class="ishod {{ 'lose' if ishod.status in ('greška', 'odbijeno') }}">
+    <div class="tiho">
+      {{ {'pregled_certifikata': 'Pregled', 'posalji_certifikate': 'Slanje'}
+         .get(ishod.posao, ishod.posao) }} ·
+      {{ ishod.status }} · {{ (ishod.gotovo or ishod.trazeno)|vrijeme }}
+    </div>
+    {% if ishod.ispis %}<pre>{{ ishod.ispis }}</pre>{% endif %}
+  </div>
+  {% endif %}
 </section>
 
 <p><a href="{{ url_for('pregled') }}">← svi tečajevi</a></p>

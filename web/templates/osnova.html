@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#1d4e4a">
 <title>{% block naslov %}Emmett{% endblock %} · Emmett</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% block zaglavlje %}{% endblock %}
 </head>
 <body>
 {% if session.get('prijavljen') %}

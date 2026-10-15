@@ -1,0 +1,47 @@
+{% extends "osnova.html" %}
+{% block naslov %}Slanje potvrdnica{% endblock %}
+{% block sadrzaj %}
+
+<h1>Pošalji potvrdnice</h1>
+<p class="tiho">{{ tecaj.kod }} · {{ tecaj.mjesto }} · {{ tecaj.datumi }}</p>
+
+{% if not napravljeni %}
+<p class="traka lose">Potvrdnice za ovaj tečaj još nisu napravljene, pa nema
+  što poslati.</p>
+<p><a href="{{ url_for('tecaj', oznaka=tecaj.oznaka) }}">← natrag</a></p>
+
+{% elif not cekaju %}
+<p class="tiho">Svi polaznici s adresom su već dobili svoju potvrdnicu.</p>
+<p><a href="{{ url_for('tecaj', oznaka=tecaj.oznaka) }}">← natrag</a></p>
+
+{% else %}
+<p>Svatko s popisa dobiva mail sa <strong>svojom</strong> potvrdnicom u
+  prilogu. Kopija ide i tebi.</p>
+
+{% for p in cekaju %}
+<div class="redak">
+  <div class="redak-ime">{{ loop.index }}. {{ p.ime }}</div>
+  <div class="redak-detalj tiho">{{ p.email }}</div>
+</div>
+{% endfor %}
+
+{% set bez_adrese = tecaj.polaznici | rejectattr('email') | list %}
+{% if bez_adrese %}
+<p class="traka pazi">{{ bez_adrese|length }}
+  {{ 'polaznik nema' if bez_adrese|length == 1 else 'polaznika nema' }}
+  adresu u tablici, pa ih ovo preskače:
+  {{ bez_adrese | map(attribute='ime') | join(', ') }}.</p>
+{% endif %}
+
+<form method="post" class="tipke">
+  <input type="hidden" name="token" value="{{ token }}">
+  <button class="tipka glavna" type="submit">
+    Pošalji {{ cekaju|length }}
+    {{ 'potvrdnicu' if cekaju|length == 1 else 'potvrdnica' }}</button>
+  <a class="tipka tiha" href="{{ url_for('tecaj', oznaka=tecaj.oznaka) }}">Odustani</a>
+</form>
+
+<p class="tiho">Tko je jednom dobio potvrdnicu, neće je dobiti dvaput — i da
+  ovo pokreneš ponovno.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,18 @@
+# Odradi zahtjev koji je web stranica ostavila u ~/zahtjevi.
+#
+# Pokrece ga emmett-zahtjev.path, ne pokrece se sam. Radi kao `emmett`, s
+# istim pravima kao cron poslovi - jer radi isti posao. Samu bravu uzima
+# pokreni.sh, kao i inace.
+
+[Unit]
+Description=Odradi zahtjev s Emmett web stranice
+
+[Service]
+Type=oneshot
+User=emmett
+Group=emmett
+WorkingDirectory=/home/emmett/Tgdgd
+ExecStart=/home/emmett/venv/bin/python3 /home/emmett/Tgdgd/server/izvrsi.py
+StandardOutput=append:/home/emmett/Tgdgd/log.txt
+StandardError=append:/home/emmett/Tgdgd/log.txt
+TimeoutStartSec=3900
