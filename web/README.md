@@ -13,16 +13,19 @@ Nitko izvana ne može ni pokucati na nju. Cliniko ostaje netaknut.
                  unutar mreže
    iPhone  ────────────────────►  Tailscale  ──────────────►  gunicorn
    (Tailscale                      serve                         │
-    uključen)                      :8443                  web/stanje.json
+    uključen)                       :443                  web/stanje.json
                                                                  ▲
                               cron, svakih 20 min: osvjezi.sh ───┘
                               (rclone iz Dropboxa + web/skupi.py)
 ```
 
-Port je **8443**, a ne 443, s razlogom: nginx (Cliniko) sluša na
-`0.0.0.0:443`, što obuhvaća i Tailscale adresu. Da Serve uzme 443, dvoje bi
-se potuklo oko istog porta, a nakon ponovnog pokretanja servera moglo bi se
-dogoditi da nginx ostane bez njega — i Cliniko padne. Na 8443 se ne dodiruju.
+Serve sluša na 443, ali **samo na Tailscale adresi** — na javnoj adresi
+servera ne otvara ništa. Prije postavljanja ipak provjeri da taj port nije
+već nečiji (`ss -tlnp | grep -E ':(80|443)\s'`): ako na serveru postoji web
+poslužitelj koji sluša na `0.0.0.0:443`, to obuhvaća i Tailscale adresu, pa
+bi se potukli — a nakon ponovnog pokretanja servera onaj drugi mogao bi
+ostati bez porta. U tom slučaju uzmi 8443
+(`tailscale serve --bg --https=8443 8099`); adresa tada nosi i port.
 
 Stranica **ne čita Excel tablice**. Čita snimku koju svakih dvadeset minuta
 napravi `web/skupi.py`, pod istom bravom kao i ostali poslovi. Dva razloga:
@@ -84,26 +87,28 @@ U Tailscale konzoli (`login.tailscale.com`) preimenuj uređaj iz
 Zatim:
 
 ```bash
-tailscale serve --bg --https=8443 8099
+tailscale serve --bg 8099
 tailscale serve status
 ```
 
-`status` ispiše punu adresu — nešto poput
-`https://emmett.tail1234.ts.net:8443`. To je adresa stranice.
+`status` ispiše punu adresu — nešto poput `https://emmett.tail1234.ts.net`.
+To je adresa stranice.
+
+Ako si uređaj preimenovao nakon što si već pokrenuo `serve`, u popisu ostanu
+dva zapisa, stari i novi. Počisti sa `tailscale serve reset`, pa ponovi.
 
 Prvi put će Serve tražiti da se za mrežu uključe HTTPS certifikati; ponudi
 poveznicu na koju klikneš i potvrdiš. Certifikat je pravi, Safari ne
 prigovara.
 
-**Provjeri da Cliniko i dalje stoji:**
+**Provjeri što sluša:**
 
 ```bash
-ss -tlnp | grep -E ':(443|8443) '
-systemctl status nginx --no-pager | head -3
-curl -sI https://localhost -k | head -1
+ss -tlnp | grep -E ':(80|443)\s'
 ```
 
-Nginx mora i dalje držati 443, a Tailscale 8443 — svaki svoje.
+Mora se vidjeti samo `tailscaled` na Tailscale adresi. Ako ondje stoji još
+nešto na `0.0.0.0:443`, vrati se na 8443.
 
 ### 5b. iPhone
 
@@ -182,5 +187,5 @@ SSH tunela (`ssh -L 8099:localhost:8099 emmett`), ne za pogon.
 U repozitoriju stoji i `web/nginx-emmett.conf` — gotov vhost za slučaj da
 dobiješ subdomenu i poželiš stranicu na internetu, s certifikatom od
 `certbot --nginx`. Tada Tailscale Serve nije potreban:
-`tailscale serve --https=8443 off`. Dok god je ovako, taj se vhost ne
+`tailscale serve --https=443 off`. Dok god je ovako, taj se vhost ne
 koristi.

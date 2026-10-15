@@ -4,8 +4,8 @@
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now emmett-web
 #
-# Sluša samo na 127.0.0.1. Prema van ide isključivo kroz Tailscale Serve
-# (port 8443), koji drži HTTPS - stranica tako nikad nije na internetu.
+# Sluša samo na 127.0.0.1. Prema van ide isključivo kroz Tailscale Serve,
+# koji drži HTTPS - stranica tako nikad nije na internetu.
 
 [Unit]
 Description=Emmett web pregled
