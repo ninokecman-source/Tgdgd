@@ -4,8 +4,8 @@
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now emmett-web
 #
-# Sluša samo na 127.0.0.1 - prema svijetu ide isključivo kroz nginx, koji
-# drži HTTPS. Tako stranica nikad nije dostupna bez potvrde certifikata.
+# Sluša samo na 127.0.0.1. Prema van ide isključivo kroz Tailscale Serve
+# (port 8443), koji drži HTTPS - stranica tako nikad nije na internetu.
 
 [Unit]
 Description=Emmett web pregled
@@ -21,10 +21,16 @@ ExecStart=/home/emmett/venv/bin/gunicorn \
     --bind 127.0.0.1:8099 \
     --workers 2 \
     --timeout 30 \
+    --no-control-socket \
     --access-logfile - \
     app:app
 Restart=on-failure
 RestartSec=5
+
+# --no-control-socket: gunicorn od izdanja 25.1 otvara upravljačku utičnicu u
+# $HOME/.gunicorn, a dom je ovdje samo za čitanje, pa bi pri svakom pokretanju
+# bacio [ERROR] u log. Tu utičnicu (alat gunicornc) ne koristimo, pa je gasimo
+# umjesto da zbog nje popustimo zaštitu.
 
 # Aplikacija samo čita - nema razloga da smije bilo što više od toga.
 NoNewPrivileges=true
