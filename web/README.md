@@ -4,18 +4,25 @@ Stranica za mobitel s kojom se vidi što sustav radi: tečajevi i prijavljeni,
 kome manjka uplata, što je zadnje poslano, proknjižene uplate i greške iz
 logova. **Samo za čitanje** — ništa ne pokreće i ništa ne mijenja.
 
-Stoji na istom serveru kao i Cliniko, kao zaseban nginx vhost. Cliniko
-ostaje netaknut.
+Stoji na istom serveru kao i Cliniko, ali **nije na internetu**: objavljuje
+je Tailscale, privatna mreža u koju su spojeni samo server i tvoji uređaji.
+Nitko izvana ne može ni pokucati na nju. Cliniko ostaje netaknut.
 
 ```
-                 HTTPS                      127.0.0.1:8099
-   iPhone  ────────────────►  nginx  ───────────────────────►  gunicorn
-                                                                  │
-                                                           web/stanje.json
-                                                                  ▲
-                               cron, svakih 20 min: osvjezi.sh ────┘
-                               (rclone iz Dropboxa + web/skupi.py)
+                HTTPS, samo                  127.0.0.1:8099
+                 unutar mreže
+   iPhone  ────────────────────►  Tailscale  ──────────────►  gunicorn
+   (Tailscale                      serve                         │
+    uključen)                      :8443                  web/stanje.json
+                                                                 ▲
+                              cron, svakih 20 min: osvjezi.sh ───┘
+                              (rclone iz Dropboxa + web/skupi.py)
 ```
+
+Port je **8443**, a ne 443, s razlogom: nginx (Cliniko) sluša na
+`0.0.0.0:443`, što obuhvaća i Tailscale adresu. Da Serve uzme 443, dvoje bi
+se potuklo oko istog porta, a nakon ponovnog pokretanja servera moglo bi se
+dogoditi da nginx ostane bez njega — i Cliniko padne. Na 8443 se ne dodiruju.
 
 Stranica **ne čita Excel tablice**. Čita snimku koju svakih dvadeset minuta
 napravi `web/skupi.py`, pod istom bravom kao i ostali poslovi. Dva razloga:
@@ -61,22 +68,53 @@ systemctl status emmett-web
 curl -I http://127.0.0.1:8099/        # mora vratiti 302 na /prijava
 ```
 
-### 5. Adresa i nginx
-
-Prvo DNS: A zapis za subdomenu (npr. `emmett.emmett-hr.com`) na IP servera.
-Provjeri da je prošao (`dig +short emmett.emmett-hr.com`) prije certbota —
-inače Let's Encrypt ne može potvrditi domenu.
+### 5. Tailscale (kao `root`)
 
 ```bash
-sudo cp ~emmett/Tgdgd/web/nginx-emmett.conf /etc/nginx/sites-available/emmett
-sudo nano /etc/nginx/sites-available/emmett     # upiši svoju adresu
-sudo ln -s /etc/nginx/sites-available/emmett /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d emmett.emmett-hr.com
+curl -fsSL https://tailscale.com/install.sh | sh
+tailscale up
 ```
 
-`certbot` sam dopiše HTTPS i preusmjeravanje s porta 80. Postojeći Cliniko
-vhostovi se ne diraju — nginx ih razlikuje po `server_name`.
+`tailscale up` ispiše poveznicu — otvori je u pregledniku i prijavi se
+(Google račun je dovoljan). Time server ulazi u tvoju privatnu mrežu.
+
+U Tailscale konzoli (`login.tailscale.com`) preimenuj uređaj iz
+`ubuntu-4gb-nbg1-1` u **`emmett`**, da adresa bude kratka.
+
+Zatim:
+
+```bash
+tailscale serve --bg --https=8443 8099
+tailscale serve status
+```
+
+`status` ispiše punu adresu — nešto poput
+`https://emmett.tail1234.ts.net:8443`. To je adresa stranice.
+
+Prvi put će Serve tražiti da se za mrežu uključe HTTPS certifikati; ponudi
+poveznicu na koju klikneš i potvrdiš. Certifikat je pravi, Safari ne
+prigovara.
+
+**Provjeri da Cliniko i dalje stoji:**
+
+```bash
+ss -tlnp | grep -E ':(443|8443) '
+systemctl status nginx --no-pager | head -3
+curl -sI https://localhost -k | head -1
+```
+
+Nginx mora i dalje držati 443, a Tailscale 8443 — svaki svoje.
+
+### 5b. iPhone
+
+1. App Store → **Tailscale** → instaliraj.
+2. Prijavi se **istim računom** kao na serveru.
+3. Uključi prekidač (ostaje uključen, troši zanemarivo).
+4. Otvori adresu iz `tailscale serve status` u Safariju.
+5. Share → **Add to Home Screen** — dobiješ ikonu kao da je aplikacija.
+
+Ako Tailscale na mobitelu isključiš, stranica se neće otvoriti. To nije
+kvar, nego cijela poanta.
 
 ### 6. Cron
 
@@ -89,8 +127,8 @@ crontab -l | tail -3
 
 ## Svakodnevno
 
-Otvori adresu na iPhoneu i spremi je na početni zaslon (Share → Add to Home
-Screen). Prijava traje do zatvaranja preglednika.
+Dodirneš ikonu na početnom zaslonu. Prijava traje mjesec dana, pa lozinku
+tražiš rijetko; promijeni to s `web_session_days` u `config.json`.
 
 | Stranica | Što pokazuje |
 |---|---|
@@ -103,18 +141,21 @@ Screen). Prijava traje do zatvaranja preglednika.
 
 Kroz stranicu idu imena, adrese, mailovi i telefoni polaznika, pa:
 
+- **Stranica nije na internetu.** Dohvatljiva je jedino s uređaja u tvojoj
+  Tailscale mreži. Tko ne uđe u mrežu, ne može ni probati lozinku.
+- Gunicorn sluša samo na `127.0.0.1`.
 - **Bez HTTPS-a se ne koristi.** Kolačić prijave ima `Secure`, što znači da
   preko običnog `http://` prijava neće ni raditi.
-- Gunicorn sluša samo na `127.0.0.1` — izvana je dostupan isključivo kroz
-  nginx.
 - Lozinka se čuva kao scrypt hash. Promjena: ponovno `postavi_lozinku.py`,
-  pa `sudo systemctl restart emmett-web`.
-- Pet promašenih prijava s iste adrese znači petnaest minuta pauze.
-- Stranica je označena s `noindex, nofollow`, a nginx dodaje i
-  `X-Robots-Tag` — ne pojavljuje se u tražilicama.
+  pa `systemctl restart emmett-web`.
+- Pet promašenih prijava znači petnaest minuta pauze.
+- Stranica je označena s `noindex, nofollow` — ionako je nijedna tražilica
+  ne može vidjeti.
 - Systemd servisu su oduzeta prava koja mu ne trebaju: ne smije pisati po
   disku (`ProtectSystem=strict`, `ProtectHome=read-only`) ni dobiti nova
   ovlaštenja (`NoNewPrivileges`).
+- Lozinka je i dalje tu iako je mreža privatna: da izgubljen, otključan
+  telefon ne znači i otvorenu kartoteku polaznika.
 
 ## Kad nešto ne radi
 
@@ -123,10 +164,11 @@ Kroz stranicu idu imena, adrese, mailovi i telefoni polaznika, pa:
 | "Nema snimke podataka" | `~/Tgdgd/server/pokreni.sh web/skupi.py` i pročitaj grešku |
 | "Podaci su stari N min" | `crontab -l`, pa `tail ~/Tgdgd/log.txt` |
 | 502 Bad Gateway | `systemctl status emmett-web`, `journalctl -u emmett-web -n 50` |
+| Stranica se uopće ne otvara | je li Tailscale na mobitelu uključen? Pa `tailscale status` na serveru |
 | Prijava ne prolazi, a lozinka je dobra | ide li preko `https://`? Kolačić je `Secure`. |
 | Tečaj nedostaje | "Upozorenja iz tablica" na prvoj stranici — vjerojatno kopija ili sukob sinkronizacije |
 
-## Proba bez nginxa
+## Proba bez Tailscalea
 
 ```bash
 EMMETT_WEB_HTTP=1 ~/venv/bin/python ~/Tgdgd/web/app.py
@@ -134,3 +176,11 @@ EMMETT_WEB_HTTP=1 ~/venv/bin/python ~/Tgdgd/web/app.py
 
 Sluša na `127.0.0.1:8099`, bez `Secure` kolačića. Služi samo za probu preko
 SSH tunela (`ssh -L 8099:localhost:8099 emmett`), ne za pogon.
+
+## Ako jednom zatrebaš javnu adresu
+
+U repozitoriju stoji i `web/nginx-emmett.conf` — gotov vhost za slučaj da
+dobiješ subdomenu i poželiš stranicu na internetu, s certifikatom od
+`certbot --nginx`. Tada Tailscale Serve nije potreban:
+`tailscale serve --https=8443 off`. Dok god je ovako, taj se vhost ne
+koristi.

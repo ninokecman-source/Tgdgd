@@ -22,7 +22,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
@@ -67,9 +67,12 @@ app.secret_key = config["web_secret_key"]
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    # Kolačić samo preko HTTPS-a. Za probu na 127.0.0.1 (bez nginxa) stavi
-    # EMMETT_WEB_HTTP=1 u okolinu.
+    # Kolačić samo preko HTTPS-a. Za probu na 127.0.0.1 (bez posrednika)
+    # stavi EMMETT_WEB_HTTP=1 u okolinu.
     SESSION_COOKIE_SECURE=not os.environ.get("EMMETT_WEB_HTTP"),
+    # Prijava traje mjesec dana. Stranici ionako može prići samo uređaj u
+    # Tailscale mreži, pa nema smisla tražiti lozinku svaki put na mobitelu.
+    PERMANENT_SESSION_LIFETIME=timedelta(days=config.get("web_session_days", 30)),
 )
 
 promasaji = {}
@@ -87,11 +90,17 @@ def treba_prijava(f):
     return omot
 
 
-def adresa() -> str:
-    """Adresa posjetitelja. Uzima se X-Real-IP, koji nginx postavlja sam i
-    time pregazi sve što je klijent poslao; X-Forwarded-For se namjerno NE
-    koristi jer mu klijent može dopisati prvi član i tako bježati od pauze."""
-    return request.headers.get("X-Real-IP") or request.remote_addr or "?"
+def tko_kuca() -> str:
+    """Po čemu se broje promašaji prijave.
+
+    Iza Tailscalea su svi zahtjevi s 127.0.0.1, pa adresa ništa ne razlikuje;
+    zato se prvo gleda 'Tailscale-User-Login', koji Tailscale postavlja sam i
+    odbacuje ako ga klijent pošalje. Iza nginxa vrijedi X-Real-IP, iz istog
+    razloga: nginx ga prepisuje. X-Forwarded-For se namjerno NE koristi -
+    njemu klijent može dopisati prvi član i tako bježati od pauze."""
+    return (request.headers.get("Tailscale-User-Login")
+            or request.headers.get("X-Real-IP")
+            or request.remote_addr or "?")
 
 
 def sigurno_dalje(putanja: str) -> str:
@@ -110,7 +119,7 @@ def pauziran(ip: str) -> int:
 
 @app.route("/prijava", methods=["GET", "POST"])
 def prijava():
-    ip = adresa()
+    ip = tko_kuca()
     ostalo = pauziran(ip)
     if ostalo:
         return render_template("prijava.html",
@@ -126,7 +135,7 @@ def prijava():
             promasaji.pop(ip, None)
             session.clear()
             session["prijavljen"] = True
-            session.permanent = False
+            session.permanent = True
             return redirect(sigurno_dalje(request.form.get("dalje")))
 
         sada = time.time()

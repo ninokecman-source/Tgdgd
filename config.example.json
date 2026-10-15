@@ -59,5 +59,6 @@
   "course_dates_url": "https://emmett-hr.com/prijava-ljudi/",
   "web_user": "nino",
   "web_password_hash": "",
-  "web_secret_key": ""
+  "web_secret_key": "",
+  "web_session_days": 30
 }

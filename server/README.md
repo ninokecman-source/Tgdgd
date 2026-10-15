@@ -200,6 +200,9 @@ Uz poslove na serveru stoji i stranica za mobitel — tečajevi, prijavljeni,
 kome manjka uplata, što je poslano i greške iz logova. Samo za čitanje.
 
 Upute su u [`web/README.md`](../web/README.md). Ukratko: `gunicorn` sluša na
-`127.0.0.1:8099` pod systemd-om, nginx ga objavljuje preko HTTPS-a kao
-zaseban vhost pokraj Clinika, a podatke čita iz snimke koju svakih dvadeset
-minuta napravi `server/osvjezi.sh`.
+`127.0.0.1:8099` pod systemd-om, Tailscale ga objavljuje preko HTTPS-a na
+portu 8443 — samo unutar privatne mreže, nikad na internetu — a podatke čita
+iz snimke koju svakih dvadeset minuta napravi `server/osvjezi.sh`.
+
+Port 8443 je namjeran: nginx (Cliniko) drži `0.0.0.0:443`, pa bi se oko 443
+potukli i nakon ponovnog pokretanja servera Cliniko mogao ostati bez porta.
