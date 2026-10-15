@@ -332,6 +332,43 @@ obrađuje dvaput. U cron ide jednom dnevno, uz `posalji_tablicu.py`:
 30 8 * * * cd /putanja/do/ovog/foldera && /usr/bin/python3 napravi_certifikate.py >> log.txt 2>&1
 ```
 
+### Novi tečaj, nova potvrdnica
+
+Ugrađene su potvrdnice za Modul 1&2 i za module 3-6. Za svaki drugi tečaj
+skripta javi da nema potvrdnice i preskoči ga - radije to nego da izmisli
+pogrešnu. Dodaje se bez diranja koda, u `config.json`:
+
+```json
+"certificate_templates": {
+  "Ponavljanje M6 i Praktičarski dan": "potvrdnica ponavljanje m6"
+}
+```
+
+Vrijednost je naziv HTML predloška (bez `.html`) koji stoji uz tablice. Ako
+predložak sam ispisuje broj modula, kao onaj za 3-6, navedi i oznaku:
+
+```json
+"certificate_templates": {
+  "Obnova M6": ["potvrdnica modul 3-6", "6"]
+}
+```
+
+A za tečaj koji potvrdnicu uopće ne dobiva:
+
+```json
+"no_certificate_course_codes": ["Ponavljanje M6 i Praktičarski dan"]
+```
+
+Takav se preskače **tiho** - inače bi ti isto upozorenje stizalo svaki put.
+
+Kod tečaja se uspoređuje bez obzira na velika slova, višak razmaka i
+kvačice, pa "Modul 1&2" i "MODUL  1&2" znače isto. Tipfeler ipak ostaje
+tipfeler: ako u tablici piše "praktočarski", a u postavkama "praktičarski",
+neće se poklopiti. Kod tečaja iz ćelije C4 ionako ide i u naslov maila
+polaznicima, pa ga vrijedi držati točnim.
+
+
+
 ## Slanje potvrdnica (`posalji_certifikate.py`)
 
 Potvrdnice se **ne šalju same** — ideš ti, kad odlučiš. Skripta uzme PDF-ove

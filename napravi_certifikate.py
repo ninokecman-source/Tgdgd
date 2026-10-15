@@ -40,6 +40,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+import predlosci
 import tablice
 from send_reminders import (
     FIRST_PARTICIPANT_ROW,
@@ -56,6 +57,10 @@ MJESECI = ["January", "February", "March", "April", "May", "June",
 
 # Koja potvrdnica za koji tečaj. Ključ je kod tečaja iz tablice (C4),
 # vrijednost je (naziv datoteke predloška, oznaka modula ili None).
+#
+# Ključ se uspoređuje preko kljuc_tecaja(): bez kvačica, bez velikih slova i
+# bez viška razmaka. Tablice ispunjava čovjek, pa "Modul 1&2", "modul 1&2" i
+# "MODUL 1&2" moraju značiti isto.
 PREDLOSCI = {
     "modul 1&2": ("potvrdnica modul 1 i 2", None),
     "modul 3": ("potvrdnica modul 3-6", "3"),
@@ -100,13 +105,49 @@ def nastavak_dana(dan: int) -> str:
     return f"{dan}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(dan % 10, 'th') }"
 
 
-def predlozak_za(course_code: str, mapa: Path):
-    """(put do predloška, oznaka modula) ili (None, razlog zašto ne ide)."""
-    kljuc = " ".join(str(course_code).lower().split())
-    if kljuc not in PREDLOSCI:
-        return None, (f"za tečaj {course_code!r} nema potvrdnice "
-                      f"(postoje samo za Modul 1&2 i Modul 3-6)")
-    naziv, modul = PREDLOSCI[kljuc]
+def kljuc_tecaja(course_code) -> str:
+    """Kod tečaja sveden na oblik po kojem se uspoređuje."""
+    return " ".join(predlosci.bez_dijakritika(str(course_code)).lower().split())
+
+
+def popis_predlozaka(config: dict) -> dict:
+    """PREDLOSCI, plus ono što je dopisano u config.json pod
+    'certificate_templates'. Tako novi tečaj ne traži izmjenu skripte:
+
+        "certificate_templates": {
+            "Ponavljanje M6 i Praktičarski dan": "potvrdnica ponavljanje m6",
+            "Modul 6 obnova": ["potvrdnica modul 3-6", "6"]
+        }
+
+    Vrijednost je naziv datoteke predloška, ili [naziv, oznaka modula] ako
+    predložak sam ispisuje broj modula."""
+    popis = {kljuc_tecaja(k): v for k, v in PREDLOSCI.items()}
+    for kod, vrijednost in (config.get("certificate_templates") or {}).items():
+        if isinstance(vrijednost, str):
+            popis[kljuc_tecaja(kod)] = (vrijednost, None)
+        else:
+            naziv, modul = (list(vrijednost) + [None])[:2]
+            popis[kljuc_tecaja(kod)] = (naziv, modul)
+    return popis
+
+
+def predlozak_za(course_code: str, mapa: Path, config: dict):
+    """(put do predloška, oznaka modula) ili (None, razlog zašto ne ide).
+
+    Razlog je None kad si tečaj izrijekom naveo kao onaj bez potvrdnice - tad
+    se preskače tiho, da ti svaki mjesec ne javlja isto."""
+    kljuc = kljuc_tecaja(course_code)
+    if kljuc in {kljuc_tecaja(k)
+                 for k in config.get("no_certificate_course_codes", [])}:
+        return None, None
+    popis = popis_predlozaka(config)
+    if kljuc not in popis:
+        poznati = ", ".join(sorted(popis)) or "nijedan"
+        return None, (f"za tečaj {course_code!r} nema potvrdnice. Potvrdnice "
+                      f"postoje za: {poznati}. Novu dodaj u config.json pod "
+                      f"'certificate_templates', ili tečaj upiši u "
+                      f"'no_certificate_course_codes' ako je bez potvrdnice")
+    naziv, modul = popis[kljuc]
     put = mapa / f"{naziv}.html"
     if not put.exists():
         return None, f"nedostaje predložak '{put.name}' u {mapa}"
@@ -194,9 +235,10 @@ def obradi(xlsx_path: Path, config: dict, state: dict, danas: date,
         return 0   # već napravljeno
 
     mapa = xlsx_path.parent
-    odabir, razlog = predlozak_za(info["course_code"], mapa)
+    odabir, razlog = predlozak_za(info["course_code"], mapa, config)
     if odabir is None:
-        print(f"[!] {xlsx_path.name}: {razlog} - preskačem.")
+        if razlog:
+            print(f"[!] {xlsx_path.name}: {razlog} - preskačem.")
         return 0
     predlozak_put, modul = odabir
 

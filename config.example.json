@@ -60,5 +60,9 @@
   "web_user": "nino",
   "web_password_hash": "",
   "web_secret_key": "",
-  "web_session_days": 30
+  "web_session_days": 30,
+  "certificate_templates": {
+    "Ponavljanje M6 i Praktičarski dan": "potvrdnica ponavljanje m6"
+  },
+  "no_certificate_course_codes": []
 }
