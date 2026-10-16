@@ -45,17 +45,20 @@
       {{ t.polaznika }} prijavljenih · {{ t.uplaceno|eur }}
       {% if t.duznika %}· <span class="pazi-tekst">{{ t.duznika }} nije platilo</span>{% endif %}
     </div>
+    <div class="kartica-dalje">Polaznici i slanje →</div>
   </a>
   {% endfor %}
 </section>
 
 <section>
   <h2>Prošli tečajevi</h2>
+  {% if not prosli %}<p class="tiho">Još nijedan tečaj nije prošao.</p>{% endif %}
   {% for t in prosli %}
   <a class="kartica" href="{{ url_for('tecaj', oznaka=t.oznaka) }}">
     <div class="kartica-vrh"><strong>{{ t.kod }} · {{ t.mjesto }}</strong></div>
     <div class="kartica-red">{{ t.datumi }}</div>
     <div class="kartica-red tiho">{{ t.polaznika }} polaznika · {{ t.uplaceno|eur }}</div>
+    <div class="kartica-dalje">Polaznici i slanje →</div>
   </a>
   {% endfor %}
 </section>

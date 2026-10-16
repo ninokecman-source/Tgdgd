@@ -420,6 +420,50 @@ Pa onda:
 | `certifikati posalji` | pošalje |
 | `certifikati napravi` | napravi PDF-ove odmah, bez čekanja crona |
 
+## Otkazivanje i poruke jednom čovjeku
+
+Dvije skripte koje ne rade same od sebe - pokreću se s web stranice (vidi
+`web/README.md`) ili iz terminala.
+
+### `otkazi_polaznika.py` - polaznik je otkazao
+
+```bash
+python3 otkazi_polaznika.py --tablica "Modul 1&2 Split.xlsx" \
+    --email ana@primjer.hr              # samo pokaži tko bi otišao
+python3 otkazi_polaznika.py --tablica "..." --email ... --stvarno
+python3 otkazi_polaznika.py --tablica "..." --ime "Ana Anić" --stvarno
+```
+
+Jedina radnja u sustavu koja trajno uklanja podatak, pa ima dvije mreže:
+
+- prije izmjene nastane kopija cijele tablice u podmapi **`Otkazani`**, s
+  datumom i vremenom u nazivu
+- tko je izbačen, kada i koliko je do tada uplatio zapisuje se u
+  **`otkazani.json`**
+
+Brisanje retka iz Excela nije samo brisanje retka: formule u bloku s
+ukupnim iznosima pokazuju na redove ispod, a openpyxl ih pri brisanju ne
+pomiče. "Total Income" bi ostao `=SUM(L10:L29)` u ćeliji L29 - kružna
+referenca - a PDV i provizije bi gledali u krive retke. Zato se formule
+nakon brisanja ispisuju iznova, PDV vraća kakav je bio, a polaznici
+prenumeriraju.
+
+### `posalji_poruku.py` - jedna poruka jednom primatelju
+
+```bash
+python3 posalji_poruku.py --kome ana@primjer.hr \
+    --naslov-datoteka naslov.txt --tijelo-datoteka tijelo.txt --stvarno
+```
+
+Šalje tekst nedirnut - ništa ne popunjava i ne dotjeruje, jer je tekst već
+prošao kroz tvoje ruke na stranici. Tekst stiže u datotekama, a ne kao
+argument naredbe: duga poruka ne stane u naredbu, a tako ni navodnik ni
+novi red ne mogu ništa pokvariti.
+
+Zadani tekst podsjetnika za uplatu živi u `poruke.py`, a kao i svaki drugi
+može se preuzeti u dokument `podsjetnik za uplatu.docx` uz tablice
+(`napravi_predloske.py` ga napravi).
+
 ## Što se događa kad nešto pukne
 
 Sustav je posložen tako da **radije ne napravi ništa nego da napravi krivo**.

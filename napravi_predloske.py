@@ -17,6 +17,7 @@ import argparse
 import sys
 from pathlib import Path
 
+import poruke
 import predlosci
 from posalji_tablicu import DEFAULT_BODY as IZVJESTAJ_BODY
 from posalji_tablicu import DEFAULT_SUBJECT as IZVJESTAJ_SUBJECT
@@ -78,7 +79,14 @@ def popis(config: dict) -> list:
         stavke.append((naziv, sastavi(naslov_potvrde,
                                       config.get(kljuc) or mailer.DEFAULT_BODIES[kljuc])))
 
-    # 4. Mail centrali nakon tečaja
+    # 4. Podsjetnik za uplatu, koji se šalje jednom čovjeku s web stranice
+    stavke.append((
+        "podsjetnik za uplatu",
+        sastavi(config.get("payment_reminder_subject") or poruke.ZADANI_NASLOV,
+                config.get("payment_reminder_body") or poruke.ZADANO_TIJELO),
+    ))
+
+    # 5. Mail centrali nakon tečaja
     stavke.append((
         "izvjestaj centrali",
         sastavi(config.get("course_report_subject", IZVJESTAJ_SUBJECT),

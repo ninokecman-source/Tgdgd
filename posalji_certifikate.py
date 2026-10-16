@@ -120,7 +120,24 @@ def posalji_jedan(config: dict, primatelj: str, naslov: str, tijelo: str,
     with_retry(_posalji)
 
 
-def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool) -> int:
+def tekst_iz_datoteka(naslov_put: str, tijelo_put: str):
+    """Naslov i tijelo koje je zadala web stranica, umjesto predloška uz
+    tablice. Oznake tipa {first_name} ostaju i ovdje - poruka ide svakom
+    polazniku s njegovim imenom, pa se popunjavaju po osobi."""
+    def procitaj(put_tekst, sto):
+        put = Path(put_tekst)
+        if not put.exists():
+            sys.exit(f"Nema datoteke s {sto}: {put}")
+        tekst = put.read_text(encoding="utf-8").strip()
+        if not tekst:
+            sys.exit(f"Datoteka s {sto} je prazna: {put}")
+        return tekst
+    return (procitaj(naslov_put, "naslovom"), procitaj(tijelo_put, "tijelom poruke"),
+            "tekst zadan sa stranice")
+
+
+def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool,
+           zadani_tekst=None) -> int:
     """Vrati broj poslanih (ili, u pregledu, spremnih) potvrdnica."""
     wb = with_retry(lambda: load_workbook(xlsx_path), retry_on=(PermissionError, OSError))
     if "podaci" not in wb.sheetnames:
@@ -139,10 +156,13 @@ def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool) -> int:
     polaznici = citaj_polaznike(ws, find_totals_row(ws))
     vec_poslano = {a.lower() for a in state.get(xlsx_path.name, {}).get("poslano", [])}
 
-    naslov_pred, tijelo_pred, izvor = predlosci.dohvati(
-        xlsx_path.parent, "mail uz certifikat", config=config,
-        kljuc_naslov="certificate_mail_subject", kljuc_tijela="certificate_mail_body",
-        zadani_naslov=ZADANI_NASLOV, zadano_tijelo=ZADANI_TEKST)
+    if zadani_tekst:
+        naslov_pred, tijelo_pred, izvor = zadani_tekst
+    else:
+        naslov_pred, tijelo_pred, izvor = predlosci.dohvati(
+            xlsx_path.parent, "mail uz certifikat", config=config,
+            kljuc_naslov="certificate_mail_subject", kljuc_tijela="certificate_mail_body",
+            zadani_naslov=ZADANI_NASLOV, zadano_tijelo=ZADANI_TEKST)
 
     print(f"\n{info['course_code']} / {info['location']} ({info['dates']})")
     print(f"  mapa:  {mapa}")
@@ -212,7 +232,16 @@ def main():
                         help="Stvarno pošalji; bez ovoga se samo prikaže popis")
     parser.add_argument("--tecaj", metavar="DIO NAZIVA",
                         help="Samo tečajevi čiji naziv tablice sadrži ovaj tekst")
+    parser.add_argument("--naslov-datoteka", dest="naslov_datoteka",
+                        help="Datoteka s naslovom, umjesto predloška uz tablice")
+    parser.add_argument("--tijelo-datoteka", dest="tijelo_datoteka",
+                        help="Datoteka s tijelom poruke, umjesto predloška")
     args = parser.parse_args()
+
+    if bool(args.naslov_datoteka) != bool(args.tijelo_datoteka):
+        sys.exit("--naslov-datoteka i --tijelo-datoteka idu zajedno.")
+    zadani_tekst = (tekst_iz_datoteka(args.naslov_datoteka, args.tijelo_datoteka)
+                    if args.naslov_datoteka else None)
 
     config = load_config()
     output_dir = Path(config["output_dir"])
@@ -230,7 +259,7 @@ def main():
     ukupno = 0
     for put in datoteke:
         try:
-            ukupno += obradi(put, config, state, args.posalji)
+            ukupno += obradi(put, config, state, args.posalji, zadani_tekst)
         except predlosci.GreskaPredloska as e:
             print(f"[!] {put.name}: {e}")
 

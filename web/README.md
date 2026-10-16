@@ -175,10 +175,29 @@ Na stranici tečaja, ispod "Što je poslano":
 - **Pošalji potvrdnice** — vodi na potvrdu s popisom primatelja; tek tamo
   drugi pritisak stvarno šalje.
 
+Prije slanja se pokaže i **tekst maila**, u polju koje možeš izmijeniti.
+Izmjena vrijedi samo za to slanje; trajno se tekst mijenja u dokumentu
+`mail uz certifikat.docx` uz tablice. Oznake tipa `{first_name}` ovdje
+ostaju — popunjavaju se za svakog polaznika posebno.
+
 Dok posao traje, stranica se osvježava sama i pokaže ispis kad završi. Tko
 je potvrdnicu jednom dobio, neće je dobiti dvaput, koliko god puta
 pritisnuo — to pamti `poslani_certifikati.json`, isto kao i kod naredbe iz
 terminala.
+
+### Uz svakog polaznika
+
+Na stranici tečaja, ispod svakog imena:
+
+- **Podsjetnik za plaćanje** — pojavljuje se samo kod onih kojima nedostaje
+  novca i koji imaju adresu. Otvara tekst poruke **već popunjen** imenom,
+  iznosima i rokom; izmijeni ga kako hoćeš, šalje se točno ono što ostane na
+  ekranu. Podaci za uplatu dolaze iz istog odlomka kao i redovni
+  podsjetnici, pa se IBAN upisuje na jednom mjestu.
+- **Otkazao** — izbacuje polaznika iz tablice. Ide preko potvrde, koja
+  posebno upozori ako je osoba nešto uplatila. Prije izmjene nastane kopija
+  cijele tablice u podmapi `Otkazani`, a otkaz se zapiše u `otkazani.json`
+  — ako pogriješiš, iz kopije se sve vraća.
 
 **Kako radi iznutra.** Stranica sama ne šalje ništa. Tipka ostavi datoteku
 sa zahtjevom u `~/zahtjevi`, systemd to primijeti (`emmett-zahtjev.path`) i

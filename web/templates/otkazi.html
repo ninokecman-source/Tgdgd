@@ -1,0 +1,34 @@
+{% extends "osnova.html" %}
+{% block naslov %}Otkazao{% endblock %}
+{% block sadrzaj %}
+
+<h1>Otkazao dolazak</h1>
+<p class="tiho">{{ tecaj.kod }} · {{ tecaj.mjesto }} · {{ tecaj.datumi }}</p>
+
+<div class="redak duzan">
+  <div class="redak-ime">{{ polaznik.ime }}</div>
+  <div class="redak-detalj tiho">
+    {% if polaznik.email %}{{ polaznik.email }}{% else %}bez adrese{% endif %}
+    {% if polaznik.mobitel %}· {{ polaznik.mobitel }}{% endif %}
+  </div>
+  <div class="redak-novac">uplaćeno {{ polaznik.uplaceno|eur }}</div>
+</div>
+
+<p class="traka lose"><strong>{{ polaznik.ime }}</strong> se briše iz tablice
+  tečaja. To je jedina radnja ovdje koja trajno uklanja podatak.</p>
+
+{% if polaznik.uplaceno and polaznik.uplaceno > 0 %}
+<p class="traka pazi">Ovaj polaznik ima uplatu od {{ polaznik.uplaceno|eur }}.
+  Brisanjem nestaje i taj zapis iz tablice — povrat novca riješi odvojeno.</p>
+{% endif %}
+
+<p class="tiho">Prije izmjene nastaje kopija cijele tablice u podmapi
+  <code>Otkazani</code>, s datumom i vremenom u nazivu, a otkaz se zapisuje u
+  <code>otkazani.json</code>. Ako pogriješiš, iz kopije se sve vraća.</p>
+
+<form method="post" class="tipke">
+  <input type="hidden" name="token" value="{{ token }}">
+  <button class="tipka opasna" type="submit">Da, izbaci iz tablice</button>
+  <a class="tipka tiha" href="{{ url_for('tecaj', oznaka=tecaj.oznaka) }}">Odustani</a>
+</form>
+{% endblock %}

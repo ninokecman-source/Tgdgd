@@ -22,7 +22,7 @@ import json
 import re
 import sqlite3
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 KORIJEN = Path(__file__).resolve().parent.parent
@@ -38,6 +38,7 @@ from send_reminders import (
     COL_FIRST_NAME,
     COL_LAST_NAME,
     course_info,
+    datum_rijecima,
     iznosi_tecaja,
     parse_course_dates,
 )
@@ -117,6 +118,11 @@ def citaj_tecaj(put: Path, config: dict, danas: date) -> dict:
     else:
         stanje = "dolazi"
 
+    # prvi dan i rok uplate stoje ovdje, a ne se računaju na stranici: web
+    # čita samo ovu snimku, pa sve što mu treba mora biti u njoj
+    rok = (pocetak - timedelta(days=config.get("payment_due_days_before", 7))
+           if pocetak else None)
+
     return {
         "oznaka": oznaka(put.stem),
         "datoteka": put.name,
@@ -124,6 +130,8 @@ def citaj_tecaj(put: Path, config: dict, danas: date) -> dict:
         "mjesto": info["location"],
         "datumi": info["dates"],
         "instruktor": info["instructor_name"],
+        "prvi_dan": datum_rijecima(pocetak) if pocetak else "",
+        "rok_uplate": rok.strftime("%d.%m.%Y.") if rok else "",
         "pocetak": pocetak.isoformat() if pocetak else None,
         "kraj": kraj.isoformat() if kraj else None,
         "stanje": stanje,

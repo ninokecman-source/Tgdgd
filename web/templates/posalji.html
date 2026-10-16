@@ -33,12 +33,34 @@
   {{ bez_adrese | map(attribute='ime') | join(', ') }}.</p>
 {% endif %}
 
-<form method="post" class="tipke">
+{% if greska %}
+<p class="traka lose">Ne mogu pročitati tekst poruke: {{ greska }}</p>
+{% endif %}
+
+<form method="post">
   <input type="hidden" name="token" value="{{ token }}">
-  <button class="tipka glavna" type="submit">
-    Pošalji {{ cekaju|length }}
-    {{ 'potvrdnicu' if cekaju|length == 1 else 'potvrdnica' }}</button>
-  <a class="tipka tiha" href="{{ url_for('tecaj', oznaka=tecaj.oznaka) }}">Odustani</a>
+
+  <label class="polje">Naslov
+    <input name="naslov" value="{{ naslov }}" required maxlength="300">
+  </label>
+
+  <label class="polje">Poruka
+    <textarea name="tijelo" rows="16" required>{{ tijelo }}</textarea>
+  </label>
+
+  <p class="tiho">Izvor teksta: {{ izvor }}. Oznake se popunjavaju za svakog
+    polaznika posebno: <code>{first_name}</code> <code>{last_name}</code>
+    <code>{course_code}</code> <code>{location}</code> <code>{dates}</code>
+    <code>{datumi_rijecima}</code> <code>{instructor_name}</code>
+    <code>{link_termini}</code>. Izmjena vrijedi samo za ovo slanje — trajno
+    se mijenja u dokumentu <code>mail uz certifikat.docx</code>.</p>
+
+  <div class="tipke">
+    <button class="tipka glavna" type="submit">
+      Pošalji {{ cekaju|length }}
+      {{ 'potvrdnicu' if cekaju|length == 1 else 'potvrdnica' }}</button>
+    <a class="tipka tiha" href="{{ url_for('tecaj', oznaka=tecaj.oznaka) }}">Odustani</a>
+  </div>
 </form>
 
 <p class="tiho">Tko je jednom dobio potvrdnicu, neće je dobiti dvaput — i da

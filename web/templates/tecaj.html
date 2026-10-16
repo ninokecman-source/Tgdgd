@@ -31,6 +31,16 @@
       {% if p.manjka > 0 %}<span class="pazi-tekst">manjka {{ p.manjka|eur }}</span>{% endif %}
     </div>
     {% if p.biljeska %}<div class="redak-detalj">{{ p.biljeska }}</div>{% endif %}
+    {% if not radi %}
+    <div class="tipke uske">
+      {% if p.manjka > 0 and p.email %}
+      <a class="tipka mala" href="{{ url_for('podsjetnik', oznaka=tecaj.oznaka,
+         broj=loop.index0) }}">Podsjetnik za plaćanje</a>
+      {% endif %}
+      <a class="tipka mala tiha" href="{{ url_for('otkazi', oznaka=tecaj.oznaka,
+         broj=loop.index0) }}">Otkazao</a>
+    </div>
+    {% endif %}
   </div>
   {% endfor %}
 </section>

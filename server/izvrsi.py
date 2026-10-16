@@ -35,12 +35,86 @@ PAMTI = 20
 # Koliko znakova ispisa se sprema uz ishod.
 ISPIS_ZNAKOVA = 6000
 
-# Jedini poslovi koji se smiju zatražiti. Sve ostalo se odbija.
-# Vrijednost je funkcija koja od naziva tablice složi argumente.
+# Najveća dopuštena duljina teksta koji stigne sa stranice.
+NAJDULJI_NASLOV = 300
+NAJDULJE_TIJELO = 20000
+NAJDULJE_IME = 120
+
+
+class Odbijeno(Exception):
+    """Zahtjev ne valja - ne pokreće se ništa."""
+
+
+def provjeri_adresu(zahtjev: dict) -> str:
+    adresa = str(zahtjev.get("email", "")).strip()
+    if "@" not in adresa or len(adresa.split()) != 1:
+        raise Odbijeno(f"ovo ne izgleda kao adresa: {adresa!r}")
+    return adresa
+
+
+def provjeri_tekst(zahtjev: dict) -> tuple:
+    naslov = str(zahtjev.get("naslov", "")).strip()
+    tijelo = str(zahtjev.get("tijelo", "")).strip()
+    if not naslov or not tijelo:
+        raise Odbijeno("poruka nema naslov ili tijelo")
+    if len(naslov) > NAJDULJI_NASLOV or len(tijelo) > NAJDULJE_TIJELO:
+        raise Odbijeno("poruka je predugačka")
+    if "\n" in naslov or "\r" in naslov:
+        raise Odbijeno("naslov ne smije imati prijelom retka")
+    return naslov, tijelo
+
+
+def zapisi_tekst(mapa: Path, zahtjev: dict) -> tuple:
+    """Naslov i tijelo u datoteke uz zahtjev. Tekst ide datotekama, a ne
+    argumentima naredbe: duga poruka ne stane u naredbu, a ovako ni navodnik
+    ni novi red ne mogu ništa pokvariti. Usput ostaje i trag što je poslano."""
+    naslov, tijelo = provjeri_tekst(zahtjev)
+    mapa.mkdir(parents=True, exist_ok=True)
+    (mapa / "naslov.txt").write_text(naslov, encoding="utf-8")
+    (mapa / "tijelo.txt").write_text(tijelo, encoding="utf-8")
+    return str(mapa / "naslov.txt"), str(mapa / "tijelo.txt")
+
+
+def _certifikati(posalji: bool):
+    def sastavi(zahtjev, tablica, mapa):
+        naredba = ["posalji_certifikate.py", "--tecaj", tablica]
+        if posalji:
+            naredba.append("--posalji")
+        if zahtjev.get("naslov") or zahtjev.get("tijelo"):
+            naslov_put, tijelo_put = zapisi_tekst(mapa, zahtjev)
+            naredba += ["--naslov-datoteka", naslov_put,
+                        "--tijelo-datoteka", tijelo_put]
+        return naredba
+    return sastavi
+
+
+def _podsjetnik(zahtjev, tablica, mapa):
+    adresa = provjeri_adresu(zahtjev)
+    naslov_put, tijelo_put = zapisi_tekst(mapa, zahtjev)
+    return ["posalji_poruku.py", "--kome", adresa,
+            "--naslov-datoteka", naslov_put, "--tijelo-datoteka", tijelo_put,
+            "--stvarno"]
+
+
+def _otkazi(zahtjev, tablica, mapa):
+    naredba = ["otkazi_polaznika.py", "--tablica", tablica]
+    if zahtjev.get("email"):
+        naredba += ["--email", provjeri_adresu(zahtjev)]
+    else:
+        ime = str(zahtjev.get("ime", "")).strip()
+        if not ime or len(ime) > NAJDULJE_IME:
+            raise Odbijeno("otkazivanje treba adresu ili ime polaznika")
+        naredba += ["--ime", ime]
+    return naredba + ["--stvarno"]
+
+
+# Jedini poslovi koji se smiju zatražiti. Sve ostalo se odbija. Vrijednost je
+# funkcija koja od zahtjeva složi argumente za pokreni.sh.
 POSLOVI = {
-    "pregled_certifikata": lambda t: ["posalji_certifikate.py", "--tecaj", t],
-    "posalji_certifikate": lambda t: ["posalji_certifikate.py", "--posalji",
-                                      "--tecaj", t],
+    "pregled_certifikata": _certifikati(posalji=False),
+    "posalji_certifikate": _certifikati(posalji=True),
+    "podsjetnik_uplata": _podsjetnik,
+    "otkazi_polaznika": _otkazi,
 }
 
 
@@ -86,50 +160,58 @@ def poznate_tablice() -> set:
     return {p.name for p in tablice.nadji(mapa, javi=lambda _: None)}
 
 
-def procitaj_zahtjev(put: Path):
-    """(posao, tablica, trazio) ili (None, razlog, None)."""
+def procitaj_zahtjev(put: Path) -> dict:
+    """Zahtjev s provjerenim poslom i tablicom. Diže Odbijeno ako ne valja."""
     try:
         with open(put, encoding="utf-8") as f:
             zahtjev = json.load(f)
     except (ValueError, OSError) as e:
-        return None, f"ne mogu pročitati zahtjev: {e}", None
+        raise Odbijeno(f"ne mogu pročitati zahtjev: {e}")
+    if not isinstance(zahtjev, dict):
+        raise Odbijeno("zahtjev nije u očekivanom obliku")
 
-    posao = zahtjev.get("posao")
-    if posao not in POSLOVI:
-        return None, f"nepoznat posao {posao!r}", None
+    if zahtjev.get("posao") not in POSLOVI:
+        raise Odbijeno(f"nepoznat posao {zahtjev.get('posao')!r}")
 
-    tablica = zahtjev.get("tablica", "")
-    if tablica not in poznate_tablice():
-        return None, f"nema tablice {tablica!r}", None
+    # Naziv tablice ide u naredbu, pa se ne uzima na vjeru nego se traži
+    # među onima koje stvarno postoje.
+    if zahtjev.get("tablica", "") not in poznate_tablice():
+        raise Odbijeno(f"nema tablice {zahtjev.get('tablica')!r}")
 
-    return posao, tablica, zahtjev.get("trazio", "?")
+    return zahtjev
 
 
 def odradi(put: Path) -> None:
     oznaka = put.stem
-    posao, tablica, trazio = procitaj_zahtjev(put)
-
-    if posao is None:
-        razlog = tablica   # kod greške drugi član nosi objašnjenje
-        print(f"[!] {put.name}: {razlog}")
-        zabiljezi({"oznaka": oznaka, "posao": "?", "tablica": "",
+    arhiva = OBRADENO / oznaka
+    try:
+        zahtjev = procitaj_zahtjev(put)
+        posao = zahtjev["posao"]
+        tablica = zahtjev["tablica"]
+        argumenti = POSLOVI[posao](zahtjev, tablica, arhiva)
+    except Odbijeno as e:
+        print(f"[!] {put.name}: {e}")
+        zabiljezi({"oznaka": oznaka, "posao": "?", "tablica": "", "osoba": "",
                    "trazio": "?", "trazeno": sada(), "gotovo": sada(),
-                   "status": "odbijeno", "ispis": razlog})
+                   "status": "odbijeno", "ispis": str(e)})
         put.unlink(missing_ok=True)
         return
 
+    trazio = zahtjev.get("trazio", "?")
+    osoba = zahtjev.get("ime") or zahtjev.get("email") or ""
+
     # makni zahtjev prije pokretanja: ako posao padne usred, ne pokreće se
     # ponovno sam od sebe
-    OBRADENO.mkdir(parents=True, exist_ok=True)
-    arhiva = OBRADENO / put.name
-    put.replace(arhiva)
+    arhiva.mkdir(parents=True, exist_ok=True)
+    put.replace(arhiva / "zahtjev.json")
 
     osnova = {"oznaka": oznaka, "posao": posao, "tablica": tablica,
-              "trazio": trazio, "trazeno": sada()}
+              "osoba": osoba, "trazio": trazio, "trazeno": sada()}
     zabiljezi(dict(osnova, status="u tijeku", ispis=""))
-    print(f"=== {sada()} {posao} / {tablica} (tražio {trazio}) ===")
+    print(f"=== {sada()} {posao} / {tablica}"
+          + (f" / {osoba}" if osoba else "") + f" (tražio {trazio}) ===")
 
-    naredba = [str(POKRENI), *POSLOVI[posao](tablica)]
+    naredba = [str(POKRENI), *argumenti]
     try:
         rezultat = subprocess.run(naredba, capture_output=True, text=True,
                                   timeout=3600)

@@ -5,6 +5,7 @@ log_check_state.json
 napravljeni_certifikati.json
 poslani_certifikati.json
 sent_reports.json
+otkazani.json
 web/stanje.json
 web/zahtjevi.json
 log.txt

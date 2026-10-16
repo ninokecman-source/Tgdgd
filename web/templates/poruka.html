@@ -1,0 +1,54 @@
+{% extends "osnova.html" %}
+{% block naslov %}{{ naslov_stranice }}{% endblock %}
+{% block sadrzaj %}
+
+<h1>{{ naslov_stranice }}</h1>
+<p class="tiho">{{ polaznik.ime }} · {{ tecaj.kod }} · {{ tecaj.mjesto }}</p>
+
+{% if not kome %}
+<p class="traka lose">{{ polaznik.ime }} nema upisanu adresu u tablici, pa
+  poruka nema kamo otići. Upiši adresu u tablicu pa pokušaj ponovno.</p>
+<p><a href="{{ natrag }}">← natrag</a></p>
+
+{% elif greska %}
+<p class="traka lose">Ne mogu složiti tekst: {{ greska }}</p>
+<p><a href="{{ natrag }}">← natrag</a></p>
+
+{% else %}
+<div class="plocice">
+  <div class="plocica"><span class="broj">{{ polaznik.uplaceno|eur }}</span>
+    <span class="natpis">uplaćeno</span></div>
+  <div class="plocica pazi"><span class="broj">{{ polaznik.manjka|eur }}</span>
+    <span class="natpis">manjka</span></div>
+</div>
+
+<form method="post">
+  <input type="hidden" name="token" value="{{ token }}">
+
+  <label class="polje">Za
+    <input value="{{ kome }}" disabled>
+  </label>
+
+  <label class="polje">Naslov
+    <input name="naslov" value="{{ naslov }}" required maxlength="300">
+  </label>
+
+  <label class="polje">Poruka
+    <textarea name="tijelo" rows="18" required>{{ tijelo }}</textarea>
+  </label>
+
+  {% if oznake %}
+  <p class="tiho">Oznake koje se popunjavaju pri slanju:
+    {% for o in oznake %}<code>{{ o }}</code>{% if not loop.last %} {% endif %}{% endfor %}</p>
+  {% else %}
+  <p class="tiho">Tekst je već popunjen imenom i iznosima — šalje se točno
+    ovako kako ovdje stoji.</p>
+  {% endif %}
+
+  <div class="tipke">
+    <button class="tipka glavna" type="submit">{{ gumb }}</button>
+    <a class="tipka tiha" href="{{ natrag }}">Odustani</a>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

@@ -32,6 +32,7 @@ from flask import (
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import lozinka
 
@@ -277,11 +278,14 @@ def ceka_zahtjev(tablica: str) -> bool:
     return False
 
 
-def zatrazi(posao: str, tablica: str) -> None:
+def zatrazi(posao: str, tablica: str, **dodatno) -> None:
+    """Ostavi zahtjev; posao odradi server/izvrsi.py. `dodatno` su polja koja
+    taj posao treba - adresa, ime, naslov i tijelo poruke."""
     ZAHTJEVI.mkdir(parents=True, exist_ok=True)
     zahtjev = {"posao": posao, "tablica": tablica,
                "trazio": config.get("web_user", "?"),
-               "kada": datetime.now().isoformat(timespec="seconds")}
+               "kada": datetime.now().isoformat(timespec="seconds"),
+               **{k: v for k, v in dodatno.items() if v}}
     naziv = f"{datetime.now():%Y%m%d-%H%M%S}-{secrets.token_hex(4)}.json"
     # piši pod drugim nazivom pa preimenuj: systemd prati *.json, ne smije
     # uloviti datoteku koja se još piše
@@ -296,6 +300,38 @@ def nedobili(tecaj: dict, poslani) -> list:
     vec = {a.lower() for a in (poslani or {}).get("poslano", [])}
     return [p for p in tecaj["polaznici"]
             if p["email"] and p["email"].lower() not in vec]
+
+
+def mapa_tablica() -> Path:
+    return Path(config["output_dir"])
+
+
+def zadani_podsjetnik(tecaj: dict, polaznik: dict):
+    """Tekst podsjetnika za uplatu, s već popunjenim imenom i iznosima."""
+    import poruke
+    return poruke.podsjetnik_uplata(mapa_tablica(), config, tecaj, polaznik)
+
+
+def zadani_certifikat():
+    """Tekst maila uz potvrdnicu. Ovdje oznake {first_name} OSTAJU - poruka
+    ide svakom polazniku sa svojim imenom, pa se popunjavaju pri slanju."""
+    import predlosci
+    from posalji_certifikate import ZADANI_NASLOV, ZADANI_TEKST
+    naslov, tijelo, izvor = predlosci.dohvati(
+        mapa_tablica(), "mail uz certifikat", config=config,
+        kljuc_naslov="certificate_mail_subject",
+        kljuc_tijela="certificate_mail_body",
+        zadani_naslov=ZADANI_NASLOV, zadano_tijelo=ZADANI_TEKST)
+    return naslov, tijelo, izvor
+
+
+def nadji_polaznika(tecaj: dict, broj: int) -> dict:
+    """Polaznik po mjestu u popisu. Mjesto služi samo za put do stranice -
+    u zahtjev ide adresa odnosno ime, pa i ako se tablica u međuvremenu
+    promijenila, posao se radi nad pravom osobom ili nad nikim."""
+    if broj < 0 or broj >= len(tecaj["polaznici"]):
+        abort(404)
+    return tecaj["polaznici"][broj]
 
 
 def nadji_tecaj(oznaka: str):
@@ -318,7 +354,7 @@ def pregled():
     dolazi.sort(key=lambda t: t["pocetak"] or "9999")
     prosli = [t for t in tecajevi if t["stanje"] == "prosao"]
     return render_template("pregled.html", podaci=podaci, dolazi=dolazi,
-                           prosli=prosli[:6],
+                           prosli=prosli,
                            duznika=sum(t["duznika"] for t in dolazi),
                            prijavljenih=sum(t["polaznika"] for t in dolazi))
 
@@ -355,12 +391,23 @@ def posalji(oznaka):
     if request.method == "POST":
         if not token_valja():
             abort(400)
-        if cekaju and not ceka_zahtjev(tecaj["datoteka"]):
-            zatrazi("posalji_certifikate", tecaj["datoteka"])
+        naslov = request.form.get("naslov", "").strip()
+        tijelo = request.form.get("tijelo", "").strip()
+        if cekaju and naslov and tijelo and not ceka_zahtjev(tecaj["datoteka"]):
+            zatrazi("posalji_certifikate", tecaj["datoteka"],
+                    naslov=naslov, tijelo=tijelo)
         return redirect(url_for("tecaj", oznaka=oznaka))
 
+    naslov = tijelo = izvor = ""
+    greska = ""
+    try:
+        naslov, tijelo, izvor = zadani_certifikat()
+    except Exception as e:
+        greska = str(e)
+
     return render_template("posalji.html", podaci=podaci, tecaj=tecaj,
-                           cekaju=cekaju,
+                           cekaju=cekaju, naslov=naslov, tijelo=tijelo,
+                           izvor=izvor, greska=greska,
                            napravljeni=podaci.get("slanja", {})
                            .get("certifikati_napravljeni", {})
                            .get(tecaj["datoteka"]))
@@ -376,6 +423,61 @@ def pregled_slanja(oznaka):
     if not ceka_zahtjev(tecaj["datoteka"]):
         zatrazi("pregled_certifikata", tecaj["datoteka"])
     return redirect(url_for("tecaj", oznaka=oznaka))
+
+
+@app.route("/tecaj/<oznaka>/polaznik/<int:broj>/podsjetnik", methods=["GET", "POST"])
+@treba_prijava
+def podsjetnik(oznaka, broj):
+    """Podsjetnik za uplatu jednom polazniku. Tekst se prije slanja pokaže
+    popunjen i može se izmijeniti - šalje se točno ono što ostane na ekranu."""
+    podaci, tecaj = nadji_tecaj(oznaka)
+    polaznik = nadji_polaznika(tecaj, broj)
+
+    if request.method == "POST":
+        if not token_valja():
+            abort(400)
+        naslov = request.form.get("naslov", "").strip()
+        tijelo = request.form.get("tijelo", "").strip()
+        if polaznik["email"] and naslov and tijelo:
+            zatrazi("podsjetnik_uplata", tecaj["datoteka"],
+                    email=polaznik["email"], ime=polaznik["ime"],
+                    naslov=naslov, tijelo=tijelo)
+        return redirect(url_for("tecaj", oznaka=oznaka))
+
+    naslov = tijelo = ""
+    greska = ""
+    if polaznik["email"]:
+        try:
+            naslov, tijelo = zadani_podsjetnik(tecaj, polaznik)
+        except Exception as e:
+            greska = str(e)
+    return render_template("poruka.html", podaci=podaci, tecaj=tecaj,
+                           polaznik=polaznik, naslov=naslov, tijelo=tijelo,
+                           greska=greska, oznake=None,
+                           kome=polaznik["email"],
+                           naslov_stranice="Podsjetnik za uplatu",
+                           gumb="Pošalji podsjetnik",
+                           natrag=url_for("tecaj", oznaka=oznaka))
+
+
+@app.route("/tecaj/<oznaka>/polaznik/<int:broj>/otkazi", methods=["GET", "POST"])
+@treba_prijava
+def otkazi(oznaka, broj):
+    """Polaznik je otkazao - briše se iz tablice. Jedina radnja koja trajno
+    uklanja podatak, pa ide preko potvrde."""
+    podaci, tecaj = nadji_tecaj(oznaka)
+    polaznik = nadji_polaznika(tecaj, broj)
+
+    if request.method == "POST":
+        if not token_valja():
+            abort(400)
+        if not ceka_zahtjev(tecaj["datoteka"]):
+            zatrazi("otkazi_polaznika", tecaj["datoteka"],
+                    email=polaznik["email"], ime=polaznik["ime"])
+        return redirect(url_for("tecaj", oznaka=oznaka))
+
+    return render_template("otkazi.html", podaci=podaci, tecaj=tecaj,
+                           polaznik=polaznik)
 
 
 @app.route("/uplate")

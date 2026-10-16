@@ -64,5 +64,7 @@
   "certificate_templates": {
     "Ponavljanje M6 i Praktičarski dan": "potvrdnica ponavljanje m6"
   },
-  "no_certificate_course_codes": []
+  "no_certificate_course_codes": [],
+  "payment_reminder_subject": "Podsjetnik - uplata kotizacije za {course_code}, {location}",
+  "payment_reminder_body": "Poštovani/a {first_name} {last_name},\n\njavljamo se u vezi tečaja Emmett tehnike za ljude - {course_code}, koji se\nodržava {dates} u mjestu {location}.\n\nPrema našoj evidenciji, kotizacija još nije podmirena u cijelosti:\nuplaćeno je {uplaceno} EUR od ukupno {cijena} EUR, pa preostaje {manjka} EUR.\n\n{blok_uplate}\nAko ste uplatu izvršili u međuvremenu, ovu poruku slobodno zanemarite - a\nbilo bi nam od pomoći da nam to kratko javite.\n\nLijep pozdrav,\n{instructor_name}\nEMMETT Hrvatska"
 }
