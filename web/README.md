@@ -232,6 +232,37 @@ smije pisati samo u tu jednu mapu, a `izvrsi.py` prihvaća samo poslove sa
 svog kratkog popisa i samo tablice koje stvarno postoje. Ni da mu netko
 preotme vlast, web ne može poslati mail polazniku ni promijeniti tablicu.
 
+## Izgled
+
+Boje, tipografija, razmaci i zaobljenja dolaze iz **Emmett Design Systema**
+(`claude.ai/artifact/UFrd6R7sG5HNYoe488C2nW`), uzeti doslovno iz njegovih
+`tokens/colors.css`, `typography.css` i `spacing.css`: navy `#182A93` za
+naslove, azure `#39B4E5` za naglaske, sky `#93E2FA` za zaglavlje, bijele
+kartice s mekom navy sjenom, tipke kao pilule, gradijentni pojas u podnožju.
+
+Četiri odstupanja, svako zapisano u `static/style.css` da se poslije zna
+zašto:
+
+| Odstupanje | Razlog |
+|---|---|
+| Tekst je navy, ne azure | Marka zadaje azure za tekst, ali na bijelom to daje 2,4:1. Na rollupu je taj tekst 19px i veći; ovdje je popis od 14px na mobitelu. |
+| Jantar i crvena potamnjeni | `#C98A10` na `#FBF0D6` daje 2,6:1. Potamnjene inačice (`#8A5D00`, `#B32F28`) daju 5,1:1. |
+| Podnožje uzima samo gornji dio gradijenta | Bijeli tekst na punom gradijentu pada na 4,2:1 u sredini i 2,4:1 pri dnu. |
+| Dodana tamna tema | Marka je nema — bijela je ploha za čitanje. Izvedena je iz iste plave obitelji, da stranica noću ne zasljepljuje. |
+
+Sve boje teksta provjerene su na 4,5:1 u obje teme.
+
+**Font.** Stranica koristi Figtree s Google Fontsa — u Emmett sustavu
+zapisan je kao zamjena dok se Brandon Grotesque učitava. Brandon je
+komercijalan font (HVD Fonts), a ovaj repozitorij je javan, pa se njegove
+datoteke ovdje ne isporučuju; sam sustav upozorava da se licenca provjeri
+prije objave. Ako želiš pravi Brandon, njegove `.otf` datoteke mogu stajati
+na serveru izvan gita — javi pa to postavim.
+
+**Znak.** U zaglavlju stoji EMMETT složen slovima, ne pravi wordmark.
+Wordmark iz sustava sastavljen je od obrisa Brandonovih slova, pa vrijedi
+isto: ne ide u javni repozitorij. I on može na server izvan gita.
+
 ## Sigurnost
 
 Kroz stranicu idu imena, adrese, mailovi i telefoni polaznika, pa:

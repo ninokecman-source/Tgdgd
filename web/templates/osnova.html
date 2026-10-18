@@ -4,8 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#1d4e4a">
+<meta name="theme-color" content="#93e2fa">
 <title>{% block naslov %}Emmett{% endblock %} · Emmett</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Figtree je u Emmett sustavu zapisan kao zamjena dok se Brandon Grotesque
+     učitava. Brandon je komercijalan font i ovaj repozitorij je javan, pa se
+     njegove datoteke ovdje ne isporučuju - stranica stoji na Figtreeju. -->
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 {% block zaglavlje %}{% endblock %}
 </head>
