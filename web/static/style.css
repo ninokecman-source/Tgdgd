@@ -334,3 +334,7 @@ code { font-size: 13px; background: var(--crta); padding: 1px 5px; border-radius
   align-items: stretch;
 }
 .tipke.uz-ime .tipka { text-align: center; white-space: nowrap; }
+
+/* Zaglavlje je ljepljivo, pa bi pokrilo naslov odjeljka na koji se skoči
+   preko sidra (#greske). Ovo ostavi mjesta iznad. */
+section[id] { scroll-margin-top: 64px; }

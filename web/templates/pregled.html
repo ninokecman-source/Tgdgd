@@ -15,7 +15,8 @@
     <span class="broj">{{ duznika }}</span>
     <span class="natpis">nije platilo</span>
   </a>
-  <a class="plocica {% if podaci.greske %}lose{% endif %}" href="{{ url_for('stanje') }}">
+  <a class="plocica {% if podaci.greske %}lose{% endif %}"
+     href="{{ url_for('stanje') }}#greske">
     <span class="broj">{{ podaci.greske|length }}</span>
     <span class="natpis">grešaka u logu</span>
   </a>

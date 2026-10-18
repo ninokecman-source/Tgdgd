@@ -4,6 +4,17 @@
 
 <h1>Stanje sustava</h1>
 
+<section id="greske">
+  <h2>Greške ({{ podaci.greske|length }})</h2>
+  {% if not podaci.greske %}<p class="tiho">Nijedna - logovi su čisti.</p>{% endif %}
+  {% for g in podaci.greske %}
+  <div class="redak duzan">
+    <div class="redak-detalj tiho">{{ g.kada|vrijeme }} · {{ g.posao or g.log }}</div>
+    <pre class="greska">{{ g.redak }}</pre>
+  </div>
+  {% endfor %}
+</section>
+
 <section>
   <h2>Zadnji prolazi</h2>
   <p class="tiho">Što je cron pokrenuo i kada.</p>
@@ -14,17 +25,6 @@
   </div>
   {% endfor %}
   {% if not podaci.prolazi %}<p class="tiho">U logovima nema nijednog zapisa.</p>{% endif %}
-</section>
-
-<section>
-  <h2>Greške ({{ podaci.greske|length }})</h2>
-  {% if not podaci.greske %}<p class="tiho">Nijedna - logovi su čisti.</p>{% endif %}
-  {% for g in podaci.greske %}
-  <div class="redak duzan">
-    <div class="redak-detalj tiho">{{ g.kada|vrijeme }} · {{ g.posao or g.log }}</div>
-    <pre class="greska">{{ g.redak }}</pre>
-  </div>
-  {% endfor %}
 </section>
 
 <section>
