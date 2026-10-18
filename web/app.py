@@ -28,7 +28,7 @@ from functools import wraps
 from pathlib import Path
 
 from flask import (
-    Flask, abort, redirect, render_template, request, session, url_for,
+    Flask, abort, redirect, render_template, request, send_file, session, url_for,
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -208,7 +208,8 @@ def starost_minuta(kada: str):
 
 @app.context_processor
 def ugradi_token():
-    return {"token": token() if session.get("prijavljen") else ""}
+    return {"token": token() if session.get("prijavljen") else "",
+            "ima_wordmark": (mapa_marke() / "wordmark-navy.svg").is_file()}
 
 
 @app.template_filter("vrijeme")
@@ -304,6 +305,36 @@ def nedobili(tecaj: dict, poslani) -> list:
 
 def mapa_tablica() -> Path:
     return Path(config["output_dir"])
+
+
+# Pravi Brandon Grotesque i pravi wordmark ne mogu u repozitorij: font je
+# komercijalan, a wordmark su njegova slova u obrisu, i repozitorij je javan.
+# Zato stoje u mapi 'Marka' uz tablice, koju Dropbox sinkronizira na server
+# kao i sve ostalo. Nema ih - stranica radi s Figtreejem i ispisanim EMMETT.
+MARKA = {
+    "wordmark-navy.svg": "image/svg+xml",
+    "wordmark-white.svg": "image/svg+xml",
+    "BrandonGrotesque-Regular.otf": "font/otf",
+    "BrandonGrotesque-Medium.otf": "font/otf",
+    "BrandonGrotesque-Bold.otf": "font/otf",
+}
+
+
+def mapa_marke() -> Path:
+    return mapa_tablica() / "Marka"
+
+
+@app.route("/marka/<naziv>")
+def marka(naziv):
+    """Datoteke marke. Namjerno bez prijave, da i sama stranica za prijavu
+    bude u Emmettovu ruhu; naziv mora biti s popisa, pa se ovuda ne može doći
+    ni do čega drugog u mapi s tablicama."""
+    if naziv not in MARKA:
+        abort(404)
+    put = mapa_marke() / naziv
+    if not put.is_file():
+        abort(404)
+    return send_file(put, mimetype=MARKA[naziv], max_age=86400)
 
 
 def zadani_podsjetnik(tecaj: dict, polaznik: dict):

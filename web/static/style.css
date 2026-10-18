@@ -470,3 +470,39 @@ code {
 /* Zaglavlje je ljepljivo, pa bi pokrilo naslov odjeljka na koji se skoči
    preko sidra (#greske). Ovo ostavi mjesta iznad. */
 section[id] { scroll-margin-top: 64px; }
+
+/* --- Pravi Brandon Grotesque, ako je na serveru ---------------------------
+ *
+ * Datoteke stoje u mapi 'Marka' uz tablice, izvan gita: font je komercijalan
+ * (HVD Fonts), a ovaj repozitorij je javan. Ako ih nema, /marka/ vrati 404 i
+ * preglednik ostane na Figtreeju - bez greške, bez praznog teksta.
+ */
+
+@font-face {
+  font-family: "Brandon Grotesque";
+  src: url("/marka/BrandonGrotesque-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Brandon Grotesque";
+  src: url("/marka/BrandonGrotesque-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Brandon Grotesque";
+  src: url("/marka/BrandonGrotesque-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- Wordmark --- */
+
+.znak picture, .znak img { display: block; }
+.znak img { height: 17px; width: auto; }
+.znak-veliki { margin: 0 auto 4px; }
+.znak-veliki img { height: 30px; width: auto; display: block; margin: 0 auto; }

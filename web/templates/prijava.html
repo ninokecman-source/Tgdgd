@@ -2,7 +2,15 @@
 {% block naslov %}Prijava{% endblock %}
 {% block sadrzaj %}
 <form class="prijava" method="post" action="{{ url_for('prijava') }}">
-  <h1>EMMETT</h1>
+  {% if ima_wordmark %}
+  <h1 class="znak-veliki">
+    <picture>
+      <source srcset="{{ url_for('marka', naziv='wordmark-white.svg') }}"
+              media="(prefers-color-scheme: dark)">
+      <img src="{{ url_for('marka', naziv='wordmark-navy.svg') }}" alt="EMMETT">
+    </picture>
+  </h1>
+  {% else %}<h1>EMMETT</h1>{% endif %}
   <p class="tiho">Pregled tečajeva i prijava</p>
   {% if greska %}<p class="traka lose">{{ greska }}</p>{% endif %}
   <input type="hidden" name="dalje" value="{{ dalje or '' }}">

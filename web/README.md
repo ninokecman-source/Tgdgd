@@ -252,16 +252,31 @@ zašto:
 
 Sve boje teksta provjerene su na 4,5:1 u obje teme.
 
-**Font.** Stranica koristi Figtree s Google Fontsa — u Emmett sustavu
-zapisan je kao zamjena dok se Brandon Grotesque učitava. Brandon je
-komercijalan font (HVD Fonts), a ovaj repozitorij je javan, pa se njegove
-datoteke ovdje ne isporučuju; sam sustav upozorava da se licenca provjeri
-prije objave. Ako želiš pravi Brandon, njegove `.otf` datoteke mogu stajati
-na serveru izvan gita — javi pa to postavim.
+### Pravi font i wordmark
 
-**Znak.** U zaglavlju stoji EMMETT složen slovima, ne pravi wordmark.
-Wordmark iz sustava sastavljen je od obrisa Brandonovih slova, pa vrijedi
-isto: ne ide u javni repozitorij. I on može na server izvan gita.
+Brandon Grotesque je komercijalan font (HVD Fonts), a wordmark su njegova
+slova u obrisu — i ovaj repozitorij je javan. Zato nijedno ne stoji u gitu,
+nego u mapi **`Marka`** uz tablice, koju Dropbox sinkronizira na server kao
+i sve ostalo:
+
+```
+Prijave/Marka/
+    wordmark-navy.svg              EMMETT, navy  - svijetla tema
+    wordmark-white.svg             EMMETT, bijeli - tamna tema
+    BrandonGrotesque-Regular.otf   400
+    BrandonGrotesque-Medium.otf    500
+    BrandonGrotesque-Bold.otf      700
+```
+
+Nazivi moraju biti točno takvi — stranica ih poslužuje s popisa, pa se kroz
+`/marka/` ne može doći ni do čega drugog u mapi s tablicama.
+
+**Ako ih nema, ništa ne puca:** `/marka/` vrati 404, preglednik ostane na
+Figtreeju, a u zaglavlju piše EMMETT složen slovima. Stranica tako radi i
+prije nego datoteke stignu, i ako ih ikad makneš.
+
+Mapa `Marka` ne smeta obradi tablica — one se traže samo u vrhu foldera,
+podmape se ne gledaju (isto kao `Certifikati` i `Otkazani`).
 
 ## Sigurnost
 

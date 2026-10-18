@@ -19,7 +19,15 @@
 <body>
 {% if session.get('prijavljen') %}
 <header class="vrh">
-  <a class="znak" href="{{ url_for('pregled') }}">EMMETT</a>
+  <a class="znak" href="{{ url_for('pregled') }}">
+    {%- if ima_wordmark -%}
+    <picture>
+      <source srcset="{{ url_for('marka', naziv='wordmark-white.svg') }}"
+              media="(prefers-color-scheme: dark)">
+      <img src="{{ url_for('marka', naziv='wordmark-navy.svg') }}" alt="EMMETT">
+    </picture>
+    {%- else -%}EMMETT{%- endif -%}
+  </a>
   <nav>
     <a href="{{ url_for('pregled') }}" {% if request.path == '/' %}class="tu"{% endif %}>Tečajevi</a>
     <a href="{{ url_for('uplate') }}" {% if request.path == '/uplate' %}class="tu"{% endif %}>Uplate</a>

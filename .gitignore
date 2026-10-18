@@ -14,6 +14,9 @@ log.txt
 
 # Potvrdnice: licencirani fontovi i Emmettov znak - ne idu u javni repozitorij
 potvrdnica*.html
+# Brandon Grotesque i wordmark, ako ikad zavrse uz kod umjesto u Prijave/Marka
+*.otf
+web/static/wordmark-*.svg
 __pycache__/
 *.pyc
 
