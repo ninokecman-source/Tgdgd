@@ -325,6 +325,26 @@ def zadani_certifikat():
     return naslov, tijelo, izvor
 
 
+def primjer_varijabli(tecaj: dict, cekaju: list) -> dict:
+    """Čime se oznake popune za prvog primatelja. Služi pregledu na stranici:
+    ime se povlači iz popisa samo, pa neka se to i vidi, umjesto da se vjeruje
+    na riječ."""
+    from send_reminders import datumi_rijecima
+
+    prvi = cekaju[0] if cekaju else {"ime": ""}
+    dijelovi = (prvi.get("ime") or "").split()
+    return {
+        "first_name": dijelovi[0] if dijelovi else "",
+        "last_name": " ".join(dijelovi[1:]),
+        "course_code": tecaj["kod"],
+        "location": tecaj["mjesto"],
+        "dates": tecaj["datumi"],
+        "datumi_rijecima": datumi_rijecima(tecaj["datumi"]),
+        "instructor_name": tecaj.get("instruktor") or config.get("instructor_name", ""),
+        "link_termini": config.get("course_dates_url", ""),
+    }
+
+
 def nadji_polaznika(tecaj: dict, broj: int) -> dict:
     """Polaznik po mjestu u popisu. Mjesto služi samo za put do stranice -
     u zahtjev ide adresa odnosno ime, pa i ako se tablica u međuvremenu
@@ -408,6 +428,7 @@ def posalji(oznaka):
     return render_template("posalji.html", podaci=podaci, tecaj=tecaj,
                            cekaju=cekaju, naslov=naslov, tijelo=tijelo,
                            izvor=izvor, greska=greska,
+                           primjer=primjer_varijabli(tecaj, cekaju),
                            napravljeni=podaci.get("slanja", {})
                            .get("certifikati_napravljeni", {})
                            .get(tecaj["datoteka"]))

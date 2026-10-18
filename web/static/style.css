@@ -295,3 +295,28 @@ code { font-size: 13px; background: var(--crta); padding: 1px 5px; border-radius
   font-weight: 600;
   color: var(--znak);
 }
+
+/* --- Pregled poruke s popunjenim oznakama --- */
+
+.pregled {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--crta);
+  border-left: 3px solid var(--znak);
+  border-radius: var(--radijus);
+  background: var(--ploha);
+}
+.pregled summary {
+  font-size: 13px;
+  color: var(--tiho);
+  cursor: pointer;
+}
+.pregled-naslov { margin-top: 10px; font-weight: 650; word-break: break-word; }
+.pregled pre {
+  margin: 8px 0 0;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

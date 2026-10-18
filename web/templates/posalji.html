@@ -48,12 +48,22 @@
     <textarea name="tijelo" rows="16" required>{{ tijelo }}</textarea>
   </label>
 
-  <p class="tiho">Izvor teksta: {{ izvor }}. Oznake se popunjavaju za svakog
-    polaznika posebno: <code>{first_name}</code> <code>{last_name}</code>
-    <code>{course_code}</code> <code>{location}</code> <code>{dates}</code>
-    <code>{datumi_rijecima}</code> <code>{instructor_name}</code>
-    <code>{link_termini}</code>. Izmjena vrijedi samo za ovo slanje — trajno
-    se mijenja u dokumentu <code>mail uz certifikat.docx</code>.</p>
+  <p class="tiho">Ime ne upisuješ — <code>{first_name}</code> je mjesto na
+    koje se ime svakog polaznika upiše samo, pri slanju. Isto vrijedi za
+    <code>{last_name}</code> <code>{course_code}</code> <code>{location}</code>
+    <code>{dates}</code> <code>{datumi_rijecima}</code>
+    <code>{instructor_name}</code> <code>{link_termini}</code>.</p>
+
+  <details class="pregled" open>
+    <summary>Ovako će izgledati prvom polazniku
+      ({{ cekaju[0].ime }})</summary>
+    <div class="pregled-naslov" id="pregled-naslov"></div>
+    <pre id="pregled-tijelo"></pre>
+  </details>
+
+  <p class="tiho">Izvor teksta: {{ izvor }}. Izmjena vrijedi samo za ovo
+    slanje — trajno se mijenja u dokumentu
+    <code>mail uz certifikat.docx</code>.</p>
 
   <div class="tipke">
     <button class="tipka glavna" type="submit">
@@ -65,5 +75,31 @@
 
 <p class="tiho">Tko je jednom dobio potvrdnicu, neće je dobiti dvaput — i da
   ovo pokreneš ponovno.</p>
+
+<script>
+// Pregled poruke s popunjenim oznakama. Čista pomoć pri čitanju - slanje
+// radi server, isto s ovim vrijednostima, bez obzira na ovu skriptu.
+(function () {
+  var podaci = {{ primjer | tojson }};
+  var naslov = document.querySelector('input[name=naslov]');
+  var tijelo = document.querySelector('textarea[name=tijelo]');
+  var izlazN = document.getElementById('pregled-naslov');
+  var izlazT = document.getElementById('pregled-tijelo');
+  if (!naslov || !tijelo || !izlazN || !izlazT) return;
+
+  function popuni(tekst) {
+    return tekst.replace(/\{(\w+)\}/g, function (cijelo, kljuc) {
+      return Object.prototype.hasOwnProperty.call(podaci, kljuc) ? podaci[kljuc] : cijelo;
+    });
+  }
+  function osvjezi() {
+    izlazN.textContent = popuni(naslov.value);
+    izlazT.textContent = popuni(tijelo.value);
+  }
+  naslov.addEventListener('input', osvjezi);
+  tijelo.addEventListener('input', osvjezi);
+  osvjezi();
+})();
+</script>
 {% endif %}
 {% endblock %}
