@@ -18,29 +18,33 @@
   {% if not tecaj.polaznici %}<p class="tiho">U tablici još nema nikoga.</p>{% endif %}
   {% for p in tecaj.polaznici %}
   <div class="redak {% if p.manjka > 0 %}duzan{% endif %}">
-    <div class="redak-ime">
-      {{ loop.index }}. {{ p.ime }}
-      {% if p.nr %}<span class="znacka tiha">{{ p.nr }}</span>{% endif %}
-    </div>
-    <div class="redak-detalj tiho">
-      {% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% else %}bez adrese{% endif %}
-      {% if p.mobitel %}· <a href="tel:{{ p.mobitel }}">{{ p.mobitel }}</a>{% endif %}
-    </div>
-    <div class="redak-novac">
-      {{ p.uplaceno|eur }}
-      {% if p.manjka > 0 %}<span class="pazi-tekst">manjka {{ p.manjka|eur }}</span>{% endif %}
-    </div>
-    {% if p.biljeska %}<div class="redak-detalj">{{ p.biljeska }}</div>{% endif %}
-    {% if not radi %}
-    <div class="tipke uske">
-      {% if p.manjka > 0 and p.email %}
-      <a class="tipka mala" href="{{ url_for('podsjetnik', oznaka=tecaj.oznaka,
-         broj=loop.index0) }}">Podsjetnik za plaćanje</a>
+    <div class="redak-glava">
+      <div class="redak-podaci">
+        <div class="redak-ime">
+          {{ loop.index }}. {{ p.ime }}
+          {% if p.nr %}<span class="znacka tiha">{{ p.nr }}</span>{% endif %}
+        </div>
+        <div class="redak-detalj tiho">
+          {% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% else %}bez adrese{% endif %}
+          {% if p.mobitel %}· <a href="tel:{{ p.mobitel }}">{{ p.mobitel }}</a>{% endif %}
+        </div>
+        <div class="redak-novac">
+          {{ p.uplaceno|eur }}
+          {% if p.manjka > 0 %}<span class="pazi-tekst">manjka {{ p.manjka|eur }}</span>{% endif %}
+        </div>
+        {% if p.biljeska %}<div class="redak-detalj">{{ p.biljeska }}</div>{% endif %}
+      </div>
+      {% if not radi %}
+      <div class="tipke uz-ime">
+        {% if p.manjka > 0 and p.email %}
+        <a class="tipka mala" href="{{ url_for('podsjetnik', oznaka=tecaj.oznaka,
+           broj=loop.index0) }}">Podsjetnik</a>
+        {% endif %}
+        <a class="tipka mala tiha" href="{{ url_for('otkazi', oznaka=tecaj.oznaka,
+           broj=loop.index0) }}">Otkazao</a>
+      </div>
       {% endif %}
-      <a class="tipka mala tiha" href="{{ url_for('otkazi', oznaka=tecaj.oznaka,
-         broj=loop.index0) }}">Otkazao</a>
     </div>
-    {% endif %}
   </div>
   {% endfor %}
 </section>

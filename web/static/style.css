@@ -320,3 +320,17 @@ code { font-size: 13px; background: var(--crta); padding: 1px 5px; border-radius
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* --- Polaznik: podaci lijevo, tipke desno --- */
+
+.redak-glava { display: flex; align-items: flex-start; gap: 10px; }
+.redak-podaci { flex: 1; min-width: 0; }
+
+.tipke.uz-ime {
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 6px;
+  margin: 0;
+  align-items: stretch;
+}
+.tipke.uz-ime .tipka { text-align: center; white-space: nowrap; }
