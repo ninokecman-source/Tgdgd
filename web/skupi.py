@@ -204,13 +204,30 @@ def citaj_uplate() -> dict:
                 "FROM processed_transactions ORDER BY processed_at DESC, rowid DESC "
                 "LIMIT 20")
         ]
-        neprepoznate = veza.execute(
-            "SELECT COUNT(*) FROM notified_unmatched").fetchone()[0]
+        nepovezane = citaj_nepovezane(veza)
     finally:
         veza.close()
 
     return {"baza": str(baza), "ima": True, "ukupno": round(ukupno or 0, 2),
-            "broj": broj_uplata, "neprepoznate": neprepoznate, "zadnje": zadnje}
+            "broj": broj_uplata, "zadnje": zadnje, "nepovezane": nepovezane}
+
+
+def citaj_nepovezane(veza) -> list:
+    """Uplate koje čekaju da im se kaže čije su. Tablica je novija od baze,
+    pa se njezino postojanje provjerava - stara baza nije greška."""
+    ima = veza.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' "
+        "AND name='unmatched_transactions'").fetchone()
+    if not ima:
+        return []
+    return [
+        {"ref": r[0], "datum": r[1], "iznos": r[2], "uplatitelj": r[3],
+         "opis": r[4], "razlog": r[5], "primijeceno": r[6]}
+        for r in veza.execute(
+            "SELECT ref_id, date, amount, name, description, razlog, seen_at "
+            "FROM unmatched_transactions WHERE resolved_at IS NULL "
+            "ORDER BY seen_at DESC, rowid DESC")
+    ]
 
 
 def repa_loga(put: Path) -> list:

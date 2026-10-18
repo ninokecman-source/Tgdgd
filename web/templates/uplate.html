@@ -23,6 +23,34 @@
   {% endfor %}
 </section>
 
+<section id="nepovezane">
+  <h2>Nepovezane uplate ({{ podaci.uplate.nepovezane|length }})</h2>
+  {% if not podaci.uplate.ima %}
+  <p class="tiho">Baza bankovne skripte nije nađena.</p>
+  {% elif not podaci.uplate.nepovezane %}
+  <p class="tiho">Nema ih — svaka uplata je pripisana polazniku.</p>
+  {% else %}
+  <p class="tiho">Uplate kojima sustav nije mogao odrediti polaznika —
+    najčešće jer u opisu plaćanja ne piše ime polaznika. Reci čija je i
+    proknjižit će se kao i svaka druga.</p>
+  {% for u in podaci.uplate.nepovezane %}
+  <div class="redak duzan">
+    <div class="redak-glava">
+      <div class="redak-podaci">
+        <div class="redak-ime">{{ u.iznos|eur }} · {{ u.datum }}</div>
+        <div class="redak-detalj tiho">{{ u.uplatitelj or '?' }}</div>
+        <div class="redak-detalj">{{ u.opis or '(nema opisa)' }}</div>
+        <div class="redak-detalj tiho">{{ u.razlog or '' }}</div>
+      </div>
+      <div class="tipke uz-ime">
+        <a class="tipka mala" href="{{ url_for('povezi_uplatu', broj=loop.index0) }}">Poveži</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+</section>
+
 <section>
   <h2>Proknjižene uplate</h2>
   {% if not podaci.uplate.ima %}
@@ -31,8 +59,9 @@
   <div class="plocice">
     <div class="plocica"><span class="broj">{{ podaci.uplate.broj }}</span><span class="natpis">uplata</span></div>
     <div class="plocica"><span class="broj">{{ podaci.uplate.ukupno|eur }}</span><span class="natpis">ukupno</span></div>
-    <div class="plocica {% if podaci.uplate.neprepoznate %}pazi{% endif %}">
-      <span class="broj">{{ podaci.uplate.neprepoznate }}</span><span class="natpis">neprepoznatih</span></div>
+    <a class="plocica {% if podaci.uplate.nepovezane %}pazi{% endif %}" href="#nepovezane">
+      <span class="broj">{{ podaci.uplate.nepovezane|length }}</span>
+      <span class="natpis">nepovezanih</span></a>
   </div>
   <h3>Zadnjih {{ podaci.uplate.zadnje|length }}</h3>
   {% for u in podaci.uplate.zadnje %}
@@ -44,4 +73,18 @@
   {% endfor %}
   {% endif %}
 </section>
+
+{% if ishodi %}
+<section>
+  <h2>Zadnji poslovi</h2>
+  {% for i in ishodi %}
+  <div class="ishod {{ 'lose' if i.status in ('greška', 'odbijeno') }}">
+    <div class="tiho">{{ i.posao }} · {{ i.status }}
+      {%- if i.osoba %} · {{ i.osoba }}{% endif %} ·
+      {{ (i.gotovo or i.trazeno)|vrijeme }}</div>
+    {% if i.ispis %}<pre>{{ i.ispis }}</pre>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
 {% endblock %}

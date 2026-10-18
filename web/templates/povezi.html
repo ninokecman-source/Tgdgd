@@ -1,0 +1,53 @@
+{% extends "osnova.html" %}
+{% block naslov %}Poveži uplatu{% endblock %}
+{% block sadrzaj %}
+
+<h1>Čija je ova uplata?</h1>
+
+<div class="redak duzan">
+  <div class="redak-ime">{{ uplata.iznos|eur }} · {{ uplata.datum }}</div>
+  <div class="redak-detalj tiho">Uplatitelj: {{ uplata.uplatitelj or '?' }}</div>
+  <div class="redak-detalj">Opis: {{ uplata.opis or '(nema opisa)' }}</div>
+  <div class="redak-detalj tiho">Zašto nije prepoznata: {{ uplata.razlog or '-' }}</div>
+  <div class="redak-detalj tiho">Oznaka: {{ uplata.ref }}</div>
+</div>
+
+{% if not izbor %}
+<p class="traka lose">Ni u jednoj tablici nema polaznika s upisanom adresom,
+  pa nemam kome pripisati uplatu.</p>
+<p><a href="{{ url_for('uplate') }}">← natrag</a></p>
+
+{% else %}
+<form method="post">
+  <input type="hidden" name="token" value="{{ token }}">
+
+  <label class="polje">Polaznik
+    <select name="email" required>
+      <option value="">— odaberi —</option>
+      {% for t, ljudi in izbor %}
+      <optgroup label="{{ t.kod }} · {{ t.mjesto }} ({{ t.datumi }})">
+        {% for p in ljudi %}
+        <option value="{{ p.email }}">{{ p.ime }}
+          {%- if p.manjka > 0 %} — manjka {{ p.manjka|eur }}{% endif %}</option>
+        {% endfor %}
+      </optgroup>
+      {% endfor %}
+    </select>
+  </label>
+
+  <p class="tiho">Kad potvrdiš, dogodi se sve ono što bi se dogodilo da je
+    uplata odmah prepoznata: izda se Solo ponuda na
+    <strong>{{ uplata.iznos|eur }}</strong>, iznos se pribroji tom polazniku
+    u tablici, i uplata nestane iz grešaka.</p>
+
+  <div class="tipke">
+    <button class="tipka glavna" type="submit">Poveži i proknjiži</button>
+    <a class="tipka tiha" href="{{ url_for('uplate') }}">Odustani</a>
+  </div>
+</form>
+
+<p class="tiho">Polaznici bez upisane adrese nisu na popisu — uplata se
+  povezuje po adresi, jer je ona jedina jedinstvena. Ako nekome fali adresa,
+  upiši je u tablicu pa se vrati ovamo.</p>
+{% endif %}
+{% endblock %}

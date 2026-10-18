@@ -185,6 +185,25 @@ je potvrdnicu jednom dobio, neće je dobiti dvaput, koliko god puta
 pritisnuo — to pamti `poslani_certifikati.json`, isto kao i kod naredbe iz
 terminala.
 
+### Nepovezane uplate
+
+Uplata se ne prepozna kad u opisu plaćanja ne piše ime polaznika — netko
+plati za drugoga, upiše samo "tečaj", ili iskrivi ime. Takve stoje na
+stranici **Uplate**, svaka s iznosom, datumom, uplatiteljem, opisom i
+razlogom zašto nije prepoznata.
+
+Tipka **Poveži** otvara popis polaznika po tečajevima. Kad odabereš, dogodi
+se sve ono što bi se dogodilo da je uplata odmah prepoznata: izda se Solo
+ponuda na uplaćeni iznos, iznos se pribroji tom polazniku u koloni
+"Payment Received", i uplata nestane iz nepovezanih.
+
+Prije ovoga je takva uplata bila izgubljena za sustav: javljala se mailom,
+ali se pamtila samo njezina oznaka, a izvod se čita samo jednom. Sad čeka
+u bazi dok joj ne kažeš čija je.
+
+Na popisu su samo polaznici s upisanom adresom — po adresi se uplata
+povezuje, jer je ona jedina jedinstvena.
+
 ### Uz svakog polaznika
 
 Na stranici tečaja, ispod svakog imena:

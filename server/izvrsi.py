@@ -19,6 +19,7 @@ Za ručnu provjeru:
 
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -96,6 +97,15 @@ def _podsjetnik(zahtjev, tablica, mapa):
             "--stvarno"]
 
 
+def _rijesi_uplatu(zahtjev, tablica, mapa):
+    adresa = provjeri_adresu(zahtjev)
+    ref = str(zahtjev.get("ref", "")).strip()
+    if not re.fullmatch(r"[A-Za-z0-9/._-]{1,64}", ref):
+        raise Odbijeno(f"neispravna oznaka uplate: {ref!r}")
+    return ["bank_solo/rijesi_uplatu.py", "--ref", ref, "--email", adresa,
+            "--stvarno"]
+
+
 def _otkazi(zahtjev, tablica, mapa):
     naredba = ["otkazi_polaznika.py", "--tablica", tablica]
     if zahtjev.get("email"):
@@ -115,6 +125,7 @@ POSLOVI = {
     "posalji_certifikate": _certifikati(posalji=True),
     "podsjetnik_uplata": _podsjetnik,
     "otkazi_polaznika": _otkazi,
+    "rijesi_uplatu": _rijesi_uplatu,
 }
 
 

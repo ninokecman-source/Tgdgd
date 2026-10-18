@@ -203,6 +203,44 @@ Da vidiš koje su uplate već proknjižene (tko, koliko, koja Solo ponuda):
 python3 diagnose.py --proknjizeno
 ```
 
+## Nepovezane uplate (`rijesi_uplatu.py`)
+
+Uplata se ne prepozna kad u opisu plaćanja ne piše ime polaznika: netko
+plati za drugoga, upiše samo "tečaj", ili iskrivi ime.
+
+Takva uplata sada **ostaje zapisana** u tablici `unmatched_transactions`,
+s iznosom, datumom, uplatiteljem, opisom i razlogom. Dosad se pamtila samo
+njezina oznaka (`notified_unmatched`), pa su podaci ostajali jedino u mailu
+upozorenja - a izvod se čita točno jednom. Tko nije prepoznat tog trena,
+za sustav više nije ni postojao, iako je novac stvarno stigao.
+
+```bash
+python3 bank_solo/rijesi_uplatu.py --popis
+python3 bank_solo/rijesi_uplatu.py --ref 1234567 --email ana@primjer.hr
+python3 bank_solo/rijesi_uplatu.py --ref 1234567 --email ana@primjer.hr --stvarno
+```
+
+Bez `--stvarno` je samo pregled: pokaže na koga bi uplata išla, u koju
+tablicu i koji redak, i što bi pisalo na ponudi.
+
+S `--stvarno` se dogodi isto što i kod automatske obrade, istim redom:
+
+1. izda se Solo ponuda na uplaćeni iznos (OIB se dohvaća iz izvorne
+   prijave; ako se do maila ne može, ponuda ide bez OIB-a)
+2. iznos se pribroji u koloni "Payment Received"
+3. transakcija se označi obrađenom i makne iz nepovezanih
+
+Tablica se dira tek nakon što ponuda prođe - ako Solo zakaže, uplata nije
+ni proknjižena, pa se pokušaj može ponoviti bez dvostrukog knjiženja. Uplata
+koja je već povezana odbija se izrijekom.
+
+Polaznik se bira po **email adresi**, jer je ona jedina jedinstvena. Ako se
+ista adresa pojavi na više tečajeva, skripta odustaje i traži da to riješiš
+ručno - ne pogađa.
+
+Isto se radi i s mobitela, tipkom **Poveži** na stranici Uplate
+(vidi `web/README.md`).
+
 ## Potvrda uplate polazniku
 
 Čim se uplata upari i proknjiži, polazniku se javlja da je zaprimljena.

@@ -97,6 +97,9 @@ def process_transaction(tx, registrants, config, solo, state, imap, registration
         print(f"[!] Neuparena uplata {tx['amount']:.2f} EUR ({tx['date']}, ref {tx['ref_id']}) "
               f"od {tx.get('name') or '?'} - opis: {tx.get('description') or '(nema)'} "
               f"- {razlog}, treba ručna provjera.")
+        # Izvod se čita samo jednom, pa uplata mora ostati zapisana - inače
+        # je za sustav nema, a novac je stvarno stigao.
+        state.remember_unmatched(tx, razlog)
         return "unmatched"
     if upozorenje:
         print(f"  [!] {upozorenje}")
@@ -106,9 +109,11 @@ def process_transaction(tx, registrants, config, solo, state, imap, registration
 
     opis = resolve_description(config, tx["amount"], registrant["course_code"])
     if opis is None:
-        print(f"[!] Uplata {tx['amount']:.2f} EUR za {full_name} uparena, ali kod tečaja "
-              f"{registrant['course_code']!r} nema definiran opis u "
-              f"course_description_map - preskačem, treba ručna provjera.")
+        razlog = (f"kod tečaja {registrant['course_code']!r} nema opisa u "
+                  f"course_description_map")
+        print(f"[!] Uplata {tx['amount']:.2f} EUR za {full_name} uparena, ali {razlog} "
+              f"- preskačem, treba ručna provjera.")
+        state.remember_unmatched(tx, razlog)
         return "unmatched"
 
     stavke = [{

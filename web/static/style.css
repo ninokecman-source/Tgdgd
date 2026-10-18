@@ -269,7 +269,7 @@ code { font-size: 13px; background: var(--crta); padding: 1px 5px; border-radius
 /* --- Polja obrasca (uređivanje poruke) --- */
 
 .polje { display: block; margin: 14px 0; font-size: 13px; color: var(--tiho); }
-.polje input, .polje textarea {
+.polje input, .polje textarea, .polje select {
   display: block;
   width: 100%;
   margin-top: 4px;
@@ -284,6 +284,7 @@ code { font-size: 13px; background: var(--crta); padding: 1px 5px; border-radius
 }
 .polje input:disabled { color: var(--tiho); background: var(--papir); }
 .polje textarea { resize: vertical; }
+.polje select { appearance: none; }
 
 .tipke.uske { margin: 8px 0 0; gap: 6px; }
 .tipka.mala { font-size: 13px; padding: 7px 12px; border-radius: 8px; }

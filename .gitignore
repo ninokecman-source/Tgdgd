@@ -18,4 +18,6 @@ __pycache__/
 *.pyc
 
 bank_solo/config.json
-bank_solo/*.sqlite3
+# Baza banke: sync.py je pokrece iz korijena repozitorija, pa zna stajati
+# i ondje, ne samo u bank_solo/.
+*.sqlite3

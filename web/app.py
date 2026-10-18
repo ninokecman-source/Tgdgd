@@ -507,7 +507,52 @@ def uplate():
     podaci = snimka()
     duznici = [(t, p) for t in podaci["tecajevi"] if t["stanje"] != "prosao"
                for p in t["polaznici"] if p["manjka"] > 0]
-    return render_template("uplate.html", podaci=podaci, duznici=duznici)
+    return render_template("uplate.html", podaci=podaci, duznici=duznici,
+                           ishodi=ucitaj_ishode()[-5:][::-1])
+
+
+def nepovezane(podaci: dict) -> list:
+    return podaci.get("uplate", {}).get("nepovezane", []) or []
+
+
+def polaznici_za_izbor(podaci: dict) -> list:
+    """[(tečaj, [polaznici s adresom])] - ponuda u izborniku pri povezivanju
+    uplate. Bez adrese se ne može povezati: uplata se knjiži po adresi, jer
+    je ona jedina jedinstvena."""
+    izbor = []
+    for t in podaci["tecajevi"]:
+        s_adresom = [p for p in t["polaznici"] if p["email"]]
+        if s_adresom:
+            izbor.append((t, s_adresom))
+    return izbor
+
+
+@app.route("/uplata/<int:broj>/povezi", methods=["GET", "POST"])
+@treba_prijava
+def povezi_uplatu(broj):
+    """Nepovezana uplata - reci čija je. Knjiži se isto kao da je sustav sam
+    prepoznao: Solo ponuda, iznos u tablicu, uplata više nije greška."""
+    podaci = snimka()
+    popis = nepovezane(podaci)
+    if broj < 0 or broj >= len(popis):
+        abort(404)
+    uplata = popis[broj]
+
+    if request.method == "POST":
+        if not token_valja():
+            abort(400)
+        email = request.form.get("email", "").strip()
+        tablica = ""
+        for t in podaci["tecajevi"]:
+            if any(p["email"].lower() == email.lower() for p in t["polaznici"] if p["email"]):
+                tablica = t["datoteka"]
+                break
+        if email and tablica and not ceka_zahtjev(tablica):
+            zatrazi("rijesi_uplatu", tablica, email=email, ref=uplata["ref"])
+        return redirect(url_for("uplate"))
+
+    return render_template("povezi.html", podaci=podaci, uplata=uplata,
+                           izbor=polaznici_za_izbor(podaci))
 
 
 @app.route("/stanje")
