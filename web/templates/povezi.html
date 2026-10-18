@@ -35,13 +35,13 @@
     </select>
   </label>
 
-  <p class="tiho">Kad potvrdiš, dogodi se sve ono što bi se dogodilo da je
-    uplata odmah prepoznata: izda se Solo ponuda na
-    <strong>{{ uplata.iznos|eur }}</strong>, iznos se pribroji tom polazniku
-    u tablici, i uplata nestane iz grešaka.</p>
+  <p class="tiho">Kad potvrdiš, <strong>{{ uplata.iznos|eur }}</strong> se
+    pribroji tom polazniku u tablici i uplata nestane iz nepovezanih.
+    <strong>Solo ponuda se ne izdaje</strong> — nju izdaješ sam, a podaci za
+    nju ispišu se ovdje nakon povezivanja.</p>
 
   <div class="tipke">
-    <button class="tipka glavna" type="submit">Poveži i proknjiži</button>
+    <button class="tipka glavna" type="submit">Poveži i upiši u tablicu</button>
     <a class="tipka tiha" href="{{ url_for('uplate') }}">Odustani</a>
   </div>
 </form>

@@ -192,10 +192,14 @@ plati za drugoga, upiše samo "tečaj", ili iskrivi ime. Takve stoje na
 stranici **Uplate**, svaka s iznosom, datumom, uplatiteljem, opisom i
 razlogom zašto nije prepoznata.
 
-Tipka **Poveži** otvara popis polaznika po tečajevima. Kad odabereš, dogodi
-se sve ono što bi se dogodilo da je uplata odmah prepoznata: izda se Solo
-ponuda na uplaćeni iznos, iznos se pribroji tom polazniku u koloni
-"Payment Received", i uplata nestane iz nepovezanih.
+Tipka **Poveži** otvara popis polaznika po tečajevima. Kad odabereš, iznos
+se pribroji tom polazniku u koloni "Payment Received" i uplata nestane iz
+nepovezanih.
+
+**Solo ponuda se pritom ne izdaje.** Uplate koje sustav prepozna sam
+dobivaju ponudu automatski, ali ovu je trebalo razriješiti rukom, pa se i
+račun izdaje rukom. Podaci za njega — kupac, adresa, iznos, tečaj — ispišu
+se nakon povezivanja, pod "Zadnji poslovi".
 
 Prije ovoga je takva uplata bila izgubljena za sustav: javljala se mailom,
 ali se pamtila samo njezina oznaka, a izvod se čita samo jednom. Sad čeka

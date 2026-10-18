@@ -6,13 +6,16 @@ plati za drugoga, upiše samo "tečaj", ili iskrivi ime. Dosad je takva
 uplata stizala mailom kao upozorenje i tu je priča stajala - izvod se čita
 samo jednom, pa je za sustav te uplate nakon toga nije ni bilo.
 
-Sad čeka u bazi, a ovdje joj se kaže čija je. Tada se dogodi sve ono što bi
-se dogodilo i da je prepoznata odmah:
+Sad čeka u bazi, a ovdje joj se kaže čija je. Tada se:
 
-  1. izda se Solo ponuda na uplaćeni iznos
-  2. iznos se pribroji u koloni "Payment Received" tog polaznika
-  3. uplata se označi obrađenom, pa se više ne javlja kao greška
-  4. ako je uključeno, polazniku ode potvrda uplate
+  1. iznos pribroji u koloni "Payment Received" tog polaznika
+  2. uplata označi obrađenom, pa se više ne javlja kao greška
+  3. ako je uključeno, polazniku pošalje potvrda uplate
+
+Solo ponuda se NE izdaje. Kod uplata koje sustav prepozna sam ponuda ide
+automatski, ali ovdje je riječ o uplati koju je trebalo razriješiti rukom -
+pa se i račun izdaje rukom, s podacima koje skripta ispiše na kraju. Tako
+nijedan dokument ne nastane na temelju pretpostavke.
 
 Pokretanje (iz korijena repozitorija ili iz bank_solo):
     python3 bank_solo/rijesi_uplatu.py --popis
@@ -27,11 +30,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from mailer import send_payment_confirmation
-from oib_lookup import discover_registration_folders, find_oib
 from registrants import add_payment, load_registrants
-from solo_client import SoloAPIError, SoloClient
 from state import StateStore
-from sync import load_config, resolve_description, spoji_imap
+from sync import load_config
 
 
 def nadji_polaznika(registrants: list, email: str):
@@ -59,29 +60,6 @@ def ispisi_popis(state: StateStore) -> None:
         print(f"      razlog:     {u['razlog'] or '-'}\n")
 
 
-def oib_polaznika(config: dict, email: str) -> str:
-    """OIB iz izvorne prijave. Ako se do maila ne može, ponuda ide bez
-    OIB-a - isto kao i kod automatske obrade."""
-    try:
-        imap = spoji_imap(config)
-    except Exception as e:
-        print(f"  (ne mogu do maila za OIB: {e} - ponuda ide bez OIB-a)")
-        return ""
-    try:
-        imap.login(config["zoho_email"], config["zoho_app_password"])
-        folders = discover_registration_folders(
-            imap, config.get("course_folder_roots", []))
-        return find_oib(imap, config["sender_filter"], folders, email) or ""
-    except Exception as e:
-        print(f"  (OIB nije dohvaćen: {e} - ponuda ide bez OIB-a)")
-        return ""
-    finally:
-        try:
-            imap.logout()
-        except Exception:
-            pass
-
-
 def rijesi(state: StateStore, config: dict, ref_id: str, email: str,
            stvarno: bool) -> None:
     uplata = state.get_unmatched(ref_id)
@@ -97,53 +75,32 @@ def rijesi(state: StateStore, config: dict, ref_id: str, email: str,
     polaznik = nadji_polaznika(registrants, email)
     puno_ime = f"{polaznik['first_name']} {polaznik['last_name']}".strip()
     iznos = float(uplata["amount"])
+    tecaj = f"{polaznik['course_code']} - {polaznik['location']}".strip(" -")
 
-    opis = resolve_description(config, iznos, polaznik["course_code"])
-    if opis is None:
-        sys.exit(f"Kod tečaja {polaznik['course_code']!r} nema opisa u "
-                 f"course_description_map - dopuni config.json pa pokušaj opet.")
-
-    napomene = f"{polaznik['course_code']} - {polaznik['location']}".strip(" -")
     print(f"Uplata {iznos:.2f} EUR od {uplata['name'] or '?'} ({uplata['date']})")
     print(f"  opis uplate: {uplata['description'] or '(nema)'}")
     print(f"  ide na:      {puno_ime} <{polaznik['email']}>")
-    print(f"  tečaj:       {napomene}")
-    print(f"  na ponudi:   {opis}")
+    print(f"  tečaj:       {tecaj}")
     print(f"  tablica:     {Path(polaznik['file_path']).name}, redak {polaznik['row']}")
 
     if not stvarno:
         print("\nPregled - ništa nije promijenjeno. Za stvarno dodaj --stvarno")
         return
 
-    oib = oib_polaznika(config, polaznik["email"])
-    if not oib:
-        print(f"  (OIB nije pronađen za {puno_ime} - ponuda se šalje bez OIB-a)")
-
-    solo = SoloClient(api_token=config["solo_api_token"])
-    try:
-        ponuda = solo.create_ponuda(
-            tip_kupca=config["solo_tip_kupca"],
-            tip_usluge=config["solo_tip_usluge"],
-            nacin_placanja=config["solo_nacin_placanja"],
-            kupac_naziv=puno_ime,
-            kupac_adresa=polaznik.get("address") or None,
-            kupac_oib=oib or None,
-            stavke=[{"opis": opis, "cijena": iznos, "kolicina": 1,
-                     "porez_stopa": config["solo_default_tax_rate"]}],
-            napomene=napomene,
-        )
-    except SoloAPIError as e:
-        sys.exit(f"[GREŠKA] Solo ponuda za {puno_ime} ({ref_id}): {e}")
-
-    broj_ponude = ponuda.get("broj_ponude")
-    # Tek kad je ponuda izdana diramo tablicu i stanje - da se uplata ne
-    # proknjiži dvaput ako Solo zakaže pa pokušaš ponovno.
     novi_ukupno = add_payment(polaznik["file_path"], polaznik["row"], iznos)
-    state.mark_transaction_processed(ref_id, iznos, puno_ime, broj_ponude)
+    # 'rucno' umjesto broja ponude: u bazi se tako vidi da za ovu uplatu
+    # ponuda nije izdana automatski.
+    state.mark_transaction_processed(ref_id, iznos, puno_ime, "rucno")
     state.resolve_unmatched(ref_id, puno_ime)
 
-    print(f"\nGotovo. Solo ponuda {broj_ponude}, ukupno uplaćeno sad: "
+    print(f"\nUpisano u tablicu. {puno_ime} ima sad ukupno "
           f"{novi_ukupno:.2f} EUR.")
+    print("\nSolo ponuda NIJE izdana - izdaj je sam, s ovim podacima:")
+    print(f"  kupac:  {puno_ime}")
+    if polaznik.get("address"):
+        print(f"  adresa: {polaznik['address']}")
+    print(f"  iznos:  {iznos:.2f} EUR")
+    print(f"  tečaj:  {tecaj}")
 
     if config.get("send_payment_confirmation"):
         try:

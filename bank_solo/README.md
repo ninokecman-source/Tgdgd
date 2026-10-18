@@ -223,16 +223,19 @@ python3 bank_solo/rijesi_uplatu.py --ref 1234567 --email ana@primjer.hr --stvarn
 Bez `--stvarno` je samo pregled: pokaže na koga bi uplata išla, u koju
 tablicu i koji redak, i što bi pisalo na ponudi.
 
-S `--stvarno` se dogodi isto što i kod automatske obrade, istim redom:
+S `--stvarno`:
 
-1. izda se Solo ponuda na uplaćeni iznos (OIB se dohvaća iz izvorne
-   prijave; ako se do maila ne može, ponuda ide bez OIB-a)
-2. iznos se pribroji u koloni "Payment Received"
-3. transakcija se označi obrađenom i makne iz nepovezanih
+1. iznos se pribroji u koloni "Payment Received"
+2. transakcija se označi obrađenom i makne iz nepovezanih
+3. ispišu se podaci za Solo ponudu - kupac, adresa, iznos, tečaj
 
-Tablica se dira tek nakon što ponuda prođe - ako Solo zakaže, uplata nije
-ni proknjižena, pa se pokušaj može ponoviti bez dvostrukog knjiženja. Uplata
-koja je već povezana odbija se izrijekom.
+**Solo ponuda se ne izdaje.** Uplate koje sustav prepozna sam dobivaju
+ponudu automatski; ovu je trebalo razriješiti rukom, pa se i račun izdaje
+rukom. Tako nijedan dokument ne nastane na temelju pretpostavke o tome čija
+je uplata. U bazi takva transakcija nosi `rucno` umjesto broja ponude, pa se
+poslije vidi za koje uplate ponuda nije išla automatski.
+
+Uplata koja je već povezana odbija se izrijekom.
 
 Polaznik se bira po **email adresi**, jer je ona jedina jedinstvena. Ako se
 ista adresa pojavi na više tečajeva, skripta odustaje i traži da to riješiš
