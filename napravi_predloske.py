@@ -21,6 +21,8 @@ import poruke
 import predlosci
 from posalji_tablicu import DEFAULT_BODY as IZVJESTAJ_BODY
 from posalji_tablicu import DEFAULT_SUBJECT as IZVJESTAJ_SUBJECT
+from posalji_certifikate import ZADANI_NASLOV as POTVRDNICA_NASLOV
+from posalji_certifikate import ZADANI_TEKST as POTVRDNICA_TEKST
 from send_reminders import ZADANI_NASLOV
 from zoho_to_excel import load_config
 
@@ -86,7 +88,14 @@ def popis(config: dict) -> list:
                 config.get("payment_reminder_body") or poruke.ZADANO_TIJELO),
     ))
 
-    # 5. Mail centrali nakon tečaja
+    # 5. Mail uz potvrdnicu
+    stavke.append((
+        "mail uz certifikat",
+        sastavi(config.get("certificate_mail_subject") or POTVRDNICA_NASLOV,
+                config.get("certificate_mail_body") or POTVRDNICA_TEKST),
+    ))
+
+    # 6. Mail centrali nakon tečaja
     stavke.append((
         "izvjestaj centrali",
         sastavi(config.get("course_report_subject", IZVJESTAJ_SUBJECT),
