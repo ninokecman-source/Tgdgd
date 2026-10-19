@@ -243,7 +243,11 @@ def repa_loga(put: Path) -> list:
 def citaj_logove(config: dict) -> dict:
     """Greške i prolazi iz logova. Svakoj se grešci pridruži posao u kojem se
     pojavila - zaglavlje koje pokreni.sh upiše prije svakog pokretanja."""
-    greske, prolazi, stanje_logova = [], [], []
+    greske, stanje_logova = [], []
+    # Prolazi se grupiraju po poslu, ne nabrajaju redom: prijave se citaju
+    # svakih pola sata, pa bi inace 48 istih redaka dnevno zatrpalo sve
+    # ostalo. Zanima te kad je posao zadnji put prosao, ne svaki put.
+    prolazi = {}
 
     for naziv, put_tekst in config.get("watch_logs", DEFAULT_LOGS).items():
         put = Path(put_tekst).expanduser()
@@ -265,15 +269,19 @@ def citaj_logove(config: dict) -> dict:
             zaglavlje = ZAGLAVLJE.match(redak.strip())
             if zaglavlje:
                 kada, posao = zaglavlje.group(1), zaglavlje.group(2)
-                prolazi.append({"log": naziv, "kada": kada, "posao": posao})
+                unos = prolazi.setdefault((naziv, posao),
+                                          {"log": naziv, "posao": posao,
+                                           "kada": kada, "broj": 0})
+                unos["broj"] += 1
+                unos["kada"] = max(unos["kada"], kada)
                 continue
             if redak.strip() and any(u.search(redak) for u in PROBLEM_UZORCI):
                 greske.append({"log": naziv, "kada": kada, "posao": posao,
                                "redak": redak.strip()[:400]})
 
-    prolazi.sort(key=lambda r: r["kada"], reverse=True)
+    redom = sorted(prolazi.values(), key=lambda r: r["kada"], reverse=True)
     greske.sort(key=lambda r: r["kada"], reverse=True)
-    return {"greske": greske[:60], "prolazi": prolazi[:40], "logovi": stanje_logova}
+    return {"greske": greske[:60], "prolazi": redom, "logovi": stanje_logova}
 
 
 def main():

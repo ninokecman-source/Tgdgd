@@ -6,8 +6,10 @@
 TZ=Europe/Zagreb
 SHELL=/bin/bash
 
-# Prijave iz Zoha u Excel - svakih 6 sati
-0 */6 * * * $HOME/Tgdgd/server/pokreni.sh zoho_to_excel.py >> $HOME/Tgdgd/log.txt 2>&1
+# Prijave iz Zoha u Excel - svakih pola sata, da prijava brzo bude u tablici.
+# BRAVA_CEKANJE=300: ako brava nije slobodna za pet minuta, preskoci - sljedeci
+# pokusaj je ionako za 25 minuta, pa se poslovi ne nagomilavaju.
+*/30 * * * * BRAVA_CEKANJE=300 $HOME/Tgdgd/server/pokreni.sh zoho_to_excel.py >> $HOME/Tgdgd/log.txt 2>&1
 
 # Bankovni izvodi i Solo ponude - svakih 6 sati, pola sata poslije
 30 */6 * * * $HOME/Tgdgd/server/pokreni.sh bank_solo/sync.py >> $HOME/Tgdgd/sync.log 2>&1

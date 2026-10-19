@@ -17,11 +17,12 @@
 
 <section>
   <h2>Zadnji prolazi</h2>
-  <p class="tiho">Što je cron pokrenuo i kada.</p>
+  <p class="tiho">Kad je koji posao zadnji put prošao.</p>
   {% for p in podaci.prolazi %}
   <div class="redak">
     <div class="redak-ime">{{ p.posao }}</div>
-    <div class="redak-detalj tiho">{{ p.kada|vrijeme }} · {{ p.log }}</div>
+    <div class="redak-detalj tiho">{{ p.kada|vrijeme }} · {{ p.log }}{%
+      if p.broj and p.broj > 1 %} · {{ p.broj }} prolaza u logu{% endif %}</div>
   </div>
   {% endfor %}
   {% if not podaci.prolazi %}<p class="tiho">U logovima nema nijednog zapisa.</p>{% endif %}

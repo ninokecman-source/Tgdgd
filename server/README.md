@@ -169,7 +169,12 @@ Prvi redak spremi kopiju, da se možeš vratiti.
 3. vrati promjene u Dropbox
 
 Sve troje pod jednom bravom (`flock`), pa se dva cron posla nikad ne
-preklope ni međusobno ni sa sinkronizacijom. Ako posao padne, promjene se
+preklope ni međusobno ni sa sinkronizacijom.
+
+Koliko se čeka na bravu zadaje `BRAVA_CEKANJE` (zadano 1800 s). Posao koji
+se vrti često dobiva kraće čekanje — prijave se čitaju svakih pola sata s
+`BRAVA_CEKANJE=300`, jer nema smisla da ga, ako brava nije slobodna,
+dočekaju još tri njegova nasljednika. Ako posao padne, promjene se
 svejedno vraćaju u Dropbox, a izlazni status se prenosi dalje — pa ga
 uhvati provjera logova.
 

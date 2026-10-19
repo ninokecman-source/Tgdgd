@@ -19,9 +19,15 @@ fi
 
 SKRIPTA="$1"; shift
 
-# flock drzi bravu dok traje cijeli blok; -w ceka najvise 30 min, pa odustane
-# umjesto da se poslovi nagomilaju.
-exec flock -w 1800 "$BRAVA" bash -c '
+# flock drzi bravu dok traje cijeli blok; -w ceka najvise CEKANJE sekundi, pa
+# odustane umjesto da se poslovi nagomilaju.
+#
+# Posao koji se vrti cesto treba kratko cekanje: ako brava nije slobodna za
+# nekoliko minuta, nema smisla da ga docekaju jos tri njegova nasljednika.
+# Zato se zadaje iz crontaba: BRAVA_CEKANJE=300 pokreni.sh zoho_to_excel.py
+CEKANJE="${BRAVA_CEKANJE:-1800}"
+
+exec flock -w "$CEKANJE" "$BRAVA" bash -c '
     set -euo pipefail
     KORIJEN="$1"; SKRIPTA="$2"; shift 2
     echo "=== $(date "+%Y-%m-%d %H:%M:%S") $SKRIPTA $* ==="
