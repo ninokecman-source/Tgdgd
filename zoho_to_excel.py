@@ -13,7 +13,6 @@ Postavke se čitaju iz config.json (napravi ga iz config.example.json).
 """
 
 import imaplib
-import smtplib
 import ssl
 import email
 from email import policy
@@ -27,6 +26,7 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
+import posta
 import predlosci
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
@@ -404,9 +404,7 @@ def send_confirmation_email(config: dict, data: dict, course_code: str,
     msg["To"] = to_email
     msg.set_content(body)
 
-    with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
-        smtp.login(config["zoho_email"], config["zoho_app_password"])
-        smtp.send_message(msg)
+    posta.posalji(config, msg)
     return True
 
 

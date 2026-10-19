@@ -19,12 +19,13 @@ Pokretanje:
 
 import argparse
 import mimetypes
-import smtplib
 import sys
 from email.message import EmailMessage
 from pathlib import Path
 
 from zoho_to_excel import load_config, with_retry
+
+import posta
 
 
 def procitaj(put_tekst: str, sto: str) -> str:
@@ -52,9 +53,7 @@ def posalji(config: dict, kome: str, naslov: str, tijelo: str, prilog: Path = No
                            subtype=pod or "octet-stream", filename=prilog.name)
 
     def _posalji():
-        with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
-            smtp.login(config["zoho_email"], config["zoho_app_password"])
-            smtp.send_message(msg)
+        posta.posalji(config, msg)
 
     with_retry(_posalji)
 

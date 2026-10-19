@@ -25,13 +25,14 @@ Pokretanje:
 import argparse
 import json
 import re
-import smtplib
 import sys
 from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
 
 from zoho_to_excel import load_config, with_retry
+
+import posta
 
 STATE_PATH = Path(__file__).with_name("log_check_state.json")
 
@@ -144,9 +145,7 @@ def posalji_mail(config: dict, naslov: str, tijelo: str) -> None:
     msg.set_content(tijelo)
 
     def _posalji():
-        with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
-            smtp.login(config["zoho_email"], config["zoho_app_password"])
-            smtp.send_message(msg)
+        posta.posalji(config, msg)
 
     with_retry(_posalji)
 

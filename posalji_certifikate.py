@@ -24,13 +24,13 @@ potvrdnicu dvaput, koliko god puta skriptu pokrenuo.
 import argparse
 import json
 import mimetypes
-import smtplib
 import sys
 from email.message import EmailMessage
 from pathlib import Path
 
 from openpyxl import load_workbook
 
+import posta
 import predlosci
 import tablice
 from napravi_certifikate import ime_datoteke, ime_mape
@@ -113,9 +113,7 @@ def posalji_jedan(config: dict, primatelj: str, naslov: str, tijelo: str,
                        subtype=pod or "pdf", filename=pdf.name)
 
     def _posalji():
-        with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
-            smtp.login(config["zoho_email"], config["zoho_app_password"])
-            smtp.send_message(msg)
+        posta.posalji(config, msg)
 
     with_retry(_posalji)
 

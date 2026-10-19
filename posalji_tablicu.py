@@ -22,7 +22,6 @@ Tablica sadrži osobne podatke polaznika (ime, adresa, email, telefon) -
 import argparse
 import json
 import mimetypes
-import smtplib
 import sys
 from datetime import date
 from email.message import EmailMessage
@@ -30,6 +29,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+import posta
 import predlosci
 import tablice
 from send_reminders import (
@@ -123,9 +123,7 @@ def javi_nepotpunu(config: dict, xlsx_path: Path, info: dict, fali: list,
     msg.set_content(tijelo)
 
     def _posalji():
-        with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
-            smtp.login(config["zoho_email"], config["zoho_app_password"])
-            smtp.send_message(msg)
+        posta.posalji(config, msg)
 
     with_retry(_posalji)
 
@@ -158,9 +156,7 @@ def posalji(config: dict, primatelji: list, naslov: str, tijelo: str,
                        filename=xlsx_path.name)
 
     def _posalji():
-        with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
-            smtp.login(config["zoho_email"], config["zoho_app_password"])
-            smtp.send_message(msg)
+        posta.posalji(config, msg)
 
     with_retry(_posalji)
 

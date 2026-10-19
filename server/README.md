@@ -194,6 +194,21 @@ jednu granu.
 
 ---
 
+## Odlazni mail
+
+Hetzner zatvara odlazne portove 465 i 25 (mjera protiv neželjene pošte), a
+587 ostavlja otvoren. Zato u `config.json` i `bank_solo/config.json` stoji:
+
+```json
+"smtp_port": 587
+```
+
+Bez toga slanje tiho istekne (`[Errno 110] Connection timed out`), dok
+čitanje prijava radi - IMAP ide na svoj port, 993, koji nije blokiran. To je
+podmukla kombinacija: sustav izgleda živ, prijave stižu, a ništa ne izlazi.
+
+Način šifriranja bira `posta.py` po portu; vidi glavni README.
+
 ## Web pregled
 
 Uz poslove na serveru stoji i stranica za mobitel — tečajevi, prijavljeni,

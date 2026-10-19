@@ -487,6 +487,49 @@ Redoslijed modula je u `config.json`:
 "module_order": ["Modul 1&2", "Modul 3", "Modul 4", "Modul 5", "Modul 6"]
 ```
 
+## Slanje maila (`posta.py`)
+
+Sve skripte šalju kroz `posta.py`. Vrsta šifriranja bira se po portu, jer se
+tako i razlikuju:
+
+| port | način | napomena |
+|---|---|---|
+| 465 | izravni TLS | zadano; veza je šifrirana od prve bajte |
+| 587 | STARTTLS | veza kreće otvoreno pa se podigne u TLS |
+| 25 | STARTTLS | blokiran kod gotovo svih davatelja |
+
+Oba su jednako sigurna kad se obave do kraja - razlikuju se samo u trenutku
+kad šifriranje počne. Port se mijenja u `config.json`, bez ijedne izmjene
+koda:
+
+```json
+"smtp_port": 587
+```
+
+**Na Hetznerovim serverima** (i kod mnogih drugih) odlazni portovi 465 i 25
+su zatvoreni kao mjera protiv neželjene pošte, a 587 je otvoren. Simptom je
+`[Errno 110] Connection timed out` pri slanju, dok čitanje prijava radi
+normalno - jer IMAP ide na svoj port. Provjera:
+
+```bash
+python3 -c "
+import socket
+for p in (465, 587, 25):
+    s = socket.socket(); s.settimeout(6)
+    try: s.connect(('smtp.zoho.com', p)); print(p, 'otvoren')
+    except Exception as e: print(p, 'zatvoren:', e)
+    finally: s.close()
+"
+```
+
+Provjera da slanje stvarno radi, nakon izmjene:
+
+```bash
+python3 provjeri_logove.py --test
+```
+
+Pošalje mail bez obzira na to ima li grešaka - ako stigne, put je čist.
+
 ## Što se događa kad nešto pukne
 
 Sustav je posložen tako da **radije ne napravi ništa nego da napravi krivo**.

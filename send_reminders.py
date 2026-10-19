@@ -28,7 +28,6 @@ nitko ne dobiva istu poruku dvaput, koliko god puta se skripta pokrenula.
 import argparse
 import json
 import re
-import smtplib
 import sys
 from datetime import date, datetime, timedelta
 from email.message import EmailMessage
@@ -36,6 +35,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+import posta
 import predlosci
 import tablice
 from zoho_to_excel import (
@@ -259,9 +259,7 @@ def send_one(config: dict, to_email: str, subject: str, body: str) -> None:
     msg.set_content(body)
 
     def _send():
-        with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
-            smtp.login(config["zoho_email"], config["zoho_app_password"])
-            smtp.send_message(msg)
+        posta.posalji(config, msg)
 
     with_retry(_send)
 

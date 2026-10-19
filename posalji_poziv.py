@@ -18,7 +18,6 @@ Pokretanje (primatelji i tekst u datotekama, kao i kod ostalih poruka):
 
 import argparse
 import json
-import smtplib
 import sys
 from email.message import EmailMessage
 from pathlib import Path
@@ -26,6 +25,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 import pozivi
+import posta
 import predlosci
 import tablice
 from send_reminders import course_info
@@ -92,9 +92,7 @@ def posalji_jedan(config: dict, kome: str, naslov: str, tijelo: str) -> None:
     msg.set_content(tijelo)
 
     def _posalji():
-        with smtplib.SMTP_SSL(config["smtp_host"], config.get("smtp_port", 465)) as smtp:
-            smtp.login(config["zoho_email"], config["zoho_app_password"])
-            smtp.send_message(msg)
+        posta.posalji(config, msg)
 
     with_retry(_posalji)
 
