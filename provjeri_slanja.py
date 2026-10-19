@@ -82,7 +82,7 @@ def neuspjela_slanja(config: dict, od: date) -> list:
     return nalazi
 
 
-def provjeri_podsjetnike(datoteke, config, danas):
+def provjeri_podsjetnike(datoteke, config, danas, od=date.min):
     """[(tablica, dana_prije, stanje, koliko)] - po jednom pravilu i tečaju."""
     pravila = sorted(config.get("reminders", []),
                      key=lambda r: r["days_before"], reverse=True)
@@ -98,6 +98,8 @@ def provjeri_podsjetnike(datoteke, config, danas):
         pocetak = parse_start_date(info["dates"])
         if pocetak is None:
             continue
+        if pocetak < od:
+            continue      # tecaj je bio prije razdoblja koje gledamo
         dana_do = (pocetak - danas).days
 
         adrese = {str(ws.cell(row=r, column=COL_EMAIL).value or "").strip().lower()
@@ -119,7 +121,7 @@ def provjeri_podsjetnike(datoteke, config, danas):
             elif dana_do > donja:
                 polozaj = "u prozoru - poslat ce se sam"
             else:
-                polozaj = "PROPUSTENO"
+                polozaj = "nije dobio, prozor prosao"
             nalazi.append((f"{info['course_code']} / {info['location']}",
                            put.name, dana_prije, polozaj, len(fali), dana_do))
     return nalazi
@@ -141,7 +143,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Provjeri je li koja poruka trebala otići, a nije.")
     parser.add_argument("--od", metavar="GGGG-MM-DD",
-                        help="Gledaj logove samo od tog datuma")
+                        help="Gledaj samo logove i tecajeve od tog datuma")
     args = parser.parse_args()
 
     od = date.min
@@ -177,14 +179,20 @@ def main():
         print(f"  {kada}  {posao:24} {redak[:110]}")
 
     print("\nPODSJETNICI")
-    podsjetnici = provjeri_podsjetnike(datoteke, config, danas)
+    podsjetnici = provjeri_podsjetnike(datoteke, config, danas, od)
     if not podsjetnici:
         print("  Svi su podsjetnici poslani svima, ili ih nema za slati.")
     for tecaj, datoteka, dana_prije, polozaj, koliko, dana_do in podsjetnici:
-        oznaka = "[!]" if polozaj == "PROPUSTENO" else "   "
+        oznaka = "[!]" if polozaj.startswith("nije dobio") else "   "
         print(f"  {oznaka} {tecaj:30} '{dana_prije} "
               f"{'dan' if dana_prije == 1 else 'dana'} prije': "
               f"{koliko} bez poruke - {polozaj} (tecaj za {dana_do} dana)")
+
+    if any(p[3].startswith("nije dobio") for p in podsjetnici):
+        print("\n  Napomena: tko se prijavio nakon sto je prozor podsjetnika")
+        print("  prosao nikad nije ni mogao dobiti tu poruku - to nije kvar.")
+        print("  Tablica ne biljezi datum prijave, pa se to dvoje ne moze")
+        print("  razluciti; usporedi s neuspjelim slanjima gore.")
 
     print("\nTABLICA CENTRALI")
     poslane = citaj_json(Path(__file__).with_name("sent_reports.json"))

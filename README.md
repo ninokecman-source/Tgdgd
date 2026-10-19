@@ -556,6 +556,15 @@ Ništa ne šalje i ništa ne mijenja. Uspoređuje pravila s onim što je
 zabilježeno kao poslano i ispiše neuspjela slanja iz logova, označena s
 `[!]` ondje gdje treba nešto poduzeti.
 
+**Bez `--od` gleda cijelu povijest**, pa će ispisati i podsjetnike koji
+nisu otišli davno, iz posve drugih razloga. Za pitanje "što je palo zbog
+ovog kvara" zadaj datum od kojeg gledaš.
+
+Jedno `[!]` kod podsjetnika ne znači nužno kvar: tko se prijavio nakon što
+je prozor podsjetnika prošao nikad nije ni mogao dobiti tu poruku. Tablica
+ne bilježi datum prijave, pa se to dvoje ne može razlučiti iz podataka -
+usporedi s popisom neuspjelih slanja iznad, koji je mjerodavan.
+
 Za potvrde prijave i potvrde uplate ne postoji popis "kome je poslano", pa
 se one vide jedino u logovima - ako ih ondje nema, nijedna nije pala.
 
