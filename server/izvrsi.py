@@ -40,6 +40,9 @@ ISPIS_ZNAKOVA = 6000
 NAJDULJI_NASLOV = 300
 NAJDULJE_TIJELO = 20000
 NAJDULJE_IME = 120
+# Jedan tečaj ima najviše dvadesetak ljudi; stotinu je već znak da nešto
+# nije u redu, pa se takav zahtjev odbija umjesto da se izvrši.
+NAJVISE_PRIMATELJA = 100
 
 
 class Odbijeno(Exception):
@@ -97,6 +100,32 @@ def _podsjetnik(zahtjev, tablica, mapa):
             "--stvarno"]
 
 
+def _poziv(zahtjev, tablica, mapa):
+    ljudi = zahtjev.get("primatelji")
+    if not isinstance(ljudi, list) or not ljudi:
+        raise Odbijeno("nijedan primatelj nije odabran")
+    if len(ljudi) > NAJVISE_PRIMATELJA:
+        raise Odbijeno(f"previše primatelja odjednom ({len(ljudi)})")
+    for osoba in ljudi:
+        if not isinstance(osoba, dict):
+            raise Odbijeno("neispravan zapis primatelja")
+        adresa = str(osoba.get("email", "")).strip()
+        if "@" not in adresa or len(adresa.split()) != 1:
+            raise Odbijeno(f"ovo ne izgleda kao adresa: {adresa!r}")
+        if len(str(osoba.get("ime", ""))) > NAJDULJE_IME:
+            raise Odbijeno("ime primatelja je predugačko")
+
+    naslov_put, tijelo_put = zapisi_tekst(mapa, zahtjev)
+    popis = mapa / "primatelji.json"
+    popis.write_text(json.dumps(
+        [{"ime": str(o.get("ime", "")).strip(), "email": str(o["email"]).strip()}
+         for o in ljudi], ensure_ascii=False), encoding="utf-8")
+
+    return ["posalji_poziv.py", "--tecaj", tablica, "--primatelji", str(popis),
+            "--naslov-datoteka", naslov_put, "--tijelo-datoteka", tijelo_put,
+            "--posalji"]
+
+
 def _rijesi_uplatu(zahtjev, tablica, mapa):
     adresa = provjeri_adresu(zahtjev)
     ref = str(zahtjev.get("ref", "")).strip()
@@ -126,6 +155,7 @@ POSLOVI = {
     "podsjetnik_uplata": _podsjetnik,
     "otkazi_polaznika": _otkazi,
     "rijesi_uplatu": _rijesi_uplatu,
+    "posalji_poziv": _poziv,
 }
 
 

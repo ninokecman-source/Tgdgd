@@ -464,6 +464,29 @@ Zadani tekst podsjetnika za uplatu živi u `poruke.py`, a kao i svaki drugi
 može se preuzeti u dokument `podsjetnik za uplatu.docx` uz tablice
 (`napravi_predloske.py` ga napravi).
 
+### `posalji_poziv.py` - poziv na sljedeći modul
+
+Poziva polaznike prethodnog modula da se prijave na tečaj. Koga pozvati
+odlučuje se na stranici (vidi `pozivi.py` i `web/README.md`), a ovamo stiže
+gotov popis - skripta ne pogađa ništa.
+
+```bash
+python3 posalji_poziv.py --tecaj "Modul 3 Zagreb.xlsx" \
+    --primatelji ljudi.json \
+    --naslov-datoteka naslov.txt --tijelo-datoteka tijelo.txt
+python3 posalji_poziv.py ... --posalji
+```
+
+Svatko dobiva zasebnu poruku sa svojim imenom; nitko ne vidi tuđe adrese.
+Tko je jednom pozvan na taj tečaj neće biti pozvan opet - pamti
+`poslani_pozivi.json`.
+
+Redoslijed modula je u `config.json`:
+
+```json
+"module_order": ["Modul 1&2", "Modul 3", "Modul 4", "Modul 5", "Modul 6"]
+```
+
 ## Što se događa kad nešto pukne
 
 Sustav je posložen tako da **radije ne napravi ništa nego da napravi krivo**.

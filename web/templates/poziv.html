@@ -1,0 +1,96 @@
+{% extends "osnova.html" %}
+{% block naslov %}Poziv na tečaj{% endblock %}
+{% block sadrzaj %}
+
+<h1>Pozovi na {{ tecaj.kod }}</h1>
+<p class="tiho">{{ tecaj.mjesto }} · {{ tecaj.datumi }}</p>
+
+{% if not skupine %}
+<p class="tiho">Nema koga pozvati. Ili su svi s
+  {{ prethodni }} već prijavljeni, ili su već pozvani, ili taj modul još
+  nije održan.</p>
+<p><a href="{{ url_for('tecaj', oznaka=tecaj.oznaka) }}">← natrag</a></p>
+
+{% else %}
+<p>Polaznici koji su prošli <strong>{{ prethodni }}</strong>, a nisu
+  prijavljeni na ovaj tečaj. Odznači koga ne želiš zvati.</p>
+
+<form method="post">
+  <input type="hidden" name="token" value="{{ token }}">
+
+  {% for s in skupine %}
+  <h2>{{ s.tecaj }} · {{ s.mjesto }}
+    <span class="tiho">({{ s.datumi }})</span></h2>
+  {% for o in s.ljudi %}
+  <label class="kvacica">
+    <input type="checkbox" name="kome" value="{{ o.email }}" checked>
+    <span>
+      <span class="redak-ime">{{ o.ime }}</span>
+      <span class="redak-detalj tiho">{{ o.email }}</span>
+    </span>
+  </label>
+  {% endfor %}
+  {% endfor %}
+
+  <h2>Poruka</h2>
+  {% if greska %}
+  <p class="traka lose">Ne mogu pročitati tekst poruke: {{ greska }}</p>
+  {% endif %}
+
+  <label class="polje">Naslov
+    <input name="naslov" value="{{ naslov }}" required maxlength="300">
+  </label>
+
+  <label class="polje">Tekst
+    <textarea name="tijelo" rows="16" required>{{ tijelo }}</textarea>
+  </label>
+
+  <p class="tiho">Ime ne upisuješ — <code>{first_name}</code> se popuni za
+    svakoga posebno, pri slanju. Isto vrijedi za <code>{last_name}</code>
+    <code>{course_code}</code> <code>{location}</code> <code>{dates}</code>
+    <code>{prethodni_modul}</code> <code>{instructor_name}</code>
+    <code>{link_termini}</code>.</p>
+
+  <details class="pregled" open>
+    <summary>Ovako će izgledati prvom na popisu
+      ({{ skupine[0].ljudi[0].ime }})</summary>
+    <div class="pregled-naslov" id="pregled-naslov"></div>
+    <pre id="pregled-tijelo"></pre>
+  </details>
+
+  <p class="tiho">Izvor teksta: {{ izvor }}. Izmjena vrijedi samo za ovo
+    slanje — trajno se mijenja u dokumentu <code>poziv na tecaj.docx</code>.
+    Svatko dobiva zasebnu poruku; nitko ne vidi tuđe adrese.</p>
+
+  <div class="tipke">
+    <button class="tipka glavna" type="submit">Pošalji poziv</button>
+    <a class="tipka tiha" href="{{ url_for('tecaj', oznaka=tecaj.oznaka) }}">Odustani</a>
+  </div>
+</form>
+
+<script>
+// Isti pregled kao kod potvrdnica - pomoć pri čitanju, slanje radi server.
+(function () {
+  var podaci = {{ primjer | tojson }};
+  var naslov = document.querySelector('input[name=naslov]');
+  var tijelo = document.querySelector('textarea[name=tijelo]');
+  var izlazN = document.getElementById('pregled-naslov');
+  var izlazT = document.getElementById('pregled-tijelo');
+  if (!naslov || !tijelo || !izlazN || !izlazT) return;
+
+  function popuni(tekst) {
+    return tekst.replace(/\{(\w+)\}/g, function (cijelo, kljuc) {
+      return Object.prototype.hasOwnProperty.call(podaci, kljuc) ? podaci[kljuc] : cijelo;
+    });
+  }
+  function osvjezi() {
+    izlazN.textContent = popuni(naslov.value);
+    izlazT.textContent = popuni(tijelo.value);
+  }
+  naslov.addEventListener('input', osvjezi);
+  tijelo.addEventListener('input', osvjezi);
+  osvjezi();
+})();
+</script>
+{% endif %}
+{% endblock %}

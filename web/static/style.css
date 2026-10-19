@@ -506,3 +506,23 @@ section[id] { scroll-margin-top: 64px; }
 .znak img { height: 17px; width: auto; }
 .znak-veliki { margin: 0 auto 4px; }
 .znak-veliki img { height: 30px; width: auto; display: block; margin: 0 auto; }
+
+/* --- Kvačice (odabir primatelja) --- */
+
+.kvacica {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--ploha);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sjena-1);
+  padding: 12px 14px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.kvacica input { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--navy); }
+.kvacica .redak-ime, .kvacica .redak-detalj { display: block; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="light"]) .kvacica input { accent-color: var(--sky); }
+}

@@ -35,6 +35,26 @@ Lijep pozdrav,
 EMMETT Hrvatska"""
 
 
+POZIV_NASLOV = "Emmett tehnika - {course_code} u mjestu {location} ({dates})"
+
+# Odlomci stoje svaki u svom retku, bez tvrdih prijeloma: poruka se čita na
+# mobitelu, pa neka je prelama čitač, a ne mi na 72 znaka.
+POZIV_TIJELO = """Poštovani/a {first_name},
+
+javljamo se jer ste prošli {prethodni_modul} - otvorene su prijave za sljedeći korak: {course_code}, {dates} u mjestu {location}.
+
+Na tom modulu nadograđujete ono što već znate, s novim tehnikama i novim područjima tijela. Broj mjesta je ograničen, a prijave idu redom kojim stižu.
+
+Prijavnicu i sve termine možete pronaći ovdje:
+{link_termini}
+
+Ako vam ovaj termin ne odgovara ili vas zanima neki drugi modul, slobodno mi se javite - rado ću pomoći oko izbora.
+
+Lijep pozdrav,
+{instructor_name}
+EMMETT Hrvatska"""
+
+
 def iznos(vrijednost) -> str:
     """400.0 -> '400', 349.5 -> '349,50'. U poruci čovjeku ne stoji '400.0'."""
     try:

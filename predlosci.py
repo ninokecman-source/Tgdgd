@@ -51,6 +51,13 @@ def bez_dijakritika(tekst: str) -> str:
     return str(tekst).translate(zamjene).lower().strip()
 
 
+def kljuc_tecaja(kod) -> str:
+    """Kod tečaja sveden na oblik po kojem se uspoređuje: bez kvačica, bez
+    velikih slova, bez viška razmaka. Tablice ispunjava čovjek, pa
+    "Modul 1&2", "modul 1&2" i "MODUL  1&2" moraju značiti isto."""
+    return " ".join(bez_dijakritika(str(kod)).split())
+
+
 def nadji_dokument(mapa: Path, nazivi):
     """Nađi dokument po nazivu (bez nastavka). `nazivi` smije biti jedan
     naziv ili popis mogućih - vraća se prvi koji postoji. Velika/mala slova

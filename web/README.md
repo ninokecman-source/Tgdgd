@@ -163,7 +163,7 @@ tražiš rijetko; promijeni to s `web_session_days` u `config.json`.
 | Stranica | Što pokazuje |
 |---|---|
 | Tečajevi | tečajevi pred nama i prošli, broj prijavljenih, uplaćeno |
-| Tečaj | polaznici, uplate, što im je poslano, tipke za potvrdnice |
+| Tečaj | radnje na vrhu, pa polaznici, uplate i što im je poslano |
 | Uplate | kome manjka novac, proknjižene uplate iz banke |
 | Stanje | zadnji prolazi cron poslova, greške iz logova |
 
@@ -207,6 +207,28 @@ u bazi dok joj ne kažeš čija je.
 
 Na popisu su samo polaznici s upisanom adresom — po adresi se uplata
 povezuje, jer je ona jedina jedinstvena.
+
+### Poziv polaznicima prethodnog modula
+
+Tko je završio Modul 1&2 prirodni je kandidat za Modul 3, tko je završio
+Modul 3 za Modul 4, i tako redom. Na stranici tečaja, pod **Radnje**, stoji
+koliko ih ima i tipka **Pozovi ih**.
+
+Popis dolazi grupiran po tečaju s kojeg ljudi dolaze, sa svima označenima —
+odznačiš koga ne želiš zvati. **Mjesto se ne gleda:** tko je M1&2 radio u
+Splitu može doći na M3 u Zagreb, a to skripta ne može znati umjesto tebe.
+
+Iz popisa su već izbačeni:
+
+- oni koji su na taj tečaj već prijavljeni
+- oni kojima je poziv za taj tečaj već poslan (`poslani_pozivi.json`)
+- oni bez upisane adrese
+
+Tekst se uređuje kao i kod potvrdnica, s istim pregledom ispod polja.
+Trajno se mijenja u dokumentu `poziv na tecaj.docx` uz tablice.
+
+Redoslijed modula stoji u `config.json` pod `module_order`; tečaj koji nije
+na tom popisu (npr. ponavljanje) nema prethodnika, pa ni kandidata.
 
 ### Uz svakog polaznika
 

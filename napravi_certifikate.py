@@ -42,6 +42,7 @@ from openpyxl import load_workbook
 
 import predlosci
 import tablice
+from predlosci import kljuc_tecaja
 from send_reminders import (
     FIRST_PARTICIPANT_ROW,
     course_info,
@@ -103,11 +104,6 @@ def nastavak_dana(dan: int) -> str:
     if 11 <= dan % 100 <= 13:
         return f"{dan}th"
     return f"{dan}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(dan % 10, 'th') }"
-
-
-def kljuc_tecaja(course_code) -> str:
-    """Kod tečaja sveden na oblik po kojem se uspoređuje."""
-    return " ".join(predlosci.bez_dijakritika(str(course_code)).lower().split())
 
 
 def popis_predlozaka(config: dict) -> dict:

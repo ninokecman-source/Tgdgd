@@ -88,14 +88,21 @@ def popis(config: dict) -> list:
                 config.get("payment_reminder_body") or poruke.ZADANO_TIJELO),
     ))
 
-    # 5. Mail uz potvrdnicu
+    # 5. Poziv polaznicima prethodnog modula
+    stavke.append((
+        "poziv na tecaj",
+        sastavi(config.get("invite_subject") or poruke.POZIV_NASLOV,
+                config.get("invite_body") or poruke.POZIV_TIJELO),
+    ))
+
+    # 6. Mail uz potvrdnicu
     stavke.append((
         "mail uz certifikat",
         sastavi(config.get("certificate_mail_subject") or POTVRDNICA_NASLOV,
                 config.get("certificate_mail_body") or POTVRDNICA_TEKST),
     ))
 
-    # 6. Mail centrali nakon tečaja
+    # 7. Mail centrali nakon tečaja
     stavke.append((
         "izvjestaj centrali",
         sastavi(config.get("course_report_subject", IZVJESTAJ_SUBJECT),

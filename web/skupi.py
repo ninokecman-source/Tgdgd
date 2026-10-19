@@ -30,6 +30,7 @@ sys.path.insert(0, str(KORIJEN))
 
 from openpyxl import load_workbook
 
+import pozivi
 import predlosci
 import tablice
 from provjeri_logove import DEFAULT_LOGS, PROBLEM_UZORCI
@@ -300,6 +301,15 @@ def main():
         tecajevi.append(tecaj)
 
     tecajevi.sort(key=lambda t: (t["pocetak"] or "9999"), reverse=True)
+
+    # Koga se može pozvati s prethodnog modula. Računa se ovdje, uz sve
+    # tečajeve na okupu, jer web čita samo ovu snimku - i jer je ovo jedino
+    # mjesto gdje su svi polaznici svih tečajeva već pročitani.
+    poslani = citaj_json(KORIJEN / "poslani_pozivi.json")
+    for tecaj in tecajevi:
+        vec = poslani.get(tecaj["datoteka"], {}).get("poslano", [])
+        tecaj["pozvati"] = pozivi.kandidati(tecaj, tecajevi, config, vec)
+        tecaj["pozvano"] = len(vec)
 
     stanje = {
         "snimljeno": datetime.now().isoformat(timespec="seconds"),

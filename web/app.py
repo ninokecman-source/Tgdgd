@@ -343,6 +343,18 @@ def zadani_podsjetnik(tecaj: dict, polaznik: dict):
     return poruke.podsjetnik_uplata(mapa_tablica(), config, tecaj, polaznik)
 
 
+def zadani_poziv():
+    """Tekst poziva na tečaj. Oznake ostaju - poruka ide većem broju ljudi,
+    svakome sa svojim imenom."""
+    import poruke
+    import predlosci
+    naslov, tijelo, izvor = predlosci.dohvati(
+        mapa_tablica(), "poziv na tecaj", config=config,
+        kljuc_naslov="invite_subject", kljuc_tijela="invite_body",
+        zadani_naslov=poruke.POZIV_NASLOV, zadano_tijelo=poruke.POZIV_TIJELO)
+    return naslov, tijelo, izvor
+
+
 def zadani_certifikat():
     """Tekst maila uz potvrdnicu. Ovdje oznake {first_name} OSTAJU - poruka
     ide svakom polazniku sa svojim imenom, pa se popunjavaju pri slanju."""
@@ -426,6 +438,7 @@ def tecaj(oznaka):
         napravljeni=slanja.get("certifikati_napravljeni", {}).get(datoteka),
         poslani=poslani,
         cekaju=nedobili(nadjen, poslani),
+        za_poziv=sum(len(s["ljudi"]) for s in (nadjen.get("pozvati") or [])),
         ishod=ishod,
         radi=ceka or bool(ishod and ishod.get("u_tijeku")))
 
@@ -475,6 +488,57 @@ def pregled_slanja(oznaka):
     if not ceka_zahtjev(tecaj["datoteka"]):
         zatrazi("pregled_certifikata", tecaj["datoteka"])
     return redirect(url_for("tecaj", oznaka=oznaka))
+
+
+@app.route("/tecaj/<oznaka>/poziv", methods=["GET", "POST"])
+@treba_prijava
+def poziv(oznaka):
+    """Poziv polaznicima prethodnog modula. Tko je već na ovom tečaju ili je
+    već pozvan nije ni na popisu - to je odlučeno u snimci (pozivi.py)."""
+    import pozivi
+
+    podaci, tecaj = nadji_tecaj(oznaka)
+    skupine = tecaj.get("pozvati") or []
+    svi = {o["email"]: o for s in skupine for o in s["ljudi"]}
+
+    if request.method == "POST":
+        if not token_valja():
+            abort(400)
+        naslov = request.form.get("naslov", "").strip()
+        tijelo = request.form.get("tijelo", "").strip()
+        # ime se uzima iz snimke, ne iz obrasca - obrascu se vjeruje samo
+        # koga si odabrao, ne i kako se zove
+        odabrani = [svi[a] for a in request.form.getlist("kome") if a in svi]
+        if odabrani and naslov and tijelo and not ceka_zahtjev(tecaj["datoteka"]):
+            zatrazi("posalji_poziv", tecaj["datoteka"], naslov=naslov,
+                    tijelo=tijelo, primatelji=odabrani)
+        return redirect(url_for("tecaj", oznaka=oznaka))
+
+    naslov = tijelo = izvor = ""
+    greska = ""
+    try:
+        naslov, tijelo, izvor = zadani_poziv()
+    except Exception as e:
+        greska = str(e)
+
+    prvi = next((o for s in skupine for o in s["ljudi"]), {"ime": ""})
+    dijelovi = (prvi.get("ime") or "").split()
+    primjer = {
+        "first_name": dijelovi[0] if dijelovi else "",
+        "last_name": " ".join(dijelovi[1:]),
+        "course_code": tecaj["kod"],
+        "location": tecaj["mjesto"],
+        "dates": tecaj["datumi"],
+        "prethodni_modul": pozivi.naziv_prethodnog(config, tecaj["kod"]) or "prethodni modul",
+        "instructor_name": tecaj.get("instruktor") or config.get("instructor_name", ""),
+        "link_termini": config.get("course_dates_url", ""),
+    }
+
+    return render_template("poziv.html", podaci=podaci, tecaj=tecaj,
+                           skupine=skupine, koliko=len(svi),
+                           naslov=naslov, tijelo=tijelo, izvor=izvor,
+                           greska=greska, primjer=primjer,
+                           prethodni=primjer["prethodni_modul"])
 
 
 @app.route("/tecaj/<oznaka>/polaznik/<int:broj>/podsjetnik", methods=["GET", "POST"])

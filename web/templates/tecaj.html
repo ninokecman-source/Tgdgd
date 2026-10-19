@@ -14,6 +14,74 @@
 </div>
 
 <section>
+  <h2>Radnje</h2>
+
+  <h3>Potvrdnice</h3>
+
+  {% if radi %}
+  <p class="traka radi">Posao je u tijeku. Stranica se osvježava sama.</p>
+
+  {% elif not napravljeni %}
+  <p class="tiho">Potvrdnice još nisu napravljene — nastaju same dan nakon
+    tečaja, pa ih tek onda ima što slati.</p>
+
+  {% elif not cekaju %}
+  <p class="tiho">Svi polaznici s adresom su dobili svoju potvrdnicu.</p>
+  <form method="post" action="{{ url_for('pregled_slanja', oznaka=tecaj.oznaka) }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button class="tipka tiha" type="submit">Provjeri ponovno</button>
+  </form>
+
+  {% else %}
+  <p>Potvrdnicu još nije dobilo <strong>{{ cekaju|length }}</strong>
+    {{ 'polaznik' if cekaju|length == 1 else 'polaznika' }}.</p>
+  <div class="tipke">
+    <form method="post" action="{{ url_for('pregled_slanja', oznaka=tecaj.oznaka) }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="tipka tiha" type="submit">Pregled, bez slanja</button>
+    </form>
+    <a class="tipka glavna" href="{{ url_for('posalji', oznaka=tecaj.oznaka) }}">
+      Pošalji potvrdnice</a>
+  </div>
+  {% endif %}
+
+  <h3>Poziv na tečaj</h3>
+
+  {% if radi %}
+  <p class="tiho">Čeka da posao završi.</p>
+
+  {% elif tecaj.pozvati %}
+  <p>S prethodnog modula ima <strong>{{ za_poziv }}</strong>
+    {{ 'polaznika koji još nije prijavljen' if za_poziv == 1
+       else 'polaznika koji još nisu prijavljeni' }}{% if tecaj.pozvano %}, a
+    {{ tecaj.pozvano }} ih je već pozvano{% endif %}.</p>
+  <div class="tipke">
+    <a class="tipka glavna" href="{{ url_for('poziv', oznaka=tecaj.oznaka) }}">
+      Pozovi ih</a>
+  </div>
+
+  {% else %}
+  <p class="tiho">Nema koga pozvati — svi s prethodnog modula su ili
+    prijavljeni, ili već pozvani{% if tecaj.pozvano %} ({{ tecaj.pozvano }}){% endif %}.</p>
+  {% endif %}
+
+  {% if ishod %}
+  <div class="ishod {{ 'lose' if ishod.status in ('greška', 'odbijeno') }}">
+    <div class="tiho">
+      {{ {'pregled_certifikata': 'Pregled potvrdnica',
+          'posalji_certifikate': 'Slanje potvrdnica',
+          'posalji_poziv': 'Poziv na tečaj',
+          'podsjetnik_uplata': 'Podsjetnik',
+          'otkazi_polaznika': 'Otkazivanje'}
+         .get(ishod.posao, ishod.posao) }} ·
+      {{ ishod.status }} · {{ (ishod.gotovo or ishod.trazeno)|vrijeme }}
+    </div>
+    {% if ishod.ispis %}<pre>{{ ishod.ispis }}</pre>{% endif %}
+  </div>
+  {% endif %}
+</section>
+
+<section>
   <h2>Polaznici</h2>
   {% if not tecaj.polaznici %}<p class="tiho">U tablici još nema nikoga.</p>{% endif %}
   {% for p in tecaj.polaznici %}
@@ -71,48 +139,6 @@
     <dt>Potvrdnice poslane</dt>
     <dd>{% if poslani %}{{ poslani.poslano|length }} polaznika{% else %}nisu{% endif %}</dd>
   </dl>
-</section>
-
-<section>
-  <h2>Slanje potvrdnica</h2>
-
-  {% if radi %}
-  <p class="traka radi">Posao je u tijeku. Stranica se osvježava sama.</p>
-
-  {% elif not napravljeni %}
-  <p class="tiho">Potvrdnice još nisu napravljene — nastaju same dan nakon
-    tečaja, pa ih tek onda ima što slati.</p>
-
-  {% elif not cekaju %}
-  <p class="tiho">Svi polaznici s adresom su dobili svoju potvrdnicu.</p>
-  <form method="post" action="{{ url_for('pregled_slanja', oznaka=tecaj.oznaka) }}">
-    <input type="hidden" name="token" value="{{ token }}">
-    <button class="tipka tiha" type="submit">Provjeri ponovno</button>
-  </form>
-
-  {% else %}
-  <p>Potvrdnicu još nije dobilo <strong>{{ cekaju|length }}</strong>
-    {{ 'polaznik' if cekaju|length == 1 else 'polaznika' }}.</p>
-  <div class="tipke">
-    <form method="post" action="{{ url_for('pregled_slanja', oznaka=tecaj.oznaka) }}">
-      <input type="hidden" name="token" value="{{ token }}">
-      <button class="tipka tiha" type="submit">Pregled, bez slanja</button>
-    </form>
-    <a class="tipka glavna" href="{{ url_for('posalji', oznaka=tecaj.oznaka) }}">
-      Pošalji potvrdnice</a>
-  </div>
-  {% endif %}
-
-  {% if ishod %}
-  <div class="ishod {{ 'lose' if ishod.status in ('greška', 'odbijeno') }}">
-    <div class="tiho">
-      {{ {'pregled_certifikata': 'Pregled', 'posalji_certifikate': 'Slanje'}
-         .get(ishod.posao, ishod.posao) }} ·
-      {{ ishod.status }} · {{ (ishod.gotovo or ishod.trazeno)|vrijeme }}
-    </div>
-    {% if ishod.ispis %}<pre>{{ ishod.ispis }}</pre>{% endif %}
-  </div>
-  {% endif %}
 </section>
 
 <p><a href="{{ url_for('pregled') }}">← svi tečajevi</a></p>
