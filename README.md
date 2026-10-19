@@ -530,6 +530,35 @@ python3 provjeri_logove.py --test
 
 Pošalje mail bez obzira na to ima li grešaka - ako stigne, put je čist.
 
+## Je li neka poruka propala? (`provjeri_slanja.py`)
+
+Nakon prekida u slanju - zatvoren SMTP port, pala mreža - neke se poruke
+same poprave, a neke su zauvijek propuštene. Ovisi o tome ima li posao još
+prilika pokušati:
+
+| Poruka | Nakon greške |
+|---|---|
+| podsjetnik `10 dana prije` | pokušava svaki dan od 10. do 2. dana — **sam se popravi** |
+| podsjetnik `1 dan prije` | prozor traje jedan dan — **propušteno** |
+| tablica centrali | uvjet ostaje istinit — **sama se popravi** |
+| potvrdnice | šalju se na tvoju naredbu — **čekaju te** |
+| obavijest o nepovezanoj uplati | bilježi se tek nakon slanja — **sama se popravi** |
+| provjera logova | ne pomiče oznaku dok ne pošalje — **sama se popravi** |
+| **potvrda prijave** | mail je već označen obrađenim — **propušteno** |
+| **potvrda uplate (banka)** | greška se uhvati i ispiše — **propušteno** |
+
+```bash
+python3 provjeri_slanja.py
+python3 provjeri_slanja.py --od 2026-10-14    # samo od nekog datuma
+```
+
+Ništa ne šalje i ništa ne mijenja. Uspoređuje pravila s onim što je
+zabilježeno kao poslano i ispiše neuspjela slanja iz logova, označena s
+`[!]` ondje gdje treba nešto poduzeti.
+
+Za potvrde prijave i potvrde uplate ne postoji popis "kome je poslano", pa
+se one vide jedino u logovima - ako ih ondje nema, nijedna nije pala.
+
 ## Što se događa kad nešto pukne
 
 Sustav je posložen tako da **radije ne napravi ništa nego da napravi krivo**.
