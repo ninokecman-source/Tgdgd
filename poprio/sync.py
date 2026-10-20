@@ -136,6 +136,12 @@ def valid_oib(oib):
     return kontrolna == int(oib[10])
 
 
+def _usporedivo(naziv):
+    """Naziv sveden na oblik u kojem se smije uspoređivati - bez rubnih
+    razmaka i neosjetljiv na velika/mala slova."""
+    return (naziv or "").strip().casefold()
+
+
 def extract_oib(patient, config):
     """OIB pacijenta iz custom fielda na kartici u Clinku.
 
@@ -144,15 +150,20 @@ def extract_oib(patient, config):
     obavezan, pa je uredno da ga većina pacijenata nema - popunjava se samo
     kad pacijent traži OIB na računu.
 
+    Nazivi sekcije i polja uspoređuju se bez obzira na velika/mala slova i
+    rubne razmake. Te nazive tipka čovjek u Clinku, pa je "FIskalizacija"
+    jednako vjerojatna kao "Fiskalizacija" - a doslovna usporedba bi na toj
+    jednoj slovnoj razlici tiho ispustila OIB s računa.
+
     Vraća None ako polje ne postoji, prazno je ili sadrži neispravan OIB."""
-    section_name = config.get("cliniko_oib_section", "Fiskalizacija")
-    field_name = config.get("cliniko_oib_field", "OIB")
+    section_name = _usporedivo(config.get("cliniko_oib_section", "Fiskalizacija"))
+    field_name = _usporedivo(config.get("cliniko_oib_field", "OIB"))
 
     for section in (patient.get("custom_fields") or {}).get("sections") or []:
-        if section.get("name") != section_name:
+        if _usporedivo(section.get("name")) != section_name:
             continue
         for field in section.get("fields") or []:
-            if field.get("name") != field_name:
+            if _usporedivo(field.get("name")) != field_name:
                 continue
             oib = (field.get("value") or "").strip()
             if not oib:

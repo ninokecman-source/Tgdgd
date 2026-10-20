@@ -676,6 +676,11 @@ dopunsko osiguranje ili poreznu olakšicu). Račun bez OIB-a je posve uredan.
 
 ### Postavljanje polja za OIB u Clinku
 
+Nazivi sekcije i polja uspoređuju se **neosjetljivo na velika i mala slova** i
+bez rubnih razmaka, pa „FIskalizacija" radi jednako kao „Fiskalizacija". Te
+nazive tipka čovjek, a doslovna bi usporedba na jednoj slovnoj razlici tiho
+ispustila OIB s računa — bez ikakve poruke.
+
 Cliniko nema ugrađeno polje za OIB, pa se koristi vlastito polje na kartici
 pacijenta. U Clinku pod **Settings → Patient details / Custom fields**
 kreiraj sekciju **"Fiskalizacija"** s tekstualnim poljem **"OIB"**. Ako ih
