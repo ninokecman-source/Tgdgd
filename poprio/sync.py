@@ -48,10 +48,10 @@ STALE_CLAIM_MINUTES = 10
 # Što piše kao kupac kad pacijent u Clinku nema upisano ime.
 KUPAC_BEZ_IMENA = "Klijent"
 
-# Način plaćanja na R1 ponudi kad na računu nema oznake: tvrtke redovito plaćaju
+# Način plaćanja na ponudi kad na računu nema oznake: takav račun redovito se plaća
 # po ponudi, transakcijski. Ponuda nije fiskalni dokument pa vrijednost nema
 # posljedica, a osoblje je potvrđuje pri pretvaranju u račun.
-R1_NACIN_PLACANJA = 1
+PONUDA_NACIN_PLACANJA = 1
 
 
 OBAVEZNI_KLJUCEVI = (
@@ -187,12 +187,12 @@ def extract_billable_item_id(item):
 
 
 def marker_item_ids(config):
-    """Sve pomoćne oznake od 0 EUR - načini plaćanja i R1. Nijedna ne ide na
-    dokument u Solu, služe samo za prepoznavanje."""
+    """Sve pomoćne oznake od 0 EUR - načini plaćanja i one koje traže ponudu.
+    Nijedna ne ide na dokument u Solu, služe samo za prepoznavanje."""
     return {
         str(v).strip() for v in config["solo_nacin_placanja_item_ids"].values()
     } | {
-        str(v).strip() for v in config.get("cliniko_r1_item_ids", {}).values()
+        str(v).strip() for v in ponuda_item_ids(config).values()
     }
 
 
@@ -228,15 +228,26 @@ class NothingToInvoice(Exception):
     """Na računu nema nijedne stvarne stavke - nema se što fiskalizirati."""
 
 
-def r1_marker_name(invoice_items, config):
-    """Naziv oznake ako je račun označen kao R1 (na tvrtku), inače None.
+def ponuda_item_ids(config):
+    """Oznake koje traže ponudu umjesto fiskaliziranog računa.
 
-    Za B2B račun Solo traži naziv i OIB tvrtke te KPD šifru po stavci, a ništa
-    od toga ne postoji u Clinku. Zato se takav račun ne fiskalizira nego se u
-    Solo šalje kao **ponuda**: svi podaci (kupac, stavke, iznosi) su prenijeti,
-    a osoblje u Solu samo dopuni podatke tvrtke i pretvori je u R1 račun."""
+    `cliniko_r1_item_ids` je raniji naziv istog ključa, iz vremena kad je
+    jedini takav slučaj bio račun na tvrtku. Čita se i dalje, da starija
+    konfiguracija nastavi raditi bez izmjene."""
+    return config.get("cliniko_ponuda_item_ids") or config.get("cliniko_r1_item_ids", {})
+
+
+def ponuda_marker_name(invoice_items, config):
+    """Naziv oznake zbog koje račun ide kao ponuda, inače None.
+
+    Neki računi se ne smiju fiskalizirati u trenutku kad su plaćeni u Clinku -
+    račun na tvrtku (R1), poklon bon i slično. Za R1 Solo traži naziv i OIB
+    tvrtke te KPD šifru po stavci, a ništa od toga ne postoji u Clinku.
+
+    Takav račun ide u Solo kao **ponuda**: svi podaci (kupac, stavke, iznosi)
+    su prenijeti, a osoblje u Solu dovrši ono što Cliniko ne zna."""
     oznake = {
-        str(v).strip(): k for k, v in config.get("cliniko_r1_item_ids", {}).items()
+        str(v).strip(): k for k, v in ponuda_item_ids(config).items()
     }
     if not oznake:
         return None
@@ -501,22 +512,22 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
 
         invoice_items = cliniko.get_invoice_items(cliniko_id)
 
-        # Račun na tvrtku (R1) nikad se ne fiskalizira - ide kao ponuda, bez
-        # obzira na solo_document_type.
-        r1 = r1_marker_name(invoice_items, config)
-        if r1:
+        # Račun s takvom oznakom nikad se ne fiskalizira - ide kao ponuda,
+        # bez obzira na solo_document_type.
+        ponuda_oznaka = ponuda_marker_name(invoice_items, config)
+        if ponuda_oznaka:
             document_type = "ponuda"
 
         try:
             nacin_placanja = detect_nacin_placanja(cliniko_id, invoice_items, config)
         except MissingPaymentMarker:
-            # Račun na tvrtku obično nema oznaku načina plaćanja - tvrtka plaća
-            # naknadno, po ponudi. Ponuda nije fiskalni dokument pa vrijednost
-            # nema posljedica, a osoblje je ionako potvrđuje pri pretvaranju u
-            # račun. Kod običnog računa se i dalje čeka ispravak.
-            if not r1:
+            # Takav račun često nema oznaku načina plaćanja - plaća se naknadno,
+            # po ponudi. Ponuda nije fiskalni dokument pa vrijednost nema
+            # posljedica, a osoblje je ionako potvrđuje pri dovršavanju. Kod
+            # običnog računa se i dalje čeka ispravak.
+            if not ponuda_oznaka:
                 raise
-            nacin_placanja = R1_NACIN_PLACANJA
+            nacin_placanja = PONUDA_NACIN_PLACANJA
 
         stavke = build_stavke(config, invoice, invoice_items)
 
@@ -567,19 +578,20 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
     state.mark_done(cliniko_id, racun)
     print(f"Cliniko #{cliniko_id} -> Solo {document_type} {broj} "
           f"({len(stavke)} stavki, način plaćanja {nacin_placanja}"
-          f"{', R1' if r1 else ''}, JIR {racun.get('jir', '-')})")
+          f"{', ' + ponuda_oznaka if ponuda_oznaka else ''}, "
+          f"JIR {racun.get('jir', '-')})")
 
-    if r1 and alerter:
-        # Javlja se jednom po računu: osoba koja u Clinku doda oznaku R1 nije
-        # nužno ona koja u Solu dovršava račun za tvrtku.
+    if ponuda_oznaka and alerter:
+        # Javlja se jednom po računu: osoba koja u Clinku doda oznaku nije
+        # nužno ona koja u Solu dovršava dokument.
         alerter.problem(
-            f"r1:{cliniko_id}",
-            f"Ponuda {broj} čeka pretvaranje u R1 račun",
-            f"Cliniko račun #{invoice.get('number')} označen je kao "
-            f"'{r1}' pa je u Solo prenesen kao ponuda {broj} "
+            f"ponuda:{cliniko_id}",
+            f"Ponuda {broj} čeka dovršetak u Solu",
+            f"Cliniko račun #{invoice.get('number')} nosi oznaku "
+            f"'{ponuda_oznaka}', pa je u Solo prenesen kao ponuda {broj} "
             f"({invoice.get('total_amount')} EUR), a ne kao fiskalizirani račun.\n\n"
-            f"U Solu otvori tu ponudu, dopuni naziv tvrtke, OIB i KPD šifru, i "
-            f"pretvori je u R1 račun.\n\n"
+            f"Dovrši je u Solu prema vrsti oznake. Za račun na tvrtku to znači "
+            f"dopuniti naziv tvrtke, OIB i KPD šifru pa pretvoriti u R1 račun.\n\n"
             f"Ovo je jedina obavijest za taj račun, neće se ponavljati.",
         )
 
@@ -717,8 +729,8 @@ def verify_payment_markers(config, cliniko, alerter):
         (naziv_koda.get(int(code), code), item_id)
         for code, item_id in config["solo_nacin_placanja_item_ids"].items()
     ] + [
-        (f"R1: {naziv}", item_id)
-        for naziv, item_id in config.get("cliniko_r1_item_ids", {}).items()
+        (f"ponuda: {naziv}", item_id)
+        for naziv, item_id in ponuda_item_ids(config).items()
     ]
 
     nedostaju = []

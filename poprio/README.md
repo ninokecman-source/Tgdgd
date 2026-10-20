@@ -76,8 +76,9 @@ Popuni u `config.json`:
   kartici pacijenta u kojem klinika drži OIB (zadano "Fiskalizacija" / "OIB");
   vidi "OIB i adresa kupca na računu" niže. Ako to polje ne postoji, OIB se
   nikad ne šalje i skripta radi normalno.
-- `cliniko_r1_item_ids` – kataloške stavke koje označavaju račun na tvrtku;
-  takav ide u Solo kao ponuda umjesto fiskaliziranog računa (npr. "R1 - račun").
+- `cliniko_ponuda_item_ids` – kataloške stavke zbog kojih račun ide u Solo kao
+  ponuda umjesto fiskaliziranog računa (npr. "R1 - račun", "Poklon bon").
+  Raniji naziv ključa `cliniko_r1_item_ids` i dalje se čita.
   Vidi "Računi na tvrtku (R1)" niže.
 - `solo_api_token` – Solo API token (korak 3)
 - `solo_document_type` – `"racun"` (zadano) kreira odmah fiskalizirani
@@ -328,7 +329,7 @@ pada natrag na sniženu cijenu bez prikazanog popusta — iznos je uvijek važni
 od prikaza. Uz to i dalje vrijedi provjera ukupnog iznosa: ako se zbroj stavki
 ne poklapa s računom u Clinku, ne fiskalizira se ništa.
 
-## Računi na tvrtku (R1)
+## Računi koji idu kao ponuda
 
 Račun na tvrtku **se ne fiskalizira** — u Solo ide kao **ponuda**, koju
 osoblje ondje dopuni podacima tvrtke i pretvori u R1 račun.
@@ -354,8 +355,9 @@ nijedan fiskalni dokument ne nastaje s krivim podacima.
 2. `python sync.py --list-billable-items` i prepiši njen ID u config:
 
 ```json
-"cliniko_r1_item_ids": {
-  "R1 - račun": "2040004755530450528"
+"cliniko_ponuda_item_ids": {
+  "R1 - račun": "2040004755530450528",
+  "Poklon bon": "2065172138117040113"
 }
 ```
 

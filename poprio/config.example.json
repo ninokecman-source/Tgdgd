@@ -7,8 +7,9 @@
 
   "cliniko_oib_section": "Fiskalizacija",
   "cliniko_oib_field": "OIB",
-  "cliniko_r1_item_ids": {
-    "R1 - račun": "2040004755530450528"
+  "cliniko_ponuda_item_ids": {
+    "R1 - račun": "2040004755530450528",
+    "Poklon bon": "2065172138117040113"
   },
 
   "solo_api_token": "tvoj_solo_api_token",
