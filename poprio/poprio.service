@@ -36,6 +36,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/poprio
+# Bez ovoga Python međuspremа ispis kad ne piše u terminal, pa poruke u
+# journal stižu u naletima i sa zakašnjenjem - a log je ovdje glavni alat
+# za provjeru što se dogodilo i kada.
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/poprio/venv/bin/python /opt/poprio/sync.py --loop
 Restart=always
 RestartSec=15
