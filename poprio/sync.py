@@ -193,6 +193,8 @@ def marker_item_ids(config):
         str(v).strip() for v in config["solo_nacin_placanja_item_ids"].values()
     } | {
         str(v).strip() for v in ponuda_item_ids(config).values()
+    } | {
+        str(v).strip() for v in config.get("cliniko_preskoci_item_ids", {}).values()
     }
 
 
@@ -235,6 +237,30 @@ def ponuda_item_ids(config):
     jedini takav slučaj bio račun na tvrtku. Čita se i dalje, da starija
     konfiguracija nastavi raditi bez izmjene."""
     return config.get("cliniko_ponuda_item_ids") or config.get("cliniko_r1_item_ids", {})
+
+
+class SkipInvoice(Exception):
+    """Račun nosi oznaku zbog koje se uopće ne prenosi u Solo."""
+
+
+def skip_marker_name(invoice_items, config):
+    """Naziv oznake zbog koje račun uopće ne ide u Solo, inače None.
+
+    Razlikuje se od oznake za ponudu: ondje dokument nastaje pa ga osoblje
+    dovrši, a ovdje ne nastaje ništa. Služi za naplatu koja je već bila
+    fiskalizirana ranije - npr. kredit ili paket plaćen unaprijed, gdje sada
+    nema nove naplate pa ni novog fiskalnog računa."""
+    oznake = {
+        str(v).strip(): k
+        for k, v in config.get("cliniko_preskoci_item_ids", {}).items()
+    }
+    if not oznake:
+        return None
+    for item in invoice_items:
+        naziv = oznake.get(extract_billable_item_id(item))
+        if naziv:
+            return naziv
+    return None
 
 
 def ponuda_marker_name(invoice_items, config):
@@ -512,6 +538,13 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
 
         invoice_items = cliniko.get_invoice_items(cliniko_id)
 
+        # Oznaka koja račun potpuno izuzima - provjerava se prva, prije svega
+        # što ima veze sa Solom. Naplata je već bila fiskalizirana ranije, pa
+        # sada ne smije nastati nikakav dokument.
+        preskoci = skip_marker_name(invoice_items, config)
+        if preskoci:
+            raise SkipInvoice(f"označen kao '{preskoci}' - ne fiskalizira se")
+
         # Račun s takvom oznakom nikad se ne fiskalizira - ide kao ponuda,
         # bez obzira na solo_document_type.
         ponuda_oznaka = ponuda_marker_name(invoice_items, config)
@@ -564,7 +597,7 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
         state.mark_waiting(cliniko_id, invoice.get("number"), e)
         print(f"[ČEKA] Cliniko račun #{invoice.get('number')}: {e}")
         return False
-    except NothingToInvoice as e:
+    except (NothingToInvoice, SkipInvoice) as e:
         # Nije greška nego račun bez sadržaja (npr. samo oznaka načina plaćanja).
         # Ponavljanje ne bi ništa promijenilo, pa se zatvara kao preskočen.
         state.mark_skipped(cliniko_id, e, invoice.get('number'))
@@ -731,6 +764,9 @@ def verify_payment_markers(config, cliniko, alerter):
     ] + [
         (f"ponuda: {naziv}", item_id)
         for naziv, item_id in ponuda_item_ids(config).items()
+    ] + [
+        (f"preskoči: {naziv}", item_id)
+        for naziv, item_id in config.get("cliniko_preskoci_item_ids", {}).items()
     ]
 
     nedostaju = []

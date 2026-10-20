@@ -329,6 +329,28 @@ pada natrag na sniženu cijenu bez prikazanog popusta — iznos je uvijek važni
 od prikaza. Uz to i dalje vrijedi provjera ukupnog iznosa: ako se zbroj stavki
 ne poklapa s računom u Clinku, ne fiskalizira se ništa.
 
+## Računi koji se uopće ne prenose
+
+Neka naplata u Clinku ne znači novu naplatu novca — npr. kredit ili paket
+plaćen i fiskaliziran ranije. Takav račun ne smije dobiti novi fiskalni
+dokument, ali ni ponudu: u Solu ne treba nastati ništa.
+
+Oznake za to stoje pod `cliniko_preskoci_item_ids`:
+
+```json
+"cliniko_preskoci_item_ids": {
+  "Kredit": "2065197337696798712"
+}
+```
+
+Račun s takvom oznakom zatvara se kao `skipped`, s razlogom zapisanim uz
+njega, i vidljiv je u `--status`. Solo se ne poziva. Oznaka se provjerava
+prva, prije svega ostalog, pa takav račun ne čeka ni oznaku načina plaćanja —
+nema je zašto čekati kad ionako ništa ne nastaje.
+
+Razlika prema oznakama iz sljedećeg poglavlja: ondje dokument **nastaje** (kao
+ponuda) pa ga osoblje dovrši, ovdje ne nastaje ništa.
+
 ## Računi koji idu kao ponuda
 
 Račun na tvrtku **se ne fiskalizira** — u Solo ide kao **ponuda**, koju
