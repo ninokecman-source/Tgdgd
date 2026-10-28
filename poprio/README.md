@@ -412,6 +412,22 @@ Pri pokretanju se provjerava da oznaka postoji u Clinku, isto kao oznake načina
 plaćanja: da se ID obriše ili krivo prepiše, račun na tvrtku bio bi fiskaliziran
 kao da je za fizičku osobu.
 
+## Provjera slanja maila
+
+```bash
+sudo -u poprio /opt/poprio/venv/bin/python /opt/poprio/sync.py --test-mail
+```
+
+Pošalje probni mail na `alert_email` i ispiše s kojim se podacima spaja.
+
+Vrijedi ga pokrenuti nakon svake izmjene SMTP postavki, jer je slanje jedina
+stvar koja ne može sama javiti da ne radi: ako su podaci krivi, zakaže i
+slanje računa pacijentu **i** obavijest o tom neuspjehu. Jedini trag ostaje u
+logu.
+
+Uz to: app-specific lozinke znaju isteći ili biti povučene, a to se izvana ne
+vidi — povremena proba to otkrije prije pacijenta.
+
 ## Provjera stanja
 
 ```bash

@@ -27,7 +27,7 @@ from cliniko_client import ClinikoClient
 from lock import AlreadyRunning, single_instance
 from solo_client import SoloClient
 from state import StateStore
-from mailer import send_invoice_pdf
+from mailer import send_alert, send_invoice_pdf
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
 ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
@@ -871,6 +871,39 @@ def print_status(config):
         state.close()
 
 
+def send_test_mail(config):
+    """Šalje probni mail na `alert_email` i javlja je li prošao.
+
+    Postoji jer je slanje jedina stvar koja ne može sama javiti da ne radi:
+    ako su SMTP podaci krivi, zakaže i slanje računa pacijentu i obavijest o
+    tom neuspjehu. Bez ovoga bi se to otkrilo tek pregledom loga - ili ne bi."""
+    primatelj = (config.get("alert_email") or "").strip()
+    if not primatelj:
+        sys.exit("U config.json nije postavljen `alert_email`, nemam kamo poslati probu.")
+
+    print(f"Šaljem probni mail na {primatelj}")
+    print(f"  poslužitelj : {config.get('smtp_host')}:{config.get('smtp_port')}")
+    print(f"  prijava kao : {config.get('smtp_username')}")
+    print(f"  šalje se s  : {config.get('smtp_from_name')} <{config.get('smtp_from_email')}>")
+    try:
+        send_alert(
+            config, primatelj, "Probni mail",
+            "Ovo je probni mail iz Poprija.\n\n"
+            "Ako si ga dobio, slanje radi - znači da će i račun pacijentu i "
+            "obavijesti o problemima stizati.\n\n"
+            "Provjeri usput i je li završio u neželjenoj pošti.",
+        )
+    except Exception as e:
+        sys.exit(
+            f"\nSlanje NIJE uspjelo: {e}\n\n"
+            f"Najčešći uzroci: nije upisana app-specific lozinka (obična lozinka "
+            f"računa ne prolazi kad je uključena dvofaktorska prijava), krivi "
+            f"poslužitelj ili port, ili adresa u `smtp_from_email` s koje "
+            f"korisnik iz `smtp_username` nema pravo slati."
+        )
+    print("\nPoslano. Provjeri sandučić (i neželjenu poštu).")
+
+
 def ping_healthcheck(config):
     """Javlja vanjskom nadzoru da je prolaz prošao.
 
@@ -1054,6 +1087,10 @@ def main():
         help="Radi trajno (za pokretanje kao systemd servis) umjesto jednog prolaza za cron.",
     )
     parser.add_argument(
+        "--test-mail", action="store_true",
+        help="Pošalji probni mail na alert_email i izađi (provjera SMTP podataka).",
+    )
+    parser.add_argument(
         "--status", action="store_true",
         help="Ispiši stanje obrade (što je poslano, što čeka) i izađi.",
     )
@@ -1067,6 +1104,10 @@ def main():
 
     if args.list_billable_items:
         list_billable_items(config)
+        return
+
+    if args.test_mail:
+        send_test_mail(config)
         return
 
     # Samo čitanje, pa ne treba zaključavanje - radi i dok servis vrti.
