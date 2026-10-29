@@ -180,12 +180,19 @@ def iscrtaj(chrome: str, html: str, pdf_put: Path, dodatno=()) -> None:
 
     Privremena datoteka namjerno nastaje UZ PDF, a ne u /tmp: Chromium
     instaliran kao snap ima vlastiti /tmp i onaj pravi ne vidi, pa bi odande
-    pročitao prazno. Mapa odredišta mu je dostupna jer u nju i piše."""
+    pročitao prazno. Mapa odredišta mu je dostupna jer u nju i piše.
+
+    --virtual-time-budget tjera Chrome da pričeka da pisma iz predloška budu
+    spremna. Bez toga tu i tamo otisne PDF prije njih, pa ime polaznika -
+    jedini tekst koji se piše rukopisnim pismom - ispadne drugim pismom ili
+    ga uopće nema. Na ispravnom predlošku ne usporava ništa: Chrome krene
+    čim se stranica smiri, a ne čeka cijeli zadani budžet."""
     izvor = pdf_put.with_suffix(".tmp.html")
     try:
         izvor.write_text(html, encoding="utf-8")
         rezultat = subprocess.run(
             [chrome, "--headless", "--disable-gpu", "--no-pdf-header-footer",
+             "--virtual-time-budget=5000",
              *dodatno, f"--print-to-pdf={pdf_put}", izvor.as_uri()],
             capture_output=True, text=True, timeout=180)
     finally:
