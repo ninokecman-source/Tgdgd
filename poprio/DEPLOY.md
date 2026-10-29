@@ -324,6 +324,24 @@ smije** živjeti u `/opt/poprio`.
 
 ## Česte zamke
 
+**Odlazni SMTP na portu 465 i 25 je blokiran.** Hetzner ih blokira na svim
+cloud serverima radi sprječavanja spama, pa slanje maila istekne bez ikakve
+poruke o odbijanju — samo `timed out`, što izgleda kao kriva lozinka.
+
+**Port 587 je otvoren** i rješava to bez ikakvog zahtjeva prema Hetzneru. Zato
+je `"smtp_port": 587` u primjeru configa; `mailer.py` na 587 sam koristi
+STARTTLS. Provjera koji su portovi prohodni:
+
+```bash
+for P in 25 465 587; do timeout 5 bash -c "</dev/tcp/<smtp-poslužitelj>/$P" 2>/dev/null \
+  && echo "$P otvoren" || echo "$P blokiran"; done
+```
+
+Ako baš treba 465, Hetzner ga otključava na zahtjev (limit request u konzoli),
+ali tek kad je račun star barem mjesec dana i plaćen jedan račun.
+
+
+
 **`journalctl -f` guta naredbe.** Praćenje loga (`-f`, follow) radi dok ga ne
 prekineš s `Ctrl+C`. Sve što u međuvremenu zalijepiš odlazi *u* njega kao tekst
 i ne izvršava se — a izgleda kao da si naredbu pokrenuo. Ako zalijepiš nešto i
