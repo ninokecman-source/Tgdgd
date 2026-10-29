@@ -10,8 +10,9 @@
   "cliniko_ponuda_item_ids": {
     "R1 - račun": "2040004755530450528"
   },
-  "cliniko_preskoci_item_ids": {
-    "Kredit": "2065197337696798712"
+  "cliniko_preskoci_bez_placanja_item_ids": {
+    "Paket": "2065197337696798712",
+    "Poklon bon": "2071929996955354152"
   },
 
   "solo_api_token": "tvoj_solo_api_token",

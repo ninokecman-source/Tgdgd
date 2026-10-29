@@ -329,27 +329,38 @@ pada natrag na sniženu cijenu bez prikazanog popusta — iznos je uvijek važni
 od prikaza. Uz to i dalje vrijedi provjera ukupnog iznosa: ako se zbroj stavki
 ne poklapa s računom u Clinku, ne fiskalizira se ništa.
 
-## Računi koji se uopće ne prenose
+## Paket i poklon bon (računi bez naplate)
 
-Neka naplata u Clinku ne znači novu naplatu novca — npr. kredit ili paket
-plaćen i fiskaliziran ranije. Takav račun ne smije dobiti novi fiskalni
-dokument, ali ni ponudu: u Solu ne treba nastati ništa.
+Paket i poklon bon prodaju se jednom i tada se fiskaliziraju. Kad ih pacijent
+kasnije iskorištava, u Clinku nastaje račun, ali novac ne mijenja vlasnika — pa
+ne smije nastati ni novi fiskalni račun.
 
-Oznake za to stoje pod `cliniko_preskoci_item_ids`:
+Razlika se vidi po **oznaci načina plaćanja**:
+
+| na računu | što se događa |
+|---|---|
+| Paket/bon **bez** oznake plaćanja | iskorištavanje ranije plaćenog → `skipped`, u Solo ne ide ništa |
+| Paket/bon **s** oznakom plaćanja | upravo je primljen novac → normalna fiskalizacija |
+
+Oznake se upisuju pod `cliniko_preskoci_bez_placanja_item_ids`:
 
 ```json
-"cliniko_preskoci_item_ids": {
-  "Kredit": "2065197337696798712"
+"cliniko_preskoci_bez_placanja_item_ids": {
+  "Paket": "2065197337696798712",
+  "Poklon bon": "2071929996955354152"
 }
 ```
 
-Račun s takvom oznakom zatvara se kao `skipped`, s razlogom zapisanim uz
-njega, i vidljiv je u `--status`. Solo se ne poziva. Oznaka se provjerava
-prva, prije svega ostalog, pa takav račun ne čeka ni oznaku načina plaćanja —
-nema je zašto čekati kad ionako ništa ne nastaje.
+Provjera se radi **samo** na putu kojim se ide kad oznake plaćanja nema, pa
+oznaka plaćanja uvijek pobjeđuje — ako je ima, račun se fiskalizira bez obzira
+na paket ili bon.
 
-Razlika prema oznakama iz sljedećeg poglavlja: ondje dokument **nastaje** (kao
-ponuda) pa ga osoblje dovrši, ovdje ne nastaje ništa.
+Preskočeni račun zatvara se kao `skipped`, s razlogom zapisanim uz njega, i
+vidljiv je u `--status`. Ne čeka ispravak, jer nema što čekati.
+
+Ako se na računu nađu i paket i oznaka za ponudu (R1), a nema oznake plaćanja,
+preskakanje ima prednost: „nema naplate" je jača tvrdnja od „plaća se
+naknadno".
 
 ## Računi koji idu kao ponuda
 

@@ -194,7 +194,8 @@ def marker_item_ids(config):
     } | {
         str(v).strip() for v in ponuda_item_ids(config).values()
     } | {
-        str(v).strip() for v in config.get("cliniko_preskoci_item_ids", {}).values()
+        str(v).strip()
+        for v in config.get("cliniko_preskoci_bez_placanja_item_ids", {}).values()
     }
 
 
@@ -243,16 +244,23 @@ class SkipInvoice(Exception):
     """Račun nosi oznaku zbog koje se uopće ne prenosi u Solo."""
 
 
-def skip_marker_name(invoice_items, config):
-    """Naziv oznake zbog koje račun uopće ne ide u Solo, inače None.
+def bez_placanja_marker_name(invoice_items, config):
+    """Naziv oznake koja znači "sada nema naplate", inače None.
+
+    Paket i poklon bon prodaju se jednom i tada se fiskaliziraju. Kad ih
+    pacijent kasnije iskorištava, u Clinku nastaje račun, ali novac ne mijenja
+    vlasnika - pa ne smije nastati ni novi fiskalni račun.
+
+    Razlika se vidi po oznaci načina plaćanja: ako je ima, novac je upravo
+    primljen i račun se fiskalizira normalno; ako je nema, radi se o
+    iskorištavanju ranije plaćenog i račun se preskače. Zato se ova oznaka i
+    provjerava samo na putu kojim se ide kad oznake plaćanja nema.
 
     Razlikuje se od oznake za ponudu: ondje dokument nastaje pa ga osoblje
-    dovrši, a ovdje ne nastaje ništa. Služi za naplatu koja je već bila
-    fiskalizirana ranije - npr. kredit ili paket plaćen unaprijed, gdje sada
-    nema nove naplate pa ni novog fiskalnog računa."""
+    dovrši, a ovdje ne nastaje ništa."""
     oznake = {
         str(v).strip(): k
-        for k, v in config.get("cliniko_preskoci_item_ids", {}).items()
+        for k, v in config.get("cliniko_preskoci_bez_placanja_item_ids", {}).items()
     }
     if not oznake:
         return None
@@ -538,13 +546,6 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
 
         invoice_items = cliniko.get_invoice_items(cliniko_id)
 
-        # Oznaka koja račun potpuno izuzima - provjerava se prva, prije svega
-        # što ima veze sa Solom. Naplata je već bila fiskalizirana ranije, pa
-        # sada ne smije nastati nikakav dokument.
-        preskoci = skip_marker_name(invoice_items, config)
-        if preskoci:
-            raise SkipInvoice(f"označen kao '{preskoci}' - ne fiskalizira se")
-
         # Račun s takvom oznakom nikad se ne fiskalizira - ide kao ponuda,
         # bez obzira na solo_document_type.
         ponuda_oznaka = ponuda_marker_name(invoice_items, config)
@@ -554,6 +555,17 @@ def process_invoice(config, cliniko, solo, state, invoice, alerter=None):
         try:
             nacin_placanja = detect_nacin_placanja(cliniko_id, invoice_items, config)
         except MissingPaymentMarker:
+            # Paket ili poklon bon bez oznake plaćanja znači da pacijent
+            # iskorištava nešto što je već plaćeno i fiskalizirano - nema nove
+            # naplate, pa ne nastaje ni dokument. Provjerava se prije ponude:
+            # "nema naplate" je jača tvrdnja od "plaća se naknadno".
+            bez_naplate = bez_placanja_marker_name(invoice_items, config)
+            if bez_naplate:
+                raise SkipInvoice(
+                    f"označen kao '{bez_naplate}', a nema oznake načina plaćanja "
+                    f"- nema naplate, ne fiskalizira se"
+                )
+
             # Takav račun često nema oznaku načina plaćanja - plaća se naknadno,
             # po ponudi. Ponuda nije fiskalni dokument pa vrijednost nema
             # posljedica, a osoblje je ionako potvrđuje pri dovršavanju. Kod
@@ -765,8 +777,8 @@ def verify_payment_markers(config, cliniko, alerter):
         (f"ponuda: {naziv}", item_id)
         for naziv, item_id in ponuda_item_ids(config).items()
     ] + [
-        (f"preskoči: {naziv}", item_id)
-        for naziv, item_id in config.get("cliniko_preskoci_item_ids", {}).items()
+        (f"bez naplate: {naziv}", item_id)
+        for naziv, item_id in config.get("cliniko_preskoci_bez_placanja_item_ids", {}).items()
     ]
 
     nedostaju = []
