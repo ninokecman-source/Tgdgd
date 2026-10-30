@@ -135,6 +135,10 @@ def _rijesi_uplatu(zahtjev, tablica, mapa):
             "--stvarno"]
 
 
+def _popis_polaznika(zahtjev, tablica, mapa):
+    return ["popis_polaznika.py", "--tecaj", tablica]
+
+
 def _potvrdi_greske(zahtjev, tablica, mapa):
     return ["potvrdi_greske.py"]
 
@@ -160,6 +164,7 @@ POSLOVI = {
     "otkazi_polaznika": _otkazi,
     "rijesi_uplatu": _rijesi_uplatu,
     "posalji_poziv": _poziv,
+    "popis_polaznika": _popis_polaznika,
     "potvrdi_greske": _potvrdi_greske,
 }
 

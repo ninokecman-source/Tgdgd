@@ -490,6 +490,19 @@ def pregled_slanja(oznaka):
     return redirect(url_for("tecaj", oznaka=oznaka))
 
 
+@app.route("/tecaj/<oznaka>/popis", methods=["POST"])
+@treba_prijava
+def popis_polaznika(oznaka):
+    """PDF s popisom polaznika - samo imena, bez adresa i iznosa. Završi uz
+    tablice, u mapi Popisi, pa ga Dropbox odnese i na mobitel."""
+    _, tecaj = nadji_tecaj(oznaka)
+    if not token_valja():
+        abort(400)
+    if not ceka_zahtjev(tecaj["datoteka"]):
+        zatrazi("popis_polaznika", tecaj["datoteka"])
+    return redirect(url_for("tecaj", oznaka=oznaka))
+
+
 @app.route("/tecaj/<oznaka>/poziv", methods=["GET", "POST"])
 @treba_prijava
 def poziv(oznaka):

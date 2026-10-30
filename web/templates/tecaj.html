@@ -16,6 +16,20 @@
 <section>
   <h2>Radnje</h2>
 
+  <h3>Popis polaznika</h3>
+  {% if radi %}
+  <p class="tiho">Čeka da posao završi.</p>
+  {% else %}
+  <p class="tiho">PDF sa samim imenima — bez adresa, brojeva i iznosa — da se
+    može nositi na tečaj. Nastaje u Dropboxu, u mapi <code>Popisi</code>.</p>
+  <div class="tipke">
+    <form method="post" action="{{ url_for('popis_polaznika', oznaka=tecaj.oznaka) }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="tipka tiha" type="submit">Napravi popis</button>
+    </form>
+  </div>
+  {% endif %}
+
   <h3>Potvrdnice</h3>
 
   {% if radi %}
@@ -72,6 +86,7 @@
           'posalji_certifikate': 'Slanje potvrdnica',
           'posalji_poziv': 'Poziv na tečaj',
           'podsjetnik_uplata': 'Podsjetnik',
+          'popis_polaznika': 'Popis polaznika',
           'otkazi_polaznika': 'Otkazivanje'}
          .get(ishod.posao, ishod.posao) }} ·
       {{ ishod.status }} · {{ (ishod.gotovo or ishod.trazeno)|vrijeme }}
