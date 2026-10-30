@@ -6,6 +6,16 @@
 
 <section id="greske">
   <h2>Greške ({{ podaci.greske|length }})</h2>
+  {% if podaci.greske %}
+  <div class="tipke">
+    <form method="post" action="{{ url_for('potvrdi_greske') }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="tipka tiha" type="submit">Kreni ispočetka</button>
+    </form>
+  </div>
+  <p class="tiho">Ove greške prestaju se brojati. Logovi ostaju netaknuti,
+    a sve novo se opet javlja.</p>
+  {% endif %}
   {% if podaci.greske_potvrdene %}
   <p class="tiho">Brojač je krenuo ispočetka {{ podaci.greske_potvrdene|vrijeme }};
     starije se više ne broje, ali su i dalje u logu.</p>
@@ -17,14 +27,6 @@
     <pre class="greska">{{ g.redak }}</pre>
   </div>
   {% endfor %}
-  {% if podaci.greske %}
-  <form method="post" action="{{ url_for('potvrdi_greske') }}">
-    <input type="hidden" name="token" value="{{ token }}">
-    <button class="tipka tiha" type="submit">Kreni ispočetka</button>
-  </form>
-  <p class="tiho">Ove greške prestaju se brojati. Logovi ostaju netaknuti,
-    a sve novo se opet javlja.</p>
-  {% endif %}
 </section>
 
 <section>
