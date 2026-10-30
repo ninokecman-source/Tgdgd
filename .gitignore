@@ -7,6 +7,7 @@ poslani_certifikati.json
 poslani_pozivi.json
 sent_reports.json
 otkazani.json
+greske_potvrdene.json
 web/stanje.json
 web/zahtjevi.json
 log.txt

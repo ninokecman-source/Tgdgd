@@ -135,6 +135,10 @@ def _rijesi_uplatu(zahtjev, tablica, mapa):
             "--stvarno"]
 
 
+def _potvrdi_greske(zahtjev, tablica, mapa):
+    return ["potvrdi_greske.py"]
+
+
 def _otkazi(zahtjev, tablica, mapa):
     naredba = ["otkazi_polaznika.py", "--tablica", tablica]
     if zahtjev.get("email"):
@@ -156,7 +160,12 @@ POSLOVI = {
     "otkazi_polaznika": _otkazi,
     "rijesi_uplatu": _rijesi_uplatu,
     "posalji_poziv": _poziv,
+    "potvrdi_greske": _potvrdi_greske,
 }
+
+# Poslovi koji se ne tiču nijedne tablice. Svi ostali moraju imenovati
+# postojeću, jer naziv ide u naredbu.
+BEZ_TABLICE = {"potvrdi_greske"}
 
 
 def sada() -> str:
@@ -216,7 +225,9 @@ def procitaj_zahtjev(put: Path) -> dict:
 
     # Naziv tablice ide u naredbu, pa se ne uzima na vjeru nego se traži
     # među onima koje stvarno postoje.
-    if zahtjev.get("tablica", "") not in poznate_tablice():
+    if zahtjev["posao"] in BEZ_TABLICE:
+        zahtjev["tablica"] = ""
+    elif zahtjev.get("tablica", "") not in poznate_tablice():
         raise Odbijeno(f"nema tablice {zahtjev.get('tablica')!r}")
 
     return zahtjev
@@ -249,7 +260,7 @@ def odradi(put: Path) -> None:
     osnova = {"oznaka": oznaka, "posao": posao, "tablica": tablica,
               "osoba": osoba, "trazio": trazio, "trazeno": sada()}
     zabiljezi(dict(osnova, status="u tijeku", ispis=""))
-    print(f"=== {sada()} {posao} / {tablica}"
+    print(f"=== {sada()} {posao}" + (f" / {tablica}" if tablica else "")
           + (f" / {osoba}" if osoba else "") + f" (tražio {trazio}) ===")
 
     naredba = [str(POKRENI), *argumenti]

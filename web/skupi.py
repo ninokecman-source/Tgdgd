@@ -232,17 +232,48 @@ def citaj_nepovezane(veza) -> list:
 
 
 def repa_loga(put: Path) -> list:
-    """Zadnjih LOG_REP bajtova loga, u retke. Čita se u bajtovima pa dekodira
-    jer rez može pasti usred kvačice."""
+    """Zadnjih LOG_REP bajtova loga, kao (odakle, redak). `odakle` je mjesto
+    retka u datoteci - po njemu se zna što je već potvrđeno.
+
+    Retci se dekodiraju jedan po jedan, a ne cijeli komad odjednom: rez može
+    pasti usred kvačice, a i duljina dekodiranog teksta ne odgovara broju
+    bajtova, pa bi se mjesta razišla."""
+    pocetak = max(0, put.stat().st_size - LOG_REP)
     with open(put, "rb") as f:
-        f.seek(max(0, put.stat().st_size - LOG_REP))
+        f.seek(pocetak)
         sadrzaj = f.read()
-    return sadrzaj.decode("utf-8", errors="replace").splitlines()
+
+    retci, mjesto = [], pocetak
+    for redak in sadrzaj.split(b"\n"):
+        retci.append((mjesto, redak.decode("utf-8", errors="replace")))
+        mjesto += len(redak) + 1
+    return retci
+
+
+def potvrdeno_do() -> tuple:
+    """(kada je potvrđeno, {naziv loga: bajt do kojeg je sve viđeno}) - ono
+    što je zapisao potvrdi_greske.py.
+
+    Log koji je u međuvremenu postao manji je skraćen ili zarotiran, pa
+    zapamćeno mjesto više ništa ne znači - takav se gleda cijeli."""
+    stanje = citaj_json(KORIJEN / "greske_potvrdene.json")
+    granice = {}
+    for naziv, podaci in (stanje.get("logovi") or {}).items():
+        put = Path(podaci.get("put", "")).expanduser()
+        velicina = podaci.get("velicina")
+        if isinstance(velicina, int) and put.exists() and put.stat().st_size >= velicina:
+            granice[naziv] = velicina
+    return stanje.get("kada", ""), granice
 
 
 def citaj_logove(config: dict) -> dict:
     """Greške i prolazi iz logova. Svakoj se grešci pridruži posao u kojem se
-    pojavila - zaglavlje koje pokreni.sh upiše prije svakog pokretanja."""
+    pojavila - zaglavlje koje pokreni.sh upiše prije svakog pokretanja.
+
+    Greške koje su potvrđene tipkom na stranici se ne broje, ali se zaglavlja
+    i dalje čitaju od početka repa - inače se greška odmah iza potvrđene
+    točke ne bi znala pripisati nijednom poslu."""
+    kada_potvrdeno, potvrdeno = potvrdeno_do()
     greske, stanje_logova = [], []
     # Prolazi se grupiraju po poslu, ne nabrajaju redom: prijave se citaju
     # svakih pola sata, pa bi inace 48 istih redaka dnevno zatrpalo sve
@@ -264,8 +295,9 @@ def citaj_logove(config: dict) -> dict:
             "velicina": podaci.st_size,
         })
 
+        granica = potvrdeno.get(naziv, 0)
         kada, posao = "", ""
-        for redak in repa_loga(put):
+        for odakle, redak in repa_loga(put):
             zaglavlje = ZAGLAVLJE.match(redak.strip())
             if zaglavlje:
                 kada, posao = zaglavlje.group(1), zaglavlje.group(2)
@@ -275,13 +307,16 @@ def citaj_logove(config: dict) -> dict:
                 unos["broj"] += 1
                 unos["kada"] = max(unos["kada"], kada)
                 continue
+            if odakle < granica:
+                continue
             if redak.strip() and any(u.search(redak) for u in PROBLEM_UZORCI):
                 greske.append({"log": naziv, "kada": kada, "posao": posao,
                                "redak": redak.strip()[:400]})
 
     redom = sorted(prolazi.values(), key=lambda r: r["kada"], reverse=True)
     greske.sort(key=lambda r: r["kada"], reverse=True)
-    return {"greske": greske[:60], "prolazi": redom, "logovi": stanje_logova}
+    return {"greske": greske[:60], "prolazi": redom, "logovi": stanje_logova,
+            "greske_potvrdene": kada_potvrdeno}
 
 
 def main():

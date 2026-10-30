@@ -656,6 +656,20 @@ def stanje():
     return render_template("stanje.html", podaci=snimka())
 
 
+@app.route("/greske/potvrdi", methods=["POST"])
+@treba_prijava
+def potvrdi_greske():
+    """Kreni ispočetka s brojanjem grešaka: zapamti dokle su logovi
+    pročitani. Logovi ostaju netaknuti - briše se samo brojač."""
+    if not token_valja():
+        abort(400)
+    # Zahtjev bez tablice je samo ovaj posao, pa je i provjera ista kao
+    # drugdje: ne šalji drugi dok prvi još čeka.
+    if not ceka_zahtjev(""):
+        zatrazi("potvrdi_greske", "")
+    return redirect(url_for("stanje") + "#greske")
+
+
 @app.errorhandler(404)
 def nema(_):
     return render_template("nema.html"), 404
