@@ -297,8 +297,12 @@ def citaj_logove(config: dict) -> dict:
 
         granica = potvrdeno.get(naziv, 0)
         kada, posao = "", ""
+        u_tracebacku, pocetak_tb, lanac, zadnji_tb = False, 0, False, None
+
         for odakle, redak in repa_loga(put):
-            zaglavlje = ZAGLAVLJE.match(redak.strip())
+            golo = redak.strip()
+
+            zaglavlje = ZAGLAVLJE.match(golo)
             if zaglavlje:
                 kada, posao = zaglavlje.group(1), zaglavlje.group(2)
                 unos = prolazi.setdefault((naziv, posao),
@@ -306,12 +310,46 @@ def citaj_logove(config: dict) -> dict:
                                            "kada": kada, "broj": 0})
                 unos["broj"] += 1
                 unos["kada"] = max(unos["kada"], kada)
+                u_tracebacku, lanac, zadnji_tb = False, False, None
                 continue
+
+            # Jedan pad skripte ispiše desetak redaka, a svaki bi se dao
+            # prepoznati kao greška - pa bi jedna nezgoda na stranici
+            # izgledala kao deset. Zato se cijeli traceback broji kao jedna
+            # greška, a pokazuje se zadnji redak: tek on kaže što se dogodilo.
+            if u_tracebacku:
+                if not golo or redak[:1] in (" ", "\t"):
+                    continue    # tijelo tracebacka - putanje i izvorni kod
+                u_tracebacku = False
+                if pocetak_tb < granica:
+                    zadnji_tb = None
+                    continue
+                unos = {"log": naziv, "kada": kada, "posao": posao,
+                        "redak": golo[:400]}
+                # Lanac ("During handling...") je ista nezgoda, samo sljedeća
+                # karika - zanima te zadnja, pa prethodnu zamjenjuje.
+                if lanac and zadnji_tb is not None:
+                    greske[zadnji_tb] = unos
+                else:
+                    greske.append(unos)
+                    zadnji_tb = len(greske) - 1
+                lanac = False
+                continue
+
+            if golo.startswith("Traceback (most recent call last)"):
+                u_tracebacku, pocetak_tb = True, odakle
+                continue
+            if golo.startswith(("During handling of the above exception",
+                                "The above exception was the direct cause")):
+                lanac = True
+                continue
+
             if odakle < granica:
                 continue
-            if redak.strip() and any(u.search(redak) for u in PROBLEM_UZORCI):
+            if golo and any(u.search(redak) for u in PROBLEM_UZORCI):
                 greske.append({"log": naziv, "kada": kada, "posao": posao,
-                               "redak": redak.strip()[:400]})
+                               "redak": golo[:400]})
+                zadnji_tb = None
 
     redom = sorted(prolazi.values(), key=lambda r: r["kada"], reverse=True)
     greske.sort(key=lambda r: r["kada"], reverse=True)

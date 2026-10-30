@@ -652,7 +652,7 @@ def process_folder(imap, raw_folder: str, folder_location: str, config: dict,
     return added
 
 
-def main():
+def prodji():
     config = load_config()
     # Relativan put se računa od foldera skripte, ne od trenutnog direktorija.
     # Inače bi pokretanje iz drugog foldera našlo praznu evidenciju, pa bi se
@@ -708,6 +708,35 @@ def main():
         print("Nema novih mailova.")
     print(f"\nGotovo. Dodano {added} novih prijava u {len(workbooks)} datoteka "
           f"(pretraženo {len(target_folders)} foldera).")
+
+
+# Zoho zna prekinuti IMAP vezu usred prolaza - 30.10.2026. se to dogodilo
+# dvaput zaredom, pa opet prestalo samo od sebe. Takav pad je bezopasan: u
+# tablicu i u evidenciju se piše tek na kraju, pa ako prolaz pukne, nijedna
+# prijava nije ni upisana ni označena obrađenom.
+PREKID_VEZE = (imaplib.IMAP4.error, OSError, ssl.SSLError)
+# Koliko čekati prije drugog pokušaja. Veza se obično oporavi odmah, a ako
+# se ne oporavi, sljedeći prolaz je ionako za pola sata.
+PAUZA_NAKON_PREKIDA = 30
+
+
+def main():
+    """Jedan prolaz, pa još jedan ako je veza pukla.
+
+    Umjesto tracebacka od desetak redaka ispiše se jedan jasan redak: na
+    stranici se tako vidi što se dogodilo, a ne zid teksta."""
+    try:
+        return prodji()
+    except PREKID_VEZE as e:
+        print(f"  [!] Veza sa Zohom je pukla ({e}) - čekam "
+              f"{PAUZA_NAKON_PREKIDA}s pa pokušavam ponovno.")
+        time.sleep(PAUZA_NAKON_PREKIDA)
+
+    try:
+        return prodji()
+    except PREKID_VEZE as e:
+        sys.exit(f"[!] Zoho ne da IMAP vezu ({e}). Nijedna prijava nije "
+                 f"izgubljena - pročitat će se pri sljedećem prolazu.")
 
 
 if __name__ == "__main__":
