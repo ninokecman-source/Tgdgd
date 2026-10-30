@@ -43,7 +43,6 @@ def posalji(config: dict, kome: str, naslov: str, tijelo: str, prilog: Path = No
     msg["Subject"] = naslov
     msg["From"] = config["zoho_email"]
     msg["To"] = kome
-    msg["Bcc"] = config["zoho_email"]     # kopija tebi, da imaš trag u Sentu
     msg.set_content(tijelo)
 
     if prilog is not None:
@@ -90,8 +89,22 @@ def main():
         print("\nPregled - ništa nije poslano. Za slanje dodaj --stvarno")
         return
 
-    posalji(load_config(), args.kome, naslov, tijelo, prilog)
+    config = load_config()
+    posalji(config, args.kome, naslov, tijelo, prilog)
     print(f"\nPoslano na {args.kome}.")
+
+    # Jedan izvještaj tebi umjesto kopije same poruke: poruka je ovdje
+    # cijela, pa trag ostaje, a u sandučiću ne izgleda kao da je upućena
+    # polazniku.
+    izvjestaj = [f"Poslano na {args.kome}.", ""]
+    if prilog:
+        izvjestaj.append(f"Prilog: {prilog.name}")
+        izvjestaj.append("")
+    izvjestaj += ["--- poruka ---", f"Naslov: {naslov}", "", tijelo]
+    try:
+        posta.javi(config, f"Poslano: {naslov}", "\n".join(izvjestaj))
+    except Exception as e:
+        print(f"[!] Poruka je poslana, ali izvještaj tebi nije: {e}")
 
 
 if __name__ == "__main__":

@@ -88,7 +88,6 @@ def posalji_jedan(config: dict, kome: str, naslov: str, tijelo: str) -> None:
     msg["Subject"] = naslov
     msg["From"] = config["zoho_email"]
     msg["To"] = kome
-    msg["Bcc"] = config["zoho_email"]
     msg.set_content(tijelo)
 
     def _posalji():
@@ -155,6 +154,7 @@ def main():
         return
 
     poslano = set(stanje.get(put.name, {}).get("poslano", []))
+    uspjeli, pali = [], []
     for o in cekaju:
         v = dict(osnova, **imena(o["ime"]))
         try:
@@ -163,7 +163,9 @@ def main():
                           predlosci.popuni(tijelo_pred, v, "zadani tekst"))
         except Exception as e:
             print(f"  [!] {o['ime']} <{o['email']}>: {e}")
+            pali.append(f"{o['ime']} <{o['email']}>: {e}")
             continue
+        uspjeli.append(f"{o['ime']} <{o['email']}>")
         poslano.add(o["email"])
         print(f"  Poslano: {o['ime']} <{o['email']}>")
         # spremaj nakon svake poruke - ako slanje pukne na pola, sljedeće
@@ -176,6 +178,18 @@ def main():
         spremi_stanje(stanje)
 
     print(f"\nGotovo. Poslano {len(poslano) - len(vec)} poziva.")
+
+    # Jedan izvještaj tebi na kraju, umjesto kopije svakog pojedinog poziva.
+    prvi = dict(osnova, **imena(cekaju[0]["ime"]))
+    try:
+        posta.javi_o_slanju(
+            config, "pozivi",
+            f"{info['course_code']} / {info['location']} ({info['dates']})",
+            uspjeli, pali,
+            (predlosci.popuni(naslov_pred, prvi, "zadani tekst"),
+             predlosci.popuni(tijelo_pred, prvi, "zadani tekst")))
+    except Exception as e:
+        print(f"[!] Pozivi su poslani, ali izvještaj tebi nije: {e}")
 
 
 def imena(puno_ime: str) -> dict:

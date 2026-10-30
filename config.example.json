@@ -1,6 +1,7 @@
 {
   "zoho_email": "tvoj_mail@primjer.com",
   "zoho_app_password": "app-specific lozinka iz Zoho postavki",
+  "notify_email": "tvoj_mail@primjer.com",
   "imap_host": "imap.zoho.eu",
   "folder_roots": [
     "Split",

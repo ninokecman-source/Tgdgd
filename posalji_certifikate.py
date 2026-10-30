@@ -104,7 +104,6 @@ def posalji_jedan(config: dict, primatelj: str, naslov: str, tijelo: str,
     msg["Subject"] = naslov
     msg["From"] = config["zoho_email"]
     msg["To"] = primatelj
-    msg["Bcc"] = config["zoho_email"]      # kopija tebi, da imaš trag u Sentu
     msg.set_content(tijelo)
 
     tip, _ = mimetypes.guess_type(pdf.name)
@@ -136,7 +135,10 @@ def tekst_iz_datoteka(naslov_put: str, tijelo_put: str):
 
 def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool,
            zadani_tekst=None) -> int:
-    """Vrati broj poslanih (ili, u pregledu, spremnih) potvrdnica."""
+    """Vrati broj poslanih (ili, u pregledu, spremnih) potvrdnica.
+
+    Na kraju stvarnog slanja javi tebi jednom porukom kako je prošlo -
+    prije je u Bcc išla kopija svake potvrdnice posebno."""
     wb = with_retry(lambda: load_workbook(xlsx_path), retry_on=(PermissionError, OSError))
     if "podaci" not in wb.sheetnames:
         return 0
@@ -200,6 +202,8 @@ def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool,
         return len(cekaju)
 
     poslano = set(vec_poslano)
+    # u izvještaj idu i oni koje se preskočilo (bez PDF-a ili bez adrese)
+    uspjeli, pali = [], list(problemi)
     for p, pdf in cekaju:
         v = dict(varijable, **{k: p[k] for k in ("first_name", "last_name")})
         try:
@@ -208,7 +212,9 @@ def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool,
                           predlosci.popuni(tijelo_pred, v, izvor), pdf)
         except Exception as e:
             print(f"  [!] {p['ime']} <{p['email']}>: {e}")
+            pali.append(f"{p['ime']} <{p['email']}>: {e}")
             continue
+        uspjeli.append(f"{p['ime']} <{p['email']}>  ({pdf.name})")
         poslano.add(p["email"].lower())
         print(f"  Poslano: {p['ime']} <{p['email']}>")
         # spremaj nakon svake poruke - ako slanje pukne na pola, sljedeće
@@ -219,6 +225,17 @@ def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool,
             "poslano": sorted(poslano),
         }
         save_state(state)
+
+    prvi = dict(varijable, **{k: cekaju[0][0][k] for k in ("first_name", "last_name")})
+    try:
+        posta.javi_o_slanju(
+            config, "potvrdnice",
+            f"{info['course_code']} / {info['location']} ({info['dates']})",
+            uspjeli, pali,
+            (predlosci.popuni(naslov_pred, prvi, izvor),
+             predlosci.popuni(tijelo_pred, prvi, izvor)))
+    except Exception as e:
+        print(f"  [!] Potvrdnice su poslane, ali izvještaj tebi nije: {e}")
 
     return len(poslano) - len(vec_poslano)
 

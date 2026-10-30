@@ -21,6 +21,7 @@ pošte), a 587 otvoren - pa ondje u config.json ide "smtp_port": 587.
 
 import smtplib
 import ssl
+from email.message import EmailMessage
 
 ZADANI_PORT = 465
 # Ako server ne odgovori za ovoliko, nema smisla dalje čekati - mail se
@@ -53,3 +54,49 @@ def posalji(config: dict, msg) -> None:
     with veza(config) as smtp:
         smtp.login(config["zoho_email"], config["zoho_app_password"])
         smtp.send_message(msg)
+
+
+def javi_o_slanju(config: dict, sto: str, tecaj: str, uspjeli: list,
+                  pali: list, primjer=None) -> None:
+    """Izvještaj o jednom skupnom slanju.
+
+    `sto` je ono što se slalo ('potvrdnice', 'pozivi'), `tecaj` opis tečaja,
+    `uspjeli` i `pali` popisi redaka o ljudima, a `primjer` (naslov, tijelo)
+    jedne stvarno poslane poruke - da u izvještaju ostane i što je pisalo.
+
+    Ako slanje nije ni počelo, ne šalje se ništa: nema se što javiti."""
+    if not uspjeli and not pali:
+        return
+
+    stanje = "Poslano" if uspjeli and not pali else (
+        "Djelomično poslano" if uspjeli else "Nije poslano")
+    naslov = f"{stanje}: {sto} - {tecaj} ({len(uspjeli)})"
+
+    redci = [f"{sto.capitalize()} za {tecaj}.", ""]
+    if uspjeli:
+        redci.append(f"Poslano ({len(uspjeli)}):")
+        redci += [f"  - {r}" for r in uspjeli]
+        redci.append("")
+    if pali:
+        redci.append(f"NIJE poslano ({len(pali)}):")
+        redci += [f"  - {r}" for r in pali]
+        redci.append("")
+    if primjer:
+        redci += ["--- poruka (kako je otišla prvom na popisu) ---",
+                  f"Naslov: {primjer[0]}", "", primjer[1]]
+
+    javi(config, naslov, "\n".join(redci))
+
+
+def javi(config: dict, naslov: str, tijelo: str) -> None:
+    """Jedan izvještaj tebi, na kraju slanja.
+
+    Prije je svaka poslana poruka išla i tebi u Bcc, pa je slanje potvrdnica
+    za deset polaznika značilo deset poruka u tvom sandučiću. Sad ide jedna,
+    s popisom kome je otišlo i što nije prošlo."""
+    msg = EmailMessage()
+    msg["Subject"] = naslov
+    msg["From"] = config["zoho_email"]
+    msg["To"] = config.get("notify_email", config["zoho_email"])
+    msg.set_content(tijelo)
+    posalji(config, msg)
