@@ -16,6 +16,9 @@ log.txt
 
 # Potvrdnice: licencirani fontovi i Emmettov znak - ne idu u javni repozitorij
 potvrdnica*.html
+# Obrazac fakulteta i gotova izvjesca stoje uz tablice, ne u kodu
+izvjesce*.docx
+potpis.*
 # Brandon Grotesque i wordmark, ako ikad zavrse uz kod umjesto u Prijave/Marka
 *.otf
 web/static/wordmark-*.svg

@@ -440,6 +440,7 @@ def tecaj(oznaka):
         cekaju=nedobili(nadjen, poslani),
         za_poziv=sum(len(s["ljudi"]) for s in (nadjen.get("pozvati") or [])),
         ishod=ishod,
+        izvjesce_ide=izvjesce_ide(nadjen),
         radi=ceka or bool(ishod and ishod.get("u_tijeku")))
 
 
@@ -488,6 +489,65 @@ def pregled_slanja(oznaka):
     if not ceka_zahtjev(tecaj["datoteka"]):
         zatrazi("pregled_certifikata", tecaj["datoteka"])
     return redirect(url_for("tecaj", oznaka=oznaka))
+
+
+def izvjesce_ide(tecaj: dict) -> bool:
+    import predlosci
+
+    """Izvješće se piše fakultetu u Splitu, pa tipka stoji samo uz njegove
+    tečajeve. Popis mjesta je u config.json, da se drugdje ne mora dirati
+    kod ako se program proširi."""
+    mjesta = config.get("izvjesce_mjesta", ["Split"])
+    nase = predlosci.bez_dijakritika(tecaj.get("mjesto", "")).lower()
+    return any(predlosci.bez_dijakritika(m).lower() in nase for m in mjesta)
+
+
+def racun_izvjesca(tecaj: dict, skripte: float, grickalice: float) -> dict:
+    """Iste brojke kakve će izaći u dokumentu - da se vide prije slanja."""
+    prihodi = float(tecaj.get("uplaceno") or 0)
+    australija = round(prihodi * float(config.get("izvjesce_postotak_australija", 40)) / 100, 2)
+    hrvatska = round(prihodi * float(config.get("izvjesce_postotak_hrvatska", 10)) / 100, 2)
+    putni = float(config.get("izvjesce_putni_trosak", 100))
+    fakultet = float(config.get("izvjesce_fakultet_trosak", 400))
+    rashodi = round(australija + hrvatska + putni + fakultet + skripte + grickalice, 2)
+    return {"prihodi": prihodi, "australija": australija, "hrvatska": hrvatska,
+            "putni": putni, "fakultet": fakultet, "skripte": skripte,
+            "grickalice": grickalice, "rashodi": rashodi,
+            "razlika": round(prihodi - rashodi, 2)}
+
+
+def iznos_iz_obrasca(polje: str) -> float:
+    """Iznos iz obrasca, svejedno stiže li adresom (preračun) ili slanjem."""
+    try:
+        return max(0.0, float(request.values.get(polje, "0").replace(",", ".") or 0))
+    except ValueError:
+        return 0.0
+
+
+@app.route("/tecaj/<oznaka>/izvjesce", methods=["GET", "POST"])
+@treba_prijava
+def izvjesce(oznaka):
+    """Izvješće fakultetu nakon modula. Tekst obrasca je fakultetov i ne
+    dira se; upisuju se samo trošak skripti i grickalica, ostalo se računa
+    iz tablice."""
+    _, tecaj = nadji_tecaj(oznaka)
+    if not izvjesce_ide(tecaj):
+        abort(404)
+
+    skripte = iznos_iz_obrasca("skripte")
+    grickalice = iznos_iz_obrasca("grickalice")
+
+    if request.method == "POST":
+        if not token_valja():
+            abort(400)
+        if not ceka_zahtjev(tecaj["datoteka"]):
+            zatrazi("izvjesce_fakultetu", tecaj["datoteka"],
+                    skripte=f"{skripte:.2f}", grickalice=f"{grickalice:.2f}")
+        return redirect(url_for("tecaj", oznaka=oznaka))
+
+    return render_template("izvjesce.html", podaci=snimka(), tecaj=tecaj,
+                           racun=racun_izvjesca(tecaj, skripte, grickalice),
+                           skripte=skripte, grickalice=grickalice)
 
 
 @app.route("/tecaj/<oznaka>/popis", methods=["POST"])

@@ -30,6 +30,21 @@
   </div>
   {% endif %}
 
+  {% if izvjesce_ide %}
+  <h3>Izvješće fakultetu</h3>
+  {% if radi %}
+  <p class="tiho">Čeka da posao završi.</p>
+  {% else %}
+  <p class="tiho">Obrazac Fakulteta zdravstvenih znanosti, popunjen datumom,
+    brojem polaznika i financijskom tablicom. Upisuješ samo trošak skripti i
+    grickalica.</p>
+  <div class="tipke">
+    <a class="tipka tiha" href="{{ url_for('izvjesce', oznaka=tecaj.oznaka) }}">
+      Napravi izvješće</a>
+  </div>
+  {% endif %}
+  {% endif %}
+
   <h3>Potvrdnice</h3>
 
   {% if radi %}
@@ -87,6 +102,7 @@
           'posalji_poziv': 'Poziv na tečaj',
           'podsjetnik_uplata': 'Podsjetnik',
           'popis_polaznika': 'Popis polaznika',
+          'izvjesce_fakultetu': 'Izvješće fakultetu',
           'otkazi_polaznika': 'Otkazivanje'}
          .get(ishod.posao, ishod.posao) }} ·
       {{ ishod.status }} · {{ (ishod.gotovo or ishod.trazeno)|vrijeme }}
