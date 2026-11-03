@@ -8,7 +8,13 @@ polaznika i financijska tablica.
 Predložak je prazan obrazac uz tablice ('izvjesce fakultetu.docx'), isti
 princip kao 'lokacija Split.docx'. Gotovo izvješće nastaje u:
 
-    <output_dir>/Izvjesca/<Mjesto> <Kod tečaja> <Godina>.docx
+    <output_dir>/Izvjesca/<Mjesto> <Kod tečaja> <Godina>.pdf
+
+Uz PDF ostaje i .docx iz kojeg je nastao - obrazac se puni kao Wordov
+dokument jer je takav i dobiven, pa mu oblikovanje ostaje netaknuto, a PDF
+je ono što se šalje. Za pretvaranje treba LibreOffice:
+
+    sudo apt install -y libreoffice-writer
 
 Financije:
 
@@ -32,7 +38,10 @@ Pokretanje:
 
 import argparse
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import zipfile
 from datetime import date
 from pathlib import Path
@@ -266,7 +275,8 @@ def ispuni_dokument(xml: str, info: dict, novac: dict, config: dict,
 
     # --- potpis
     paragraf(lambda t: t.startswith("Titula, ime i prezime"),
-             config.get("izvjesce_potpisnik", info["instructor_name"]),
+             config.get("izvjesce_potpisnik",
+                        f"{info['instructor_name']}, instruktor"),
              "ime ispod crte za potpis")
 
     return dx.primijeni(xml, izmjene), promaseno
@@ -323,6 +333,58 @@ def mjere_slike(put: Path, visina_cm: float = 2.0) -> tuple:
     except Exception:
         omjer = 3.0
     return round(visina_cm * omjer, 2), visina_cm
+
+
+# LibreOffice pretvara .docx u PDF. Prvi koji postoji se koristi; put se po
+# potrebi zadaje s "soffice_path" u config.json.
+PUTEVI_SOFFICEA = [
+    "/usr/bin/soffice",
+    "/usr/bin/libreoffice",
+    "/snap/bin/libreoffice",
+    "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+]
+
+
+def nadji_soffice(config: dict):
+    zadano = config.get("soffice_path")
+    if zadano:
+        return zadano if Path(zadano).exists() else None
+    for put in PUTEVI_SOFFICEA:
+        if Path(put).exists():
+            return put
+    return shutil.which("soffice") or shutil.which("libreoffice")
+
+
+def u_pdf(docx_put: Path, config: dict) -> Path:
+    """Isti dokument kao PDF, uz .docx. Vraća put do PDF-a.
+
+    Obrazac se puni kao .docx jer je takav i dobiven od fakulteta i tako mu
+    oblikovanje ostaje netaknuto; PDF je ono što se šalje. Pretvara
+    LibreOffice, jer jedini čita .docx onako kako ga čita i Word.
+
+    Vlastiti profil u privremenoj mapi: bez njega se dva pokretanja odjednom
+    potuku oko istog profila u domu."""
+    soffice = nadji_soffice(config)
+    if soffice is None:
+        raise RuntimeError(
+            "ne nalazim LibreOffice, pa PDF ne mogu napraviti. Instaliraj ga "
+            "('sudo apt install -y libreoffice-writer') ili upiši put u "
+            'config.json kao "soffice_path"')
+
+    with tempfile.TemporaryDirectory() as privremeno:
+        rezultat = subprocess.run(
+            [soffice, "--headless", "--norestore",
+             f"-env:UserInstallation=file://{privremeno}/profil",
+             "--convert-to", "pdf", "--outdir", str(docx_put.parent),
+             str(docx_put)],
+            capture_output=True, text=True, timeout=300)
+
+    pdf_put = docx_put.with_suffix(".pdf")
+    if not pdf_put.exists() or pdf_put.stat().st_size == 0:
+        poruka = (rezultat.stderr or rezultat.stdout or "").strip().splitlines()
+        kraj = poruka[-1] if poruka else f"LibreOffice je vratio {rezultat.returncode}"
+        raise RuntimeError(f"PDF nije napravljen: {kraj}")
+    return pdf_put
 
 
 def napravi(predlozak: Path, cilj: Path, info: dict, novac: dict,
@@ -433,7 +495,15 @@ def main():
     promaseno = napravi(predlozak, cilj, info, novac, config, danas, potpis)
     for sto in promaseno:
         print(f"  [!] U obrascu ne nalazim {sto} - to mjesto ostaje kakvo je bilo.")
-    print(f"\nGotovo. {cilj}")
+
+    try:
+        pdf_put = u_pdf(cilj, config)
+    except Exception as e:
+        print(f"  [!] {e}")
+        print(f"\nNapravljen je samo Word dokument: {cilj}")
+        return
+    print(f"\nGotovo. {pdf_put}")
+    print(f"  (uz njega stoji i {cilj.name}, ako nešto treba dotjerati)")
 
 
 if __name__ == "__main__":
