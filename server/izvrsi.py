@@ -43,9 +43,6 @@ NAJDULJE_IME = 120
 # Jedan tečaj ima najviše dvadesetak ljudi; stotinu je već znak da nešto
 # nije u redu, pa se takav zahtjev odbija umjesto da se izvrši.
 NAJVISE_PRIMATELJA = 100
-# Trošak skripti i grickalica upisuje čovjek, pa gornja granica hvata
-# zalutalu nulu prije nego ode u financijsko izvješće.
-NAJVECI_TROSAK = 100000
 
 
 class Odbijeno(Exception):
@@ -143,17 +140,7 @@ def _popis_polaznika(zahtjev, tablica, mapa):
 
 
 def _izvjesce(zahtjev, tablica, mapa):
-    def iznos(kljuc):
-        try:
-            vrijednost = float(str(zahtjev.get(kljuc, 0)).replace(",", "."))
-        except ValueError:
-            raise Odbijeno(f"{kljuc}: ovo nije iznos ({zahtjev.get(kljuc)!r})")
-        if not 0 <= vrijednost <= NAJVECI_TROSAK:
-            raise Odbijeno(f"{kljuc}: iznos izvan granica ({vrijednost})")
-        return f"{vrijednost:.2f}"
-
-    return ["izvjesce_fakultetu.py", "--tecaj", tablica,
-            "--skripte", iznos("skripte"), "--grickalice", iznos("grickalice")]
+    return ["izvjesce_fakultetu.py", "--tecaj", tablica]
 
 
 def _potvrdi_greske(zahtjev, tablica, mapa):

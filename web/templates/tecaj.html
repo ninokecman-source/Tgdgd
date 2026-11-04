@@ -36,11 +36,13 @@
   <p class="tiho">Čeka da posao završi.</p>
   {% else %}
   <p class="tiho">Obrazac Fakulteta zdravstvenih znanosti, popunjen datumom,
-    brojem polaznika i financijskom tablicom, potpisan i spremljen kao PDF.
-    Upisuješ samo trošak skripti i grickalica.</p>
+    nazivom i trajanjem programa i brojem polaznika, potpisan i spremljen kao
+    PDF. Financijski dio ostaje prazan, kakav u obrascu i jest.</p>
   <div class="tipke">
-    <a class="tipka tiha" href="{{ url_for('izvjesce', oznaka=tecaj.oznaka) }}">
-      Napravi izvješće</a>
+    <form method="post" action="{{ url_for('izvjesce', oznaka=tecaj.oznaka) }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="tipka tiha" type="submit">Napravi izvješće</button>
+    </form>
   </div>
   {% endif %}
   {% endif %}

@@ -2,8 +2,11 @@
 Izvješće Fakultetu zdravstvenih znanosti, nakon modula u Splitu.
 
 Obrazac je fakultetov i tekst mu ostaje nedirnut. Mijenja se samo ono što se
-od modula do modula razlikuje: datum izrade, naziv i trajanje programa, broj
-polaznika i financijska tablica.
+od modula do modula razlikuje: datum izrade, naziv i trajanje programa i broj
+polaznika.
+
+Financijska analiza se ne popunjava. Odjeljak ostaje prazan kakav u obrascu
+i jest, pa ga po potrebi ispuniš rukom.
 
 Predložak je prazan obrazac uz tablice ('izvjesce fakultetu.docx'), isti
 princip kao 'lokacija Split.docx'. Gotovo izvješće nastaje u:
@@ -16,23 +19,11 @@ je ono što se šalje. Za pretvaranje treba LibreOffice:
 
     sudo apt install -y libreoffice-writer
 
-Financije:
-
-    prihodi        zbroj uplata iz tablice, onako kako jesu
-    Emmett Australija   postotak prihoda (zadano 40%)
-    Emmett Hrvatska     postotak prihoda (zadano 10%)
-    putni troškovi      stalni iznos (zadano 100)
-    fakultet            stalni iznos (zadano 400)
-    skripte, grickalice upisuješ ih pri pokretanju
-
-Postoci i stalni iznosi se mijenjaju u config.json, bez diranja skripte.
-
 Potpis se dodaje ako uz tablice, u mapi 'Marka', stoji 'potpis.png' (ili
 .jpg). Ako ga nema, izvješće nastane s praznom crtom za potpis.
 
 Pokretanje:
-    python3 izvjesce_fakultetu.py --tecaj "Modul 1&2 Split.xlsx" \\
-        --skripte 350 --grickalice 80
+    python3 izvjesce_fakultetu.py --tecaj "Modul 1&2 Split.xlsx"
     python3 izvjesce_fakultetu.py --tecaj Split --pregled
 """
 
@@ -63,33 +54,20 @@ from zoho_to_excel import load_config, with_retry
 
 NAZIV_PREDLOSKA = "izvjesce fakultetu"
 COL_FIRST_NAME, COL_LAST_NAME = 2, 3
-COL_NOVI_ILI_PONOVNI, COL_UPLATA = 11, 12
+COL_NOVI_ILI_PONOVNI = 11
 
-# Zadano, ako u config.json ne piše drugačije.
-ZADANO = {
-    "izvjesce_postotak_australija": 40,
-    "izvjesce_postotak_hrvatska": 10,
-    "izvjesce_putni_trosak": 100,
-    "izvjesce_fakultet_trosak": 400,
-}
+# Natpisi koji su dio samog obrasca; sve ostalo u financijskoj tablici je
+# stavka nekog tečaja i briše se.
+KOSTUR_FINANCIJA = ("PLANIRANI", "PRIHODI", "RASHODI", "Ukupno", "Višak",
+                    "Od strane organizatora")
 
 BROJEVI_RIJECIMA = {1: "jedan", 2: "dva", 3: "tri", 4: "četiri", 5: "pet",
                     6: "šest", 7: "sedam", 8: "osam", 9: "devet", 10: "deset"}
 
 
-def postavka(config: dict, kljuc: str) -> float:
-    return float(config.get(kljuc, ZADANO[kljuc]))
-
-
 def datum_izrade(danas: date) -> str:
     """'2. studenoga 2026' - zapis kakav već stoji na naslovnici obrasca."""
     return f"{danas.day}. {MJESECI_GENITIV[danas.month - 1]} {danas.year}"
-
-
-def eura(iznos: float) -> str:
-    """'1.234,50 EUR' - zapis kakav se piše u hrvatskim dokumentima."""
-    cijeli = f"{iznos:,.2f}".replace(",", "#").replace(".", ",").replace("#", ".")
-    return f"{cijeli} EUR"
 
 
 def citaj_tablicu(xlsx_path: Path, config: dict) -> dict:
@@ -100,7 +78,7 @@ def citaj_tablicu(xlsx_path: Path, config: dict) -> dict:
     ws = wb["podaci"]
 
     info = course_info(ws, config)
-    ukupno, ponovnih, uplaceno = 0, 0, 0.0
+    ukupno, ponovnih = 0, 0
     for row in range(FIRST_PARTICIPANT_ROW, find_totals_row(ws)):
         ime = ws.cell(row=row, column=COL_FIRST_NAME).value
         prezime = ws.cell(row=row, column=COL_LAST_NAME).value
@@ -111,15 +89,9 @@ def citaj_tablicu(xlsx_path: Path, config: dict) -> dict:
         # U tablici stoji "New (N) or Revised (R)" - ponavljači su R.
         if oznaka.upper().startswith("R"):
             ponovnih += 1
-        iznos = ws.cell(row=row, column=COL_UPLATA).value
-        try:
-            uplaceno += float(iznos)
-        except (TypeError, ValueError):
-            pass
 
     info["polaznika"] = ukupno
     info["ponovnih"] = ponovnih
-    info["uplaceno"] = round(uplaceno, 2)
     return info
 
 
@@ -139,28 +111,7 @@ def recenica_o_polaznicima(info: dict) -> str:
     return recenica + "."
 
 
-def financije(info: dict, config: dict, skripte: float, grickalice: float) -> dict:
-    prihodi = info["uplaceno"]
-    australija = round(prihodi * postavka(config, "izvjesce_postotak_australija") / 100, 2)
-    hrvatska = round(prihodi * postavka(config, "izvjesce_postotak_hrvatska") / 100, 2)
-    putni = postavka(config, "izvjesce_putni_trosak")
-    fakultet = postavka(config, "izvjesce_fakultet_trosak")
-    rashodi = round(skripte + grickalice + putni + fakultet + australija + hrvatska, 2)
-    return {
-        "prihodi": prihodi,
-        "australija": australija,
-        "hrvatska": hrvatska,
-        "putni": putni,
-        "fakultet": fakultet,
-        "skripte": skripte,
-        "grickalice": grickalice,
-        "rashodi": rashodi,
-        "razlika": round(prihodi - rashodi, 2),
-    }
-
-
-def ispuni_dokument(xml: str, info: dict, novac: dict, config: dict,
-                    danas: date) -> tuple:
+def ispuni_dokument(xml: str, info: dict, config: dict, danas: date) -> tuple:
     """(ispunjeni XML, popis mjesta koja nisu nađena).
 
     Obrazac je fakultetov i može se promijeniti. Zato se svako mjesto traži
@@ -213,54 +164,27 @@ def ispuni_dokument(xml: str, info: dict, novac: dict, config: dict,
     paragraf(lambda t: t.startswith("Tečaju je pristupilo"),
              recenica_o_polaznicima(info), "rečenica o broju polaznika")
 
-    # --- 3. financijska analiza
+    # --- 3. financijska analiza: odjeljak ostaje, ali prazan
+    #
+    # U obrascu su zaostale stavke i iznosi iz tečaja po kojem je složen
+    # ('Skripte 350 Eura', 'Emmett Australija', dvije nule). Kad bi ostali,
+    # svako bi izvješće nosilo tuđe brojke. Zato se brišu svi iznosi i svaka
+    # stavka, a ostaje samo kostur obrasca.
     financ = dx.nadji_tablicu(xml, "Ukupno rashodi")
     if financ is None:
         promaseno.append("financijska tablica")
     else:
-        redovi = dx.redovi_tablice(xml, financ)
-        natpisi = [dx.tekst(xml[r[0]:r[1]]) for r in redovi]
-
-        # Prvi prazan red ispod "PRIHODI" nosi kotizacije.
-        try:
-            prihodi_od = natpisi.index("PRIHODI") + 1
-        except ValueError:
-            prihodi_od = None
-        if prihodi_od is not None and not natpisi[prihodi_od]:
-            celije = dx.celije_reda(xml, redovi[prihodi_od])
-            if len(celije) >= 2:
+        for red in dx.redovi_tablice(xml, financ):
+            celije = dx.celije_reda(xml, red)
+            if not celije:
+                continue
+            naslov = dx.tekst(xml[celije[0][0]:celije[0][1]])
+            if not naslov.startswith(KOSTUR_FINANCIJA):
                 izmjene.append((*celije[0], dx.postavi_celiju(
-                    xml[celije[0][0]:celije[0][1]], "Kotizacije polaznika")))
-                izmjene.append((*celije[1], dx.postavi_celiju(
-                    xml[celije[1][0]:celije[1][1]], eura(novac["prihodi"]))))
-
-        red_tablice(financ, "Ukupno prihodi", eura(novac["prihodi"]))
-        red_tablice(financ, "Skripte", eura(novac["skripte"]),
-                    novi_naslov="Skripte")
-        red_tablice(financ, "Predstavništvo Emmett Hrvatska", eura(novac["hrvatska"]))
-        red_tablice(financ, "Emmett Australija", eura(novac["australija"]))
-        red_tablice(financ, "Putni troškovi", eura(novac["putni"]))
-        red_tablice(financ, "Ukupno rashodi", eura(novac["rashodi"]))
-        red_tablice(financ, "Višak/manjak prihoda", eura(novac["razlika"]))
-
-        # Preostali prazni redovi ispod "RASHODI" nose grickalice i fakultet.
-        preostalo = [("Grickalice", novac["grickalice"]),
-                     ("Fakultet zdravstvenih znanosti", novac["fakultet"])]
-        try:
-            rashodi_od = natpisi.index("RASHODI") + 1
-        except ValueError:
-            rashodi_od = len(redovi)
-        for i in range(rashodi_od, len(redovi)):
-            if natpisi[i] or not preostalo:
-                continue
-            celije = dx.celije_reda(xml, redovi[i])
-            if len(celije) < 2:
-                continue
-            naziv, iznos = preostalo.pop(0)
-            izmjene.append((*celije[0], dx.postavi_celiju(
-                xml[celije[0][0]:celije[0][1]], naziv)))
-            izmjene.append((*celije[1], dx.postavi_celiju(
-                xml[celije[1][0]:celije[1][1]], eura(iznos))))
+                    xml[celije[0][0]:celije[0][1]], "")))
+            for poc, kraj in celije[1:]:
+                if dx.tekst(xml[poc:kraj]):
+                    izmjene.append((poc, kraj, dx.postavi_celiju(xml[poc:kraj], "")))
 
     # --- 4. mjere kvalitete: spomen modula u opisu prakse
     kvaliteta = dx.nadji_tablicu(xml, "Vrjednovanje prakse")
@@ -387,13 +311,13 @@ def u_pdf(docx_put: Path, config: dict) -> Path:
     return pdf_put
 
 
-def napravi(predlozak: Path, cilj: Path, info: dict, novac: dict,
-            config: dict, danas: date, potpis: Path) -> list:
+def napravi(predlozak: Path, cilj: Path, info: dict, config: dict,
+            danas: date, potpis: Path) -> list:
     with zipfile.ZipFile(predlozak) as zip_ulaz:
         dijelovi = {ime: zip_ulaz.read(ime) for ime in zip_ulaz.namelist()}
 
     xml = dijelovi["word/document.xml"].decode("utf-8")
-    xml, promaseno = ispuni_dokument(xml, info, novac, config, danas)
+    xml, promaseno = ispuni_dokument(xml, info, config, danas)
 
     if potpis is not None:
         nastavak = potpis.suffix.lower().lstrip(".")
@@ -435,12 +359,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Izvješće fakultetu nakon modula u Splitu.")
     parser.add_argument("--tecaj", required=True, metavar="DIO NAZIVA")
-    parser.add_argument("--skripte", type=float, default=0.0,
-                        help="Trošak skripti u eurima")
-    parser.add_argument("--grickalice", type=float, default=0.0,
-                        help="Trošak grickalica u eurima")
     parser.add_argument("--pregled", action="store_true",
-                        help="Samo ispiši brojke, bez pravljenja dokumenta")
+                        help="Samo ispiši što bi ušlo, bez pravljenja dokumenta")
     args = parser.parse_args()
 
     config = load_config()
@@ -459,21 +379,11 @@ def main():
     xlsx_path = datoteke[0]
 
     info = citaj_tablicu(xlsx_path, config)
-    novac = financije(info, config, args.skripte, args.grickalice)
     danas = date.today()
 
     print(f"{info['course_code']} / {info['location']} ({info['dates']})")
     print(f"  polaznika: {info['polaznika']}"
           + (f", od toga ponavljača: {info['ponovnih']}" if info["ponovnih"] else ""))
-    print(f"  prihodi:   {eura(novac['prihodi'])}")
-    for natpis, kljuc in (("Emmett Australija", "australija"),
-                          ("Emmett Hrvatska", "hrvatska"),
-                          ("Skripte", "skripte"), ("Grickalice", "grickalice"),
-                          ("Putni troškovi", "putni"), ("Fakultet", "fakultet")):
-        print(f"    {natpis:<20} {eura(novac[kljuc])}")
-    print(f"  rashodi:   {eura(novac['rashodi'])}")
-    print(f"  razlika:   {eura(novac['razlika'])}")
-
     if args.pregled:
         print("\nPregled - dokument nije napravljen.")
         return
@@ -492,7 +402,7 @@ def main():
     naziv = ime_datoteke(f"{info['location']} {info['course_code']} {godina}")
     cilj = output_dir / "Izvjesca" / f"{naziv}.docx"
 
-    promaseno = napravi(predlozak, cilj, info, novac, config, danas, potpis)
+    promaseno = napravi(predlozak, cilj, info, config, danas, potpis)
     for sto in promaseno:
         print(f"  [!] U obrascu ne nalazim {sto} - to mjesto ostaje kakvo je bilo.")
 
