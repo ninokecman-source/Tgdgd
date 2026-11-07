@@ -14,6 +14,28 @@ echo "   treba: 700"
 ls -l /var/backups/poprio/ 2>/dev/null | sed -n '2,4p'
 echo "   treba: -rw------- (600)"
 
+o "1b. ZALUTALE DATOTEKE S TAJNAMA"
+# Traži se po PREFIKSU, ne po završetku: kopija `config.json.prije-izmjene`
+# nosi iste lozinke kao aktivni config, a uzorak `config*.json` je ne hvata.
+# -print0/-0 jer se nazivi s razmakom inače tiho prelome na pola.
+echo "-- datoteke s pristupnim podacima koje NISU 600/400 --"
+# Izvorni kod se izuzima: inače `*token*` pokupi tokenize.py i slične iz
+# knjižnica, pa se pravi nalaz izgubi u šumu.
+find /opt/poprio /root /home /etc/poprio -xdev -type f \
+  \( -path '*/.cache/*' -o -path '*/site-packages/*' -o -path '*/node_modules/*' \
+     -o -path '*/.git/*' -o -path '*/venv/*' -o -name '*.py' -o -name '*.so' \
+     -o -name '*.pyc' \) -prune -o \
+  -type f \( -name 'config*' -o -name '*.env' -o -name '.env' \
+     -o -name 'rclone.conf' -o -name '*credential*' -o -name '*secret*' \
+     -o -name '*token*' -o -name '*.bak' -o -name '*~' \) \
+  -print0 2>/dev/null \
+  | xargs -0 -r stat -c '%n  %U:%G  %a' 2>/dev/null \
+  | grep -vE '  (600|400)$' | sed 's/^/  /' | head -25
+echo "  (prazno = sve zaključano kako treba)"
+echo "-- domovi korisnika --"
+stat -c '  %n  %U:%G  %a' /home/* /root 2>/dev/null
+echo "  treba: 700"
+
 o "2. JE LI ITKO DIRAO POPRIJEV KOD"
 if [ -d "$REPO" ]; then
   for f in /opt/poprio/*.py; do
