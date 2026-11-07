@@ -51,9 +51,10 @@
   {% if radi %}
   <p class="tiho">Čeka da posao završi.</p>
   {% else %}
-  <p class="tiho">Šalje skriptu iz mape <code>Print</code> u tiskaru, s uputom
-    da ide na običan papir, jednostrano, u boji. Broj kompleta je broj
-    polaznika u tablici — sad ih je {{ tecaj.polaznika }}.</p>
+  <p class="tiho">Šalje tiskari sve što ide uz ovaj modul — iz mape
+    <code>Print</code>, a za ponavljanje i gotove potvrdnice — i uz svaku
+    stavku napiše koliko kompleta i na kakav papir. Računa se prema broju
+    polaznika u tablici, a sad ih je {{ tecaj.polaznika }}.</p>
   <div class="tipke">
     <form method="post" action="{{ url_for('na_print', oznaka=tecaj.oznaka) }}">
       <input type="hidden" name="token" value="{{ token }}">

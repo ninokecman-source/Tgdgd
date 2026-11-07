@@ -68,6 +68,18 @@
   "no_certificate_course_codes": [],
   "print_email": "marko@printshop.hr",
   "print_folder": "Print",
+  "print_paper": "običan papir",
+  "print_items": {
+    "Modul 1&2": [
+      {"datoteka": "Modul 1&2"},
+      {"datoteka": "Disclaimer"},
+      {"datoteka": "Zdravstveni obrazac", "koliko": "pola"}
+    ],
+    "Ponavljanje M6 i Praktičarski dan": [
+      {"datoteka": "Praktičarski ispit"},
+      {"certifikati": true, "papir": "tvrđi papir"}
+    ]
+  },
   "izvjesce_mjesta": ["Split"],
   "izvjesce_potpisnik": "Nino Kecman, instruktor",
   "soffice_path": "",
