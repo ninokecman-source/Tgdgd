@@ -47,6 +47,21 @@
   {% endif %}
   {% endif %}
 
+  <h3>Skripte u tiskaru</h3>
+  {% if radi %}
+  <p class="tiho">Čeka da posao završi.</p>
+  {% else %}
+  <p class="tiho">Šalje skriptu iz mape <code>Print</code> u tiskaru, s uputom
+    da ide na običan papir, jednostrano, u boji. Broj kompleta je broj
+    polaznika u tablici — sad ih je {{ tecaj.polaznika }}.</p>
+  <div class="tipke">
+    <form method="post" action="{{ url_for('na_print', oznaka=tecaj.oznaka) }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="tipka tiha" type="submit">Pošalji u tiskaru</button>
+    </form>
+  </div>
+  {% endif %}
+
   <h3>Potvrdnice</h3>
 
   {% if radi %}
@@ -105,6 +120,7 @@
           'podsjetnik_uplata': 'Podsjetnik',
           'popis_polaznika': 'Popis polaznika',
           'nastavlja_dalje': 'Nastavlja dalje',
+          'posalji_na_print': 'Skripte u tiskaru',
           'izvjesce_fakultetu': 'Izvješće fakultetu',
           'otkazi_polaznika': 'Otkazivanje'}
          .get(ishod.posao, ishod.posao) }} ·

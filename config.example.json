@@ -66,6 +66,8 @@
     "Ponavljanje M6 i Praktičarski dan": "potvrdnica ponavljanje m6"
   },
   "no_certificate_course_codes": [],
+  "print_email": "marko@printshop.hr",
+  "print_folder": "Print",
   "izvjesce_mjesta": ["Split"],
   "izvjesce_potpisnik": "Nino Kecman, instruktor",
   "soffice_path": "",

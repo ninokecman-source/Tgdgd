@@ -139,6 +139,10 @@ def _popis_polaznika(zahtjev, tablica, mapa):
     return ["popis_polaznika.py", "--tecaj", tablica]
 
 
+def _na_print(zahtjev, tablica, mapa):
+    return ["posalji_na_print.py", "--tecaj", tablica, "--posalji"]
+
+
 def _nastavlja(zahtjev, tablica, mapa):
     adresa = provjeri_adresu(zahtjev)
     cilj = str(zahtjev.get("cilj", "")).strip()
@@ -181,6 +185,7 @@ POSLOVI = {
     "popis_polaznika": _popis_polaznika,
     "izvjesce_fakultetu": _izvjesce,
     "nastavlja_dalje": _nastavlja,
+    "posalji_na_print": _na_print,
     "potvrdi_greske": _potvrdi_greske,
 }
 

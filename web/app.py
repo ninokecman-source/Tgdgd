@@ -518,6 +518,18 @@ def izvjesce(oznaka):
     return redirect(url_for("tecaj", oznaka=oznaka))
 
 
+@app.route("/tecaj/<oznaka>/print", methods=["POST"])
+@treba_prijava
+def na_print(oznaka):
+    """Skripta tečaja ide tiskari, s uputama i brojem kompleta."""
+    _, tecaj = nadji_tecaj(oznaka)
+    if not token_valja():
+        abort(400)
+    if not ceka_zahtjev(tecaj["datoteka"]):
+        zatrazi("posalji_na_print", tecaj["datoteka"])
+    return redirect(url_for("tecaj", oznaka=oznaka))
+
+
 @app.route("/tecaj/<oznaka>/popis", methods=["POST"])
 @treba_prijava
 def popis_polaznika(oznaka):

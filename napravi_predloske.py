@@ -17,6 +17,7 @@ import argparse
 import sys
 from pathlib import Path
 
+import posalji_na_print
 import poruke
 import predlosci
 from posalji_tablicu import DEFAULT_BODY as IZVJESTAJ_BODY
@@ -102,7 +103,14 @@ def popis(config: dict) -> list:
                 config.get("certificate_mail_body") or POTVRDNICA_TEKST),
     ))
 
-    # 7. Mail centrali nakon tečaja
+    # 7. Mail tiskari uz skriptu
+    stavke.append((
+        "mail printeru",
+        sastavi(config.get("print_subject") or posalji_na_print.ZADANI_NASLOV,
+                config.get("print_body") or posalji_na_print.ZADANO_TIJELO),
+    ))
+
+    # 8. Mail centrali nakon tečaja
     stavke.append((
         "izvjestaj centrali",
         sastavi(config.get("course_report_subject", IZVJESTAJ_SUBJECT),
