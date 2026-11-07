@@ -44,10 +44,10 @@ Popuni u `config.json`:
 
 - `zoho_email`, `zoho_app_password`, `imap_host` – isti podaci kao za
   glavnu Zoho skriptu u root folderu (ista adresa prima i bankovne izvode)
-- `bank_sender` – adresa s koje banka šalje izvode
-  (`netbanking.support@erstebank.hr`)
+- `bank_sender` – adresa s koje banka šalje izvode; prepiši je iz zaglavlja
+  (`Od:`) bilo kojeg izvoda koji ti je već stigao
 - `imap_folder` – folder u kojem se nalaze bankovni izvodi (`Izvodi`)
-- `sender_filter` – adresa pošiljatelja prijava (`prijava@emmett-hr.com`),
+- `sender_filter` – adresa pošiljatelja prijava, ista kao u glavnoj skripti,
   koristi se za pronalaženje izvorne prijave radi dohvaćanja OIB-a
 - `course_folder_roots` – isti Zoho folderi kao u glavnoj skripti
   (`["Split", "Zagreb"]`) koji se pretražuju (uz INBOX) pri traženju OIB-a

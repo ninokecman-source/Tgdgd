@@ -17,6 +17,7 @@ U pogonu ga vodi gunicorn pod systemd-om (web/emmett-web.service), a nginx
 ga objavljuje preko HTTPS-a (web/nginx-emmett.conf).
 """
 
+import fcntl
 import hmac
 import json
 import os
@@ -58,10 +59,17 @@ ISHODI = Path(__file__).resolve().parent / "zahtjevi.json"
 ZASTARJELO_MIN = 90
 
 # Zaštita od pogađanja lozinke: nakon toliko promašaja s iste adrese slijedi
-# pauza. Pamti se u memoriji - restart web poslužitelja je briše, što je u
-# redu jer restart može samo onaj koji već ima pristup serveru.
+# pauza.
 MAX_PROMASAJA = 5
 PAUZA_SEK = 15 * 60
+
+# Promašaji stoje u datoteci, ne u memoriji procesa. Gunicorn ima dva radnika,
+# pa bi svaki vodio svoj račun i dopuštenih pokušaja bilo bi dvostruko.
+#
+# Nastavak NIJE .json: tu mapu systemd prati po `*.json` (emmett-zahtjev.path)
+# i izvrsi.py bi svaku takvu datoteku pokušao pročitati kao zahtjev. Mapa je
+# ujedno jedina u koju web smije pisati - vidi emmett-web.service.
+PROMASAJI_PUT = ZAHTJEVI / "promasaji.txt"
 
 app = Flask(__name__)
 
@@ -89,9 +97,6 @@ app.config.update(
     # Tailscale mreži, pa nema smisla tražiti lozinku svaki put na mobitelu.
     PERMANENT_SESSION_LIFETIME=timedelta(days=config.get("web_session_days", 30)),
 )
-
-promasaji = {}
-
 
 # --- Prijava ---------------------------------------------------------------
 
@@ -140,9 +145,48 @@ def sigurno_dalje(putanja: str) -> str:
     return url_for("pregled")
 
 
+def _promasaji(promijeni=None) -> dict:
+    """Popis promašaja {adresa: [broj, do_kada]}, pod bravom.
+
+    Istekli zapisi otpadaju pri svakom čitanju, pa popis ne raste bez kraja i
+    pauza se sama resetira. `promijeni` je funkcija koja smije dirati popis;
+    bez nje se samo čita."""
+    try:
+        ZAHTJEVI.mkdir(parents=True, exist_ok=True)
+        with open(PROMASAJI_PUT, "a+", encoding="utf-8") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            f.seek(0)
+            try:
+                popis = json.loads(f.read() or "{}")
+            except ValueError:
+                popis = {}
+            if not isinstance(popis, dict):
+                popis = {}
+            sada = time.time()
+            popis = {k: v for k, v in popis.items()
+                     if isinstance(v, list) and len(v) == 2 and v[1] > sada}
+            if promijeni is not None:
+                promijeni(popis)
+                f.seek(0)
+                f.truncate()
+                f.write(json.dumps(popis))
+            return popis
+    except OSError:
+        # Bez datoteke nema ni pauze, ali prijava mora raditi - stranica je
+        # ionako samo u Tailscale mreži.
+        return {}
+
+
+def zapisi_promasaj(ip: str) -> None:
+    def dodaj(popis):
+        broj = popis.get(ip, [0, 0])[0]
+        popis[ip] = [broj + 1, time.time() + PAUZA_SEK]
+    _promasaji(dodaj)
+
+
 def pauziran(ip: str) -> int:
     """Koliko sekundi još traje pauza za tu adresu (0 ako ne traje)."""
-    broj, do_kada = promasaji.get(ip, (0, 0))
+    broj, do_kada = _promasaji().get(ip, (0, 0))
     return max(0, int(do_kada - time.time())) if broj >= MAX_PROMASAJA else 0
 
 
@@ -171,19 +215,13 @@ def prijava():
         tajna_dobra = lozinka.provjeri(config["web_password_hash"], tajna)
         dobro = ime_dobro and tajna_dobra
         if dobro:
-            promasaji.pop(ip, None)
+            _promasaji(lambda popis: popis.pop(ip, None))
             session.clear()
             session["prijavljen"] = True
             session.permanent = True
             return redirect(sigurno_dalje(request.form.get("dalje")))
 
-        sada = time.time()
-        # pospremi istekle, da popis ne raste bez kraja
-        for adr, (_, do_kada) in list(promasaji.items()):
-            if do_kada < sada:
-                del promasaji[adr]
-        broj, _ = promasaji.get(ip, (0, 0))
-        promasaji[ip] = (broj + 1, sada + PAUZA_SEK)
+        zapisi_promasaj(ip)
         return render_template("prijava.html", greska="Pogrešno ime ili lozinka.",
                                dalje=request.form.get("dalje", "")), 401
 

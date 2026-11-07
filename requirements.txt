@@ -1,1 +1,10 @@
-openpyxl>=3.1
+# Gornje granice su namjerne: bez njih `pip install -U` može dovuci novo
+# veliko izdanje koje mijenja ponasanje, a ovaj kod ima Zoho lozinku i
+# pristup bankovnim podacima.
+#
+# Za tocno te verzije koje na serveru rade, napravi i popis:
+#     ~/venv/bin/pip freeze > ~/Tgdgd/requirements.lock
+# i nadalje instaliraj iz njega:
+#     ~/venv/bin/pip install -r ~/Tgdgd/requirements.lock
+openpyxl>=3.1,<4
+requests>=2.31,<3

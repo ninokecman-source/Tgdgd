@@ -1,6 +1,6 @@
 # Zoho prijave -> Excel
 
-Skripta čita mailove prijava (od `prijava@emmett-hr.com`) s tvog Zoho Mail
+Skripta čita mailove prijava (s adrese na koju ti stižu obrasci) s tvog Zoho Mail
 računa i podatke polaznika upisuje u Excel tablicu, po uzoru na Emmett
 Technique Instructor Administration Sheet.
 
@@ -225,7 +225,7 @@ python posalji_tablicu.py --pregled    # pokaži što bi poslao, bez slanja
 Uključuje se s `"send_course_report": true`, a podešava ovako:
 
 - `course_report_to` — primatelji
-  (`["ozren.m@emmett-hr.com", "heidi@rossemmett.com.au"]`)
+  (`["kolega@primjer.com", "centrala@primjer.com"]`)
 - `course_report_days_after` — koliko dana nakon **zadnjeg** dana tečaja
   (default `1`)
 - `course_report_subject`, `course_report_body` — tekst; uz uobičajene
@@ -402,7 +402,7 @@ Da ne tipkaš punu putanju, dodaj ovo u `~/.zshrc`:
 
 ```sh
 certifikati() (
-  cd /Users/ninokecman/Tgdgd || return 1
+  cd /Users/ime/Tgdgd || return 1
   PY=/Library/Developer/CommandLineTools/usr/bin/python3
   case "$1" in
     posalji) shift; "$PY" posalji_certifikate.py --posalji "$@" ;;
@@ -665,7 +665,8 @@ Polja u `config.json`:
 - `zoho_app_password` – lozinka generirana u koraku 2
 - `imap_host` – `imap.zoho.eu` za EU data centar, `imap.zoho.com` za US.
   Ako jedan ne radi, probaj drugi.
-- `sender_filter` – adresa s koje stižu prijave (`prijava@emmett-hr.com`)
+- `sender_filter` – adresa s koje stižu prijave; vidi je u zaglavlju bilo
+  kojeg mail-a prijave (`Od:`)
 - `instructor_name` – tvoje ime točno onako kako se pojavljuje u mailu
   (npr. `Nino Kecman`)
 - `course_codes` – popis svih kodova tečaja koje prepoznaješ (Modul 1&2,

@@ -18,10 +18,10 @@ from pathlib import Path
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
 DEFAULTS = {
-    "zoho_email": "nino.k@emmett-hr.com",
+    "zoho_email": "ti@primjer.com",
     "imap_host": "imap.zoho.com",
     "folder_roots": ["Split", "Zagreb"],
-    "sender_filter": "prijava@emmett-hr.com",
+    "sender_filter": "prijave@primjer.com",
     "instructor_name": "Nino Kecman",
     "course_codes": [
         "Modul 1&2",
@@ -31,7 +31,7 @@ DEFAULTS = {
         "Modul 6",
         "Ponavljanje M6 i Praktičarski dan",
     ],
-    "output_dir": "/Users/ninokecman/Desktop/Prijave",
+    "output_dir": "/Users/ime/Desktop/Prijave",
     "state_path": "processed_uids.json",
     "since_date": "2026-01-01",
     "send_replies": False,

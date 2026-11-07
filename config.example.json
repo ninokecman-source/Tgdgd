@@ -7,7 +7,7 @@
     "Split",
     "Zagreb"
   ],
-  "sender_filter": "prijava@emmett-hr.com",
+  "sender_filter": "prijave@primjer.com",
   "instructor_name": "Nino Kecman",
   "require_instructor_name": true,
   "course_codes": [
@@ -46,8 +46,8 @@
   ],
   "send_course_report": false,
   "course_report_to": [
-    "ozren.m@emmett-hr.com",
-    "heidi@rossemmett.com.au"
+    "kolega@primjer.com",
+    "centrala@primjer.com"
   ],
   "course_report_days_after": 1,
   "course_report_subject": "Emmett Technique {course_code} - {location}, {dates} - course administration sheet",
@@ -66,7 +66,7 @@
     "Ponavljanje M6 i Praktičarski dan": "potvrdnica ponavljanje m6"
   },
   "no_certificate_course_codes": [],
-  "print_email": "marko@printshop.hr",
+  "print_email": "tiskara@primjer.com",
   "print_folder": "Print",
   "print_paper": "običan papir",
   "print_items": {

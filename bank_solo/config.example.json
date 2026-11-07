@@ -1,21 +1,21 @@
 {
-  "zoho_email": "nino.k@emmett-hr.com",
+  "zoho_email": "ti@primjer.com",
   "zoho_app_password": "ista app-specific lozinka kao za glavnu Zoho skriptu",
   "imap_host": "imap.zoho.com",
   "imap_folder": "Izvodi",
-  "bank_sender": "netbanking.support@erstebank.hr",
+  "bank_sender": "izvodi@tvojabanka.hr",
   "credit_type_codes": [
     "20"
   ],
-  "sender_filter": "prijava@emmett-hr.com",
+  "sender_filter": "prijave@primjer.com",
   "course_folder_roots": [
     "Split",
     "Zagreb"
   ],
-  "excel_dir": "/Users/ninokecman/Prijave",
+  "excel_dir": "/Users/ime/Prijave",
   "smtp_host": "smtp.zoho.com",
   "smtp_port": 465,
-  "notify_email": "nino.k@emmett-hr.com",
+  "notify_email": "ti@primjer.com",
   "solo_api_token": "tvoj Solo API token",
   "solo_tip_kupca": 1,
   "solo_tip_usluge": 2,

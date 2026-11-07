@@ -40,8 +40,13 @@ snap ima vlastiti `/tmp` i onaj pravi ne vidi.
 su - emmett
 git clone -b server https://github.com/ninokecman-source/Tgdgd.git ~/Tgdgd
 python3 -m venv ~/venv
-~/venv/bin/pip install openpyxl requests
+~/venv/bin/pip install -r ~/Tgdgd/requirements.txt
+~/venv/bin/pip freeze > ~/Tgdgd/requirements.lock
 ```
+
+Drugi red zapise tocne verzije koje su se instalirale; nadalje instaliraj iz
+njega (`pip install -r ~/Tgdgd/requirements.lock`), da nadogradnja nikad ne
+dode slucajno - kroz ovaj kod idu Zoho lozinka i bankovni podaci.
 
 Na serveru je **jedan** klon, ne dva — `bank_solo` je u istom repozitoriju.
 
@@ -105,11 +110,11 @@ Solu nastanu duple ponude.**
 Na Macu:
 
 ```bash
-cd /Users/ninokecman/Tgdgd
+cd /Users/ime/Tgdgd
 scp processed_uids.json sent_reminders.json sent_reports.json \
     log_check_state.json napravljeni_certifikati.json \
     poslani_certifikati.json emmett@<IP-SERVERA>:~/Tgdgd/
-scp /Users/ninokecman/Tgdgd-bank-solo/bank_solo/bank_solo_state.sqlite3 \
+scp /Users/ime/Tgdgd-bank-solo/bank_solo/bank_solo_state.sqlite3 \
     emmett@<IP-SERVERA>:~/Tgdgd/bank_solo/
 ```
 

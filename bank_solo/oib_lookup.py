@@ -1,6 +1,6 @@
 """
 Dohvaća OIB polaznika izravno iz njegove izvorne Zoho prijave (mail od
-prijava@emmett-hr.com), po email adresi polaznika - OIB se ne sprema
+prijave@primjer.com), po email adresi polaznika - OIB se ne sprema
 trajno u Excel (predložak nema stupac za to), samo se dohvati kad
 zatreba za Solo ponudu.
 

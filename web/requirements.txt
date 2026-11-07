@@ -1,2 +1,3 @@
-flask>=3.0
-gunicorn>=25.1
+# Vidi komentar u requirements.txt u korijenu - gornje granice i lock popis.
+flask>=3.0,<4
+gunicorn>=25.1,<26
