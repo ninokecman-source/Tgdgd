@@ -76,8 +76,15 @@ o "9. ZAKRPE I NEDAVNE INSTALACIJE"
 [ -f /var/run/reboot-required ] && echo "  TREBA RESTART" || echo "  restart ne treba"
 echo "  zakrpa na čekanju: $(apt list --upgradable 2>/dev/null | grep -c upgradable)"
 grep -h Unattended /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null | sed 's/^/  /'
-echo "-- paketi instalirani zadnjih 14 dana --"
-zgrep -h -E '^(Start-Date|Commandline)' /var/log/apt/history.log* 2>/dev/null | paste - - 2>/dev/null | tail -12 | sed 's/^/  /'
+echo "-- zadnjih 8 apt zahvata (najnoviji na dnu) --"
+awk '/^Start-Date/{d=$2" "$3} /^Commandline/{sub(/^Commandline: /,""); print "  "d"  "$0}' \
+  /var/log/apt/history.log 2>/dev/null | tail -8
+echo "  zadnji unattended-upgrade:"
+tail -3 /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null | sed 's/^/    /'
+echo "-- snapovi (ne pojavljuju se u apt povijesti) --"
+snap list 2>/dev/null | sed 's/^/  /'
+echo "-- zadnje promjene snapova --"
+snap changes 2>/dev/null | tail -5 | sed 's/^/  /'
 
 o "10. PRIJAVE"
 echo "  neuspjelih (24h): $(journalctl -t sshd-session --since '24 hours ago' --no-pager 2>/dev/null | grep -c 'Failed\|Invalid user')"
