@@ -1,16 +1,25 @@
 """Tanki klijent za Cliniko API (v1) - samo ono što nam treba za sinkronizaciju plaćenih računa."""
 
+import re
 import time
 
 import requests
 
 STATUS_PAID = 20
+# Shard se čita s kraja API ključa i ulazi u ime hosta, pa mora biti upravo
+# ono što Cliniko koristi (au1, eu2, uk1...) - ne bilo kakav tekst iz ključa.
+SHARD_OBLIK = re.compile(r"^[a-z]{2}[0-9]$")
 
 
 class ClinikoClient:
     def __init__(self, api_key, user_agent, shard=None):
         self.api_key = api_key
-        self.shard = shard or api_key.rsplit("-", 1)[-1]
+        self.shard = (shard or api_key.rsplit("-", 1)[-1]).strip().lower()
+        if not SHARD_OBLIK.match(self.shard):
+            raise ValueError(
+                f"Iz Cliniko ključa ne mogu pročitati ispravan shard (dobio "
+                f"{self.shard!r}). Ključ mora završavati nastavkom poput '-au1'."
+            )
         self.base_url = f"https://api.{self.shard}.cliniko.com/v1"
         self.session = requests.Session()
         self.session.auth = (api_key, "")

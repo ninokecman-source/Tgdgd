@@ -241,9 +241,13 @@ datoteka nestane, skripta ne zna što je obrađeno — a ponovno slanje istog
 računa znači dupli fiskalizirani račun.
 
 ```bash
-mkdir -p /var/backups/poprio
+install -d -m 700 /var/backups/poprio
 cat > /etc/cron.daily/poprio-backup <<'EOF'
 #!/bin/sh
+# umask 077 jer kopija nosi imena pacijenata. Živa baza je na 700; bez ovoga
+# bi njene dnevne kopije bile čitljive svakom korisniku na stroju, čime bi ta
+# zaštita bila zaobiđena.
+umask 077
 sqlite3 /var/lib/poprio/state.sqlite3 \
   ".backup /var/backups/poprio/state-$(date +%A).sqlite3"
 EOF

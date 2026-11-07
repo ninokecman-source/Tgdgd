@@ -45,6 +45,26 @@ Restart=always
 RestartSec=15
 User=poprio
 StateDirectory=poprio
+
+# Ograđivanje. Na ovom stroju uz Poprio radi i druga aplikacija, pa proboj
+# bilo koje od njih ne smije značiti pristup podacima pacijenata.
+# ProtectSystem=strict čini cijeli disk samo-za-čitanje osim StateDirectoryja,
+# čime servis gubi i mogućnost da prepiše vlastiti kod u /opt/poprio.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Disk je samo-za-čitanje, pa nema smisla ni pokušavati pisati .pyc
+Environment=PYTHONDONTWRITEBYTECODE=1
 # Baza sadrži imena pacijenata i brojeve računa - nek je vidi samo servis.
 StateDirectoryMode=0700
 

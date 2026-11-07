@@ -21,11 +21,16 @@ MIN_SECONDS_BETWEEN_REQUESTS = 7  # Solo traži barem 5s između zahtjeva - malo
 
 
 class SoloAPIError(Exception):
-    def __init__(self, status, message, payload=None):
+    """Solo je odbio zahtjev.
+
+    Namjerno NE nosi poslani payload: u njemu je API token, a nitko ga nije
+    čitao - stajao bi samo kao tajna koja može ispasti u nekom budućem ispisu
+    greške."""
+
+    def __init__(self, status, message):
         super().__init__(f"Solo API greška {status}: {message}")
         self.status = status
         self.message = message
-        self.payload = payload
 
 
 class SoloClient:
@@ -139,6 +144,6 @@ class SoloClient:
         data = resp.json()
 
         if data.get("status") != 0:
-            raise SoloAPIError(data.get("status"), data.get("message"), payload)
+            raise SoloAPIError(data.get("status"), data.get("message"))
 
         return data[result_key]

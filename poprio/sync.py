@@ -15,6 +15,7 @@ Dva načina rada (vidi README.md za detalje):
 import argparse
 import json
 import re
+import stat
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -66,11 +67,39 @@ OBAVEZNI_KLJUCEVI = (
 )
 
 
+def provjeri_dozvole_configa():
+    """Odbija raditi ako config.json mogu čitati i drugi korisnici sustava.
+
+    U njemu su Cliniko ključ (koji otvara kartone svih pacijenata), Solo token
+    i lozinka maila. Svaka izmjena configa kao root zna resetirati prava, a na
+    stroju uz Poprio rade i druge aplikacije - pa se to provjerava umjesto da
+    se pretpostavlja."""
+    try:
+        mode = CONFIG_PATH.stat().st_mode
+    except OSError:
+        return
+
+    if mode & stat.S_IROTH:
+        sys.exit(
+            f"{CONFIG_PATH} mogu čitati svi korisnici na sustavu, a u njemu su "
+            f"API ključevi i lozinka maila.\n"
+            f"Ispravi pa pokreni ponovno:\n"
+            f"  chmod 600 {CONFIG_PATH}"
+        )
+    if mode & stat.S_IRGRP:
+        print(
+            f"[UPOZORENJE] {CONFIG_PATH} mogu čitati članovi grupe. Preporučeno "
+            f"je `chmod 600 {CONFIG_PATH}`.",
+            file=sys.stderr,
+        )
+
+
 def load_config():
     """Učitava i provjerava config prije nego išta krene.
 
     Bez ove provjere nedostajući ključ izađe kao KeyError usred obrade - u
     --loop modu svakih 15 sekundi iznova, bez naznake što zapravo nedostaje."""
+    provjeri_dozvole_configa()
     if not CONFIG_PATH.exists():
         sys.exit(
             f"Nema {CONFIG_PATH}. Kopiraj config.example.json u config.json i popuni podatke."
@@ -928,7 +957,11 @@ def ping_healthcheck(config):
     try:
         requests.get(url, timeout=10)
     except requests.exceptions.RequestException as e:
-        print(f"[UPOZORENJE] Javljanje vanjskom nadzoru nije prošlo: {e}", file=sys.stderr)
+        # Ispisuje se samo vrsta greške: `requests` u poruku stavlja cijeli URL,
+        # a taj ping URL je zapravo lozinka - tko ga ima može slati lažne
+        # pingove i prikriti da je server pao.
+        print(f"[UPOZORENJE] Javljanje vanjskom nadzoru nije prošlo "
+              f"({type(e).__name__}).", file=sys.stderr)
 
 
 def run_pass(config, cliniko, solo, state, alerter):
