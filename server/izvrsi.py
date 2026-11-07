@@ -25,6 +25,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Datoteke koje ova skripta i poslovi pod njom naprave nastaju kao 600, mape
+# kao 700. Zadani umask bi dao 644: web/zahtjevi.json, naslov.txt i tijelo.txt
+# uz zahtjev, tablice u Prijavama - sve bi to na serveru mogao pročitati i
+# svaki drugi korisnik, a u njima su podaci polaznika. Nasljeđuju ga i djeca
+# (pokreni.sh i skripte pod njim).
+os.umask(0o077)
+
 KORIJEN = Path(__file__).resolve().parent.parent
 ZAHTJEVI = Path(os.environ.get("EMMETT_ZAHTJEVI", Path.home() / "zahtjevi"))
 OBRADENO = ZAHTJEVI / "obradeno"
@@ -49,11 +56,22 @@ class Odbijeno(Exception):
     """Zahtjev ne valja - ne pokreće se ništa."""
 
 
+def nije_opcija(vrijednost: str, sto: str) -> str:
+    """Vrijednost koja ide u naredbu ne smije početi crticom.
+
+    Nema tu proboja - nigdje nema shella, sve ide kroz subprocess.run s
+    listom - ali argparse bi takvu vrijednost pročitao kao novu opciju i
+    posao bi pao s nejasnom greškom. Bolje je odbiti odmah i reći zašto."""
+    if vrijednost.startswith("-"):
+        raise Odbijeno(f"{sto} ne smije početi crticom: {vrijednost!r}")
+    return vrijednost
+
+
 def provjeri_adresu(zahtjev: dict) -> str:
     adresa = str(zahtjev.get("email", "")).strip()
     if "@" not in adresa or len(adresa.split()) != 1:
         raise Odbijeno(f"ovo ne izgleda kao adresa: {adresa!r}")
-    return adresa
+    return nije_opcija(adresa, "adresa")
 
 
 def provjeri_tekst(zahtjev: dict) -> tuple:
@@ -129,7 +147,10 @@ def _poziv(zahtjev, tablica, mapa):
 def _rijesi_uplatu(zahtjev, tablica, mapa):
     adresa = provjeri_adresu(zahtjev)
     ref = str(zahtjev.get("ref", "")).strip()
-    if not re.fullmatch(r"[A-Za-z0-9/._-]{1,64}", ref):
+    # Prvi znak mora biti slovo ili broj, da argparse oznaku ne pročita kao
+    # opciju. Ostalo ostaje široko kao prije: ref_id je zadnji token iz
+    # bankovnog izvoda, pa mu se oblik ne izmišlja - u upit ide kao parametar.
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9/._-]{0,63}", ref):
         raise Odbijeno(f"neispravna oznaka uplate: {ref!r}")
     return ["bank_solo/rijesi_uplatu.py", "--ref", ref, "--email", adresa,
             "--stvarno"]
@@ -169,7 +190,7 @@ def _otkazi(zahtjev, tablica, mapa):
         ime = str(zahtjev.get("ime", "")).strip()
         if not ime or len(ime) > NAJDULJE_IME:
             raise Odbijeno("otkazivanje treba adresu ili ime polaznika")
-        naredba += ["--ime", ime]
+        naredba += ["--ime", nije_opcija(ime, "ime")]
     return naredba + ["--stvarno"]
 
 

@@ -26,6 +26,7 @@ import argparse
 import email
 import imaplib
 import json
+import ssl
 import sys
 from email import policy
 from pathlib import Path
@@ -55,7 +56,10 @@ def load_config():
 
 
 def connect(config):
-    imap = imaplib.IMAP4_SSL(config["imap_host"])
+    # ssl_context izričito: bez njega imaplib ne provjerava certifikat
+    # (ssl._create_stdlib_context, CERT_NONE) - isto kao u posta.py.
+    imap = imaplib.IMAP4_SSL(config["imap_host"],
+                             ssl_context=ssl.create_default_context())
     imap.login(config["zoho_email"], config["zoho_app_password"])
     return imap
 

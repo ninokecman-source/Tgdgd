@@ -32,7 +32,10 @@
     <a href="{{ url_for('pregled') }}" {% if request.path == '/' %}class="tu"{% endif %}>Tečajevi</a>
     <a href="{{ url_for('uplate') }}" {% if request.path == '/uplate' %}class="tu"{% endif %}>Uplate</a>
     <a href="{{ url_for('stanje') }}" {% if request.path == '/stanje' %}class="tu"{% endif %}>Stanje</a>
-    <a href="{{ url_for('odjava') }}">Odjava</a>
+    <form method="post" action="{{ url_for('odjava') }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button type="submit">Odjava</button>
+    </form>
   </nav>
 </header>
 {% endif %}

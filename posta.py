@@ -28,6 +28,16 @@ ZADANI_PORT = 465
 # ponavlja, a cron posao ne smije visjeti.
 ISTEK = 30
 
+# TLS postavke za svaku vezu, i za 465 i za 587.
+#
+# Bez ovoga Python uzme `ssl._create_stdlib_context()`, a taj ima
+# `check_hostname = False` i `verify_mode = CERT_NONE` - veza bude šifrirana,
+# ali se NE provjerava čiji je certifikat. Tko se umetne u mrežni put ponudi
+# bilo kakav, veza ga prihvati, i `smtp.login()` mu preda Zoho lozinku. Zato
+# kontekst ide izričito; `create_default_context()` provjerava i potpis
+# certifikata i ime servera.
+KONTEKST = ssl.create_default_context()
+
 
 def veza(config: dict):
     """Otvorena i šifrirana veza sa SMTP poslužiteljem, spremna za prijavu."""
@@ -35,12 +45,12 @@ def veza(config: dict):
     port = int(config.get("smtp_port") or ZADANI_PORT)
 
     if port == 465:
-        return smtplib.SMTP_SSL(host, port, timeout=ISTEK)
+        return smtplib.SMTP_SSL(host, port, timeout=ISTEK, context=KONTEKST)
 
     smtp = smtplib.SMTP(host, port, timeout=ISTEK)
     try:
         smtp.ehlo()
-        smtp.starttls(context=ssl.create_default_context())
+        smtp.starttls(context=KONTEKST)
         smtp.ehlo()
     except Exception:
         smtp.close()

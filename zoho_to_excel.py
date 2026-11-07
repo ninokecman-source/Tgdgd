@@ -80,7 +80,11 @@ IMAP_BACKOFF = 2
 
 def connect_imap(config):
     """Spoji se na Zoho IMAP, uz strpljivo ponavljanje."""
-    return with_retry(lambda: imaplib.IMAP4_SSL(config["imap_host"]),
+    # ssl_context izričito: bez njega imaplib ne provjerava certifikat
+    # (ssl._create_stdlib_context, CERT_NONE) - isto kao u posta.py.
+    return with_retry(lambda: imaplib.IMAP4_SSL(
+                          config["imap_host"],
+                          ssl_context=ssl.create_default_context()),
                       attempts=IMAP_ATTEMPTS, delay=IMAP_DELAY,
                       backoff=IMAP_BACKOFF)
 

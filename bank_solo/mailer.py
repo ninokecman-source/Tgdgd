@@ -5,7 +5,6 @@ Tekst potvrda stoji u dokumentima uz Excel tablice ('potvrda uplate
 akontacija.docx', '... doplata', '... modul', '... program') - isti princip
 kao podsjetnici, vidi predlosci.py u glavnom folderu."""
 
-import smtplib
 from email.message import EmailMessage
 
 
@@ -37,15 +36,7 @@ def send_unmatched_notification(config, unmatched):
     msg["To"] = config.get("notify_email", config["zoho_email"])
     msg.set_content(body)
 
-    if config.get("smtp_port", 465) == 465:
-        with smtplib.SMTP_SSL(config["smtp_host"], config["smtp_port"], timeout=30) as smtp:
-            smtp.login(config["zoho_email"], config["zoho_app_password"])
-            smtp.send_message(msg)
-    else:
-        with smtplib.SMTP(config["smtp_host"], config["smtp_port"], timeout=30) as smtp:
-            smtp.starttls()
-            smtp.login(config["zoho_email"], config["zoho_app_password"])
-            smtp.send_message(msg)
+    _posalji(config, msg)
 
 
 # --- Potvrda uplate polazniku ------------------------------------------------
@@ -69,6 +60,20 @@ def iz_glavnog_foldera(naziv):
         return importlib.import_module(naziv)
     except Exception:
         return None
+
+
+def _posalji(config: dict, msg) -> None:
+    """Pošalji poruku kroz posta.py u glavnom folderu.
+
+    Ovdje su prije stajala dva ista bloka sa `smtplib`, a oba su otvarala
+    vezu bez `context`, dakle bez provjere certifikata. posta.py to radi
+    kako treba i na jednom mjestu, pa ide kroz njega. Ako ga nema, mail
+    pada s greškom - tiha zamjena nesigurnom vezom nije opcija."""
+    posta = iz_glavnog_foldera("posta")
+    if posta is None:
+        raise RuntimeError("ne mogu uvesti posta.py iz glavnog foldera - "
+                           "mail nije poslan")
+    posta.posalji(config, msg)
 
 
 def datumi_rijecima(dates_text: str) -> str:
@@ -181,13 +186,5 @@ def send_payment_confirmation(config, registrant, iznos, ukupno_uplaceno):
     msg["To"] = to_email
     msg.set_content(tijelo_gotov)
 
-    if config.get("smtp_port", 465) == 465:
-        with smtplib.SMTP_SSL(config["smtp_host"], config["smtp_port"], timeout=30) as smtp:
-            smtp.login(config["zoho_email"], config["zoho_app_password"])
-            smtp.send_message(msg)
-    else:
-        with smtplib.SMTP(config["smtp_host"], config["smtp_port"], timeout=30) as smtp:
-            smtp.starttls()
-            smtp.login(config["zoho_email"], config["zoho_app_password"])
-            smtp.send_message(msg)
+    _posalji(config, msg)
     return True

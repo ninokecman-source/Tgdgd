@@ -17,6 +17,7 @@ U pogonu ga vodi gunicorn pod systemd-om (web/emmett-web.service), a nginx
 ga objavljuje preko HTTPS-a (web/nginx-emmett.conf).
 """
 
+import hmac
 import json
 import os
 import re
@@ -35,6 +36,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import lozinka
+
+# Svaka datoteka koju ova aplikacija napravi (zahtjevi u ~/zahtjevi) nastaje
+# kao 600, a mapa kao 700. Zadani umask bi dao 644, pa bi ih na serveru mogao
+# pročitati i svaki drugi korisnik - a u njima su mailovi polaznika i tekstovi
+# poruka. Mora stajati prije prvog pisanja, dakle ovdje.
+os.umask(0o077)
 
 KORIJEN = Path(__file__).resolve().parent.parent
 CONFIG = KORIJEN / "config.json"
@@ -151,8 +158,18 @@ def prijava():
     if request.method == "POST":
         korisnik = request.form.get("korisnik", "")
         tajna = request.form.get("lozinka", "")
-        dobro = (korisnik == config.get("web_user")
-                 and lozinka.provjeri(config["web_password_hash"], tajna))
+        # Oboje se uvijek izvrti do kraja. Da stoji `and`, kod pogrešnog
+        # imena scrypt se ne bi ni pokrenuo, odgovor bi stigao za milisekundu
+        # umjesto za stotinjak, i po tome bi se razlikovalo "ime ne postoji"
+        # od "lozinka ne valja".
+        # U bajtovima, ne u stringovima: compare_digest sa stringom diže
+        # TypeError na prvom znaku koji nije ASCII, a u polje se može upisati
+        # bilo što - i onda bi prijava pala s 500 umjesto s "pogrešno ime".
+        ime_dobro = hmac.compare_digest(
+            korisnik.encode("utf-8"),
+            str(config.get("web_user", "")).encode("utf-8"))
+        tajna_dobra = lozinka.provjeri(config["web_password_hash"], tajna)
+        dobro = ime_dobro and tajna_dobra
         if dobro:
             promasaji.pop(ip, None)
             session.clear()
@@ -173,8 +190,12 @@ def prijava():
     return render_template("prijava.html", dalje=request.args.get("dalje", ""))
 
 
-@app.route("/odjava")
+@app.route("/odjava", methods=["POST"])
 def odjava():
+    """Samo POST i samo s tokenom - inače te tuđa stranica može odjaviti
+    slikom koja pokazuje ovamo. Smetnja, ne šteta, ali besplatno je riješiti."""
+    if not token_valja():
+        return redirect(url_for("pregled"))
     session.clear()
     return redirect(url_for("prijava"))
 
@@ -204,6 +225,39 @@ def starost_minuta(kada: str):
         return int((datetime.now() - datetime.fromisoformat(kada)).total_seconds() // 60)
     except ValueError:
         return None
+
+
+@app.after_request
+def sigurnosna_zaglavlja(odgovor):
+    """Zaglavlja koja stranicu drže zatvorenom.
+
+    U web/nginx-emmett.conf ih ima, ali taj vhost nije u pogonu - stranicu
+    objavljuje Tailscale Serve, a on ne dodaje nijedno. Flask sam ne šalje
+    ništa od ovoga, pa idu odavde.
+
+    Cache-Control je tu najvažniji: bez njega stranice s imenima, mailovima i
+    mobitelima polaznika ostanu u cacheu Safarija na mobitelu i vrate se
+    tipkom natrag i nakon odjave.
+
+    'unsafe-inline' za skripte je zbog dvaju ugrađenih blokova (pregled
+    poruke u posalji.html i poziv.html). Podatke uzimaju kroz `| tojson`,
+    koji Flask ispravno izbjegne, pa su bezopasni."""
+    odgovor.headers.setdefault("X-Frame-Options", "DENY")
+    odgovor.headers.setdefault("X-Content-Type-Options", "nosniff")
+    odgovor.headers.setdefault("Referrer-Policy", "no-referrer")
+    odgovor.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
+    odgovor.headers.setdefault("Cache-Control", "no-store")
+    odgovor.headers.setdefault("Content-Security-Policy", "; ".join([
+        "default-src 'self'",
+        "style-src 'self' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data:",
+        "script-src 'self' 'unsafe-inline'",
+        "frame-ancestors 'none'",
+        "base-uri 'none'",
+        "form-action 'self'",
+    ]))
+    return odgovor
 
 
 @app.context_processor

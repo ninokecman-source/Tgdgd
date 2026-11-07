@@ -19,6 +19,7 @@ Pokretanje (uvijek kroz pokreni.sh, da povuče svježe tablice iz Dropboxa):
 """
 
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -44,6 +45,13 @@ from send_reminders import (
     parse_course_dates,
 )
 from zoho_to_excel import FIRST_PARTICIPANT_ROW, find_totals_row, load_config, with_retry
+
+# stanje.json se ne prepisuje na mjestu: piše se u stanje.tmp pa preimenuje,
+# pa svaki prolaz stvori NOVU datoteku s pravima iz umaska. Bez ovoga bi bila
+# 644 i svaki bi je korisnik na serveru mogao pročitati - a u njoj su imena,
+# mailovi, mobiteli i iznosi svih polaznika. `chmod` rukom ne pomaže, jer ga
+# sljedeći prolaz izbriše.
+os.umask(0o077)
 
 SNIMKA = Path(__file__).with_name("stanje.json")
 

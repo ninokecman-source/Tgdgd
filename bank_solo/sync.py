@@ -14,6 +14,7 @@ Pokretanje:
 
 import email
 import imaplib
+import ssl
 import json
 import sys
 from email import policy
@@ -36,7 +37,10 @@ def spoji_imap(config):
     (gaierror) - za nekoliko desetaka sekundi veza je obično tu."""
     glavni = iz_glavnog_foldera("zoho_to_excel")
     if glavni is None:
-        return imaplib.IMAP4_SSL(config["imap_host"])
+    # ssl_context izričito: bez njega imaplib ne provjerava certifikat
+    # (ssl._create_stdlib_context, CERT_NONE) - isto kao u posta.py.
+        return imaplib.IMAP4_SSL(config["imap_host"],
+                                 ssl_context=ssl.create_default_context())
     return glavni.connect_imap(config)
 
 
