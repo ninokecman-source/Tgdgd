@@ -1,4 +1,9 @@
 config.json
+# Kopije configa koje prave setup_config.py i postavi_lozinku.py - u njima
+# je sve isto sto i u configu: zoho lozinka, Solo token, tajni kljuc weba.
+config.json.prije-izmjene
+config.json.*
+bank_solo/config.json.*
 processed_uids.json
 sent_reminders.json
 log_check_state.json
@@ -12,6 +17,7 @@ greske_potvrdene.json
 web/stanje.json
 web/zahtjevi.json
 log.txt
+*.log
 *.xlsx
 !template_admin_sheet.xlsx
 
