@@ -441,6 +441,7 @@ def tecaj(oznaka):
         za_poziv=sum(len(s["ljudi"]) for s in (nadjen.get("pozvati") or [])),
         ishod=ishod,
         izvjesce_ide=izvjesce_ide(nadjen),
+        dalje_tecaj=sljedeci_tecaj(podaci, nadjen),
         radi=ceka or bool(ishod and ishod.get("u_tijeku")))
 
 
@@ -614,6 +615,46 @@ def podsjetnik(oznaka, broj):
                            naslov_stranice="Podsjetnik za uplatu",
                            gumb="Pošalji podsjetnik",
                            natrag=url_for("tecaj", oznaka=oznaka))
+
+
+def sljedeci_tecaj(podaci: dict, tecaj: dict):
+    """Tečaj sljedećeg modula na koji se polaznika može odmah upisati, ili
+    None. Traži se u istom mjestu i među onima koji tek dolaze; od više
+    takvih uzima se najbliži.
+
+    Gleda se samo ono što u snimci postoji, dakle tablice koje stvarno
+    stoje uz ostale. Tablica sljedećeg tečaja nastaje s prvom prijavom na
+    njega, pa dok nje nema, nema ni tipke."""
+    import pozivi
+    import predlosci
+
+    sljedeci = pozivi.sljedeci_modul(config, tecaj.get("kod", ""))
+    if sljedeci is None:
+        return None
+    moguci = [t for t in podaci["tecajevi"]
+              if predlosci.kljuc_tecaja(t.get("kod", "")) == sljedeci
+              and t.get("mjesto") == tecaj.get("mjesto")
+              and t.get("stanje") in ("dolazi", "u toku")]
+    moguci.sort(key=lambda t: t.get("pocetak") or "9999")
+    return moguci[0] if moguci else None
+
+
+@app.route("/tecaj/<oznaka>/polaznik/<int:broj>/nastavlja", methods=["POST"])
+@treba_prijava
+def nastavlja(oznaka, broj):
+    """Polaznik ide dalje na sljedeći modul: upisuje se u njegovu tablicu i
+    dobiva istu potvrdu kao da se prijavio preko obrasca."""
+    podaci, tecaj = nadji_tecaj(oznaka)
+    polaznik = nadji_polaznika(tecaj, broj)
+    if not token_valja():
+        abort(400)
+    cilj = sljedeci_tecaj(podaci, tecaj)
+    if cilj is None or not polaznik["email"]:
+        abort(404)
+    if not ceka_zahtjev(tecaj["datoteka"]):
+        zatrazi("nastavlja_dalje", tecaj["datoteka"], email=polaznik["email"],
+                ime=polaznik["ime"], cilj=cilj["datoteka"])
+    return redirect(url_for("tecaj", oznaka=oznaka))
 
 
 @app.route("/tecaj/<oznaka>/polaznik/<int:broj>/otkazi", methods=["GET", "POST"])

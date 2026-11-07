@@ -41,16 +41,36 @@ def prethodni_modul(config: dict, kod: str):
     return popis[mjesto - 1] if mjesto > 0 else None
 
 
+def sljedeci_modul(config: dict, kod: str):
+    """Kod modula koji dolazi poslije ovoga, ili None (zadnji modul, ili
+    tečaj koji uopće nije u nizu - ponavljanje, praktičarski dan)."""
+    popis = redoslijed(config)
+    kljuc = kljuc_tecaja(kod)
+    if kljuc not in popis:
+        return None
+    mjesto = popis.index(kljuc)
+    return popis[mjesto + 1] if mjesto + 1 < len(popis) else None
+
+
+def napisan(config: dict, kljuc: str) -> str:
+    """Svedeni ključ natrag u zapis iz configa - to ide u tekst poruke, pa
+    ne smije ostati 'modul 1&2'."""
+    if kljuc is None:
+        return ""
+    for zapis in (config.get("module_order") or ZADANI_REDOSLIJED):
+        if kljuc_tecaja(zapis) == kljuc:
+            return zapis
+    return kljuc
+
+
+def naziv_sljedeceg(config: dict, kod: str) -> str:
+    return napisan(config, sljedeci_modul(config, kod))
+
+
 def naziv_prethodnog(config: dict, kod: str) -> str:
     """Prethodni modul napisan onako kako stoji u configu - to ide u tekst
     poruke, pa ne smije biti svedeni ključ ('modul 1&2')."""
-    kljuc = prethodni_modul(config, kod)
-    if kljuc is None:
-        return ""
-    for napisan in (config.get("module_order") or ZADANI_REDOSLIJED):
-        if kljuc_tecaja(napisan) == kljuc:
-            return napisan
-    return kljuc
+    return napisan(config, prethodni_modul(config, kod))
 
 
 def kandidati(tecaj: dict, svi_tecajevi: list, config: dict,

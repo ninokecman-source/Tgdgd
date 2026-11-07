@@ -139,6 +139,16 @@ def _popis_polaznika(zahtjev, tablica, mapa):
     return ["popis_polaznika.py", "--tecaj", tablica]
 
 
+def _nastavlja(zahtjev, tablica, mapa):
+    adresa = provjeri_adresu(zahtjev)
+    cilj = str(zahtjev.get("cilj", "")).strip()
+    # I odredišna tablica ide u naredbu, pa se traži među postojećima.
+    if cilj not in poznate_tablice():
+        raise Odbijeno(f"nema tablice {cilj!r}")
+    return ["nastavlja_dalje.py", "--tecaj", tablica, "--email", adresa,
+            "--na", cilj, "--stvarno"]
+
+
 def _izvjesce(zahtjev, tablica, mapa):
     return ["izvjesce_fakultetu.py", "--tecaj", tablica]
 
@@ -170,6 +180,7 @@ POSLOVI = {
     "posalji_poziv": _poziv,
     "popis_polaznika": _popis_polaznika,
     "izvjesce_fakultetu": _izvjesce,
+    "nastavlja_dalje": _nastavlja,
     "potvrdi_greske": _potvrdi_greske,
 }
 
