@@ -148,7 +148,7 @@ def _promasaji(promijeni=None) -> dict:
     pauza se sama resetira. `promijeni` je funkcija koja smije dirati popis;
     bez nje se samo čita."""
     try:
-        prava.mapa(ZAHTJEVI)
+        prava.mapa_iz_postavki(ZAHTJEVI)
         with open(PROMASAJI_PUT, "a+", encoding="utf-8") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
             f.seek(0)
@@ -370,7 +370,7 @@ def ceka_zahtjev(tablica: str) -> bool:
 def zatrazi(posao: str, tablica: str, **dodatno) -> None:
     """Ostavi zahtjev; posao odradi server/izvrsi.py. `dodatno` su polja koja
     taj posao treba - adresa, ime, naslov i tijelo poruke."""
-    prava.mapa(ZAHTJEVI)
+    prava.mapa_iz_postavki(ZAHTJEVI)
     zahtjev = {"posao": posao, "tablica": tablica,
                "trazio": config.get("web_user", "?"),
                "kada": datetime.now().isoformat(timespec="seconds"),

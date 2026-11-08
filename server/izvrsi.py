@@ -330,7 +330,7 @@ def odradi(put: Path) -> None:
 
 
 def main():
-    prava.mapa(ZAHTJEVI)
+    prava.mapa_iz_postavki(ZAHTJEVI)
     # Petlja, a ne jedan prolaz: ako zahtjev stigne dok ovaj posao traje,
     # systemd ga možda neće ponovno pokrenuti - mapa nikad nije bila prazna.
     while True:

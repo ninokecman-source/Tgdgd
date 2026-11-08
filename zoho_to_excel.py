@@ -666,7 +666,7 @@ def prodji():
     state_path = Path(config.get("state_path", "processed_uids.json"))
     if not state_path.is_absolute():
         state_path = Path(__file__).with_name(str(state_path))
-    output_dir = prava.mapa(Path(config["output_dir"]))
+    output_dir = prava.mapa_iz_postavki(Path(config["output_dir"]))
 
     processed = load_state(state_path)
 
