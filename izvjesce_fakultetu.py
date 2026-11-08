@@ -113,6 +113,15 @@ def recenica_o_polaznicima(info: dict) -> str:
     return recenica + "."
 
 
+def akademska_godina(kada: date) -> str:
+    """'2026./2027.' - akademska godina u kojoj je tečaj održan.
+
+    Počinje 1. listopada, pa tečaj u studenome 2026. pripada 2026./2027., a
+    tečaj u ožujku 2026. pripada 2025./2026."""
+    g = kada.year if kada.month >= 10 else kada.year - 1
+    return f"{g}./{g + 1}."
+
+
 def ispuni_dokument(xml: str, info: dict, config: dict, danas: date) -> tuple:
     """(ispunjeni XML, popis mjesta koja nisu nađena).
 
@@ -148,7 +157,17 @@ def ispuni_dokument(xml: str, info: dict, config: dict, danas: date) -> tuple:
         promaseno.append(f"redak '{naslov}'")
         return False
 
-    # --- naslovna: mjesto i datum izrade ('Split, 24. listopad 2026')
+    # --- naslovna: naziv programa, akademska godina, mjesto i datum
+    #
+    # U obrascu na naslovnici stoje upute ('Upisati puni naziv programa',
+    # 'upisati godinu'). Ako se ne popune, izvješće ode fakultetu s doslovno
+    # ispisanom uputom na prvoj stranici - tako je i izašlo prvo.
+    naziv_programa = f"Tečaj Emmett tehnike {info['course_code']}"
+    paragraf(lambda t: t.strip().lower().startswith("upisati puni naziv"),
+             naziv_programa, "naziv programa na naslovnici")
+    paragraf(lambda t: t.strip().lower() == "upisati godinu",
+             akademska_godina(info.get("kraj") or danas),
+             "akademsku godinu na naslovnici")
     paragraf(lambda t: t.startswith(f"{info['location']},"),
              f"{info['location']}, {datum_izrade(danas)}", "datum na naslovnici")
 
@@ -157,7 +176,7 @@ def ispuni_dokument(xml: str, info: dict, config: dict, danas: date) -> tuple:
     if opce is None:
         promaseno.append("tablica s općim informacijama")
     else:
-        red_tablice(opce, "Naziv programa", f"Tečaj Emmett tehnike {info['course_code']}")
+        red_tablice(opce, "Naziv programa", naziv_programa)
         red_tablice(opce, "Trajanje programa", info["dates"])
         red_tablice(opce, "Broj upisanih polaznika", str(info["polaznika"]))
         red_tablice(opce, "Broj polaznika koji su završili", str(info["polaznika"]))
@@ -348,6 +367,17 @@ def napravi(predlozak: Path, cilj: Path, info: dict, config: dict,
 
     dijelovi["word/document.xml"] = xml.encode("utf-8")
 
+    # Obrazac je u metapodacima nosio ime osobe koja ga je na fakultetu
+    # složila, i LibreOffice ga je prepisivao u PDF kao 'Author'. Tuđe ime ne
+    # ide na naše izvješće - polja se prazne.
+    jezgra = dijelovi.get("docProps/core.xml")
+    if jezgra is not None:
+        tekst_jezgre = jezgra.decode("utf-8")
+        for oznaka in ("dc:creator", "cp:lastModifiedBy"):
+            tekst_jezgre = re.sub(f"<{oznaka}>[^<]*</{oznaka}>",
+                                  f"<{oznaka}></{oznaka}>", tekst_jezgre)
+        dijelovi["docProps/core.xml"] = tekst_jezgre.encode("utf-8")
+
     prava.mapa(cilj.parent)
     privremeno = cilj.with_suffix(".tmp.docx")
     with zipfile.ZipFile(privremeno, "w", zipfile.ZIP_DEFLATED) as zip_izlaz:
@@ -400,6 +430,7 @@ def main():
               "crtom za potpis.")
 
     _, kraj = parse_course_dates(info["dates"])
+    info["kraj"] = kraj          # naslovnici treba za akademsku godinu
     godina = kraj.year if kraj else danas.year
     naziv = ime_datoteke(f"{info['location']} {info['course_code']} {godina}")
     cilj = output_dir / "Izvjesca" / f"{naziv}.docx"
