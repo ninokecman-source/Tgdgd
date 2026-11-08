@@ -41,6 +41,8 @@ from send_reminders import (
 )
 from zoho_to_excel import load_config, with_retry
 
+import prava
+
 STATE_PATH = Path(__file__).with_name("sent_reports.json")
 
 DEFAULT_SUBJECT = ("Emmett Technique {course_code} - {location}, {dates} - "

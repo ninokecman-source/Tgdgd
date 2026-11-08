@@ -12,8 +12,14 @@ Pokretanje:
 """
 
 import json
+import os
 import shutil
 from pathlib import Path
+
+# Umask 077, isto što radi prava.py u korijenu: nove datoteke nastaju kao 600,
+# mape kao 700. Ovdje se ne uvozi prava.py jer bi korijen na sys.pathu zasjenio
+# bank_solo/setup_config.py onim iz korijena - isti naziv, drugi posao.
+os.umask(0o077)
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
 EXAMPLE_PATH = Path(__file__).with_name("config.example.json")
@@ -62,7 +68,11 @@ def main():
         config, "solo_api_token", "Solo API token")
 
     if CONFIG_PATH.exists():
-        shutil.copy2(CONFIG_PATH, CONFIG_PATH.with_name("config.json.prije-izmjene"))
+        # chmod poslije copy2: copy2 prepisuje prava izvora i preskače
+        # umask, a u kopiji su Zoho lozinka i Solo API token.
+        kopija = CONFIG_PATH.with_name("config.json.prije-izmjene")
+        shutil.copy2(CONFIG_PATH, kopija)
+        kopija.chmod(0o600)
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=2)

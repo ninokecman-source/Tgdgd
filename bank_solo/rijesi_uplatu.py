@@ -24,6 +24,7 @@ Pokretanje (iz korijena repozitorija ili iz bank_solo):
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -33,6 +34,11 @@ from mailer import send_payment_confirmation
 from registrants import add_payment, load_registrants
 from state import StateStore
 from sync import load_config
+
+# Umask 077, isto što radi prava.py u korijenu: nove datoteke nastaju kao 600,
+# mape kao 700. Ovdje se ne uvozi prava.py jer bi korijen na sys.pathu zasjenio
+# bank_solo/setup_config.py onim iz korijena - isti naziv, drugi posao.
+os.umask(0o077)
 
 
 def nadji_polaznika(registrants: list, email: str):

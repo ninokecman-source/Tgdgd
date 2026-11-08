@@ -14,8 +14,9 @@ Pokretanje:
 
 import email
 import imaplib
-import ssl
 import json
+import os
+import ssl
 import sys
 from email import policy
 from pathlib import Path
@@ -27,6 +28,11 @@ from registrants import add_payment, load_registrants, match_payment
 from solo_client import SoloAPIError, SoloClient
 from state import StateStore
 from statement_parser import parse_statement
+
+# Umask 077, isto što radi prava.py u korijenu: nove datoteke nastaju kao 600,
+# mape kao 700. Ovdje se ne uvozi prava.py jer bi korijen na sys.pathu zasjenio
+# bank_solo/setup_config.py onim iz korijena - isti naziv, drugi posao.
+os.umask(0o077)
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
 

@@ -27,6 +27,8 @@ from zoho_to_excel import load_config, with_retry
 
 import posta
 
+import prava
+
 
 def procitaj(put_tekst: str, sto: str) -> str:
     put = Path(put_tekst)

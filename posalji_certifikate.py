@@ -43,6 +43,8 @@ from send_reminders import (
 )
 from zoho_to_excel import load_config, with_retry
 
+import prava
+
 STATE_PATH = Path(__file__).with_name("poslani_certifikati.json")
 
 ZADANI_NASLOV = "Vaša potvrdnica - Emmett tehnika {course_code}, {location}"

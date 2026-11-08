@@ -36,6 +36,8 @@ from zoho_to_excel import (
     with_retry,
 )
 
+import prava
+
 # Stupci u tablici polaznika, onako kako ih piše zoho_to_excel.
 STUPCI = {
     "First name": 2,

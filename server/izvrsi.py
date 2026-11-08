@@ -25,14 +25,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Datoteke koje ova skripta i poslovi pod njom naprave nastaju kao 600, mape
-# kao 700. Zadani umask bi dao 644: web/zahtjevi.json, naslov.txt i tijelo.txt
-# uz zahtjev, tablice u Prijavama - sve bi to na serveru mogao pročitati i
-# svaki drugi korisnik, a u njima su podaci polaznika. Nasljeđuju ga i djeca
-# (pokreni.sh i skripte pod njim).
-os.umask(0o077)
-
 KORIJEN = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(KORIJEN))
+
+# Postavlja umask 077: web/zahtjevi.json, naslov.txt i tijelo.txt uz zahtjev i
+# sve što poslovi pod ovom skriptom naprave nastaje kao 600, a mape kao 700.
+# Nasljeđuju ga i djeca - pokreni.sh i skripte pod njim.
+import prava  # noqa: E402  (mora iza sys.patha)
 ZAHTJEVI = Path(os.environ.get("EMMETT_ZAHTJEVI", Path.home() / "zahtjevi"))
 OBRADENO = ZAHTJEVI / "obradeno"
 ISHODI = KORIJEN / "web" / "zahtjevi.json"
@@ -91,7 +90,7 @@ def zapisi_tekst(mapa: Path, zahtjev: dict) -> tuple:
     argumentima naredbe: duga poruka ne stane u naredbu, a ovako ni navodnik
     ni novi red ne mogu ništa pokvariti. Usput ostaje i trag što je poslano."""
     naslov, tijelo = provjeri_tekst(zahtjev)
-    mapa.mkdir(parents=True, exist_ok=True)
+    prava.mapa(mapa)
     (mapa / "naslov.txt").write_text(naslov, encoding="utf-8")
     (mapa / "tijelo.txt").write_text(tijelo, encoding="utf-8")
     return str(mapa / "naslov.txt"), str(mapa / "tijelo.txt")
@@ -250,7 +249,6 @@ def zabiljezi(ishod: dict) -> None:
 def poznate_tablice() -> set:
     """Nazivi tablica koje stvarno postoje. Zahtjev smije imenovati samo
     njih - naziv ide u naredbu, pa se ne uzima na vjeru."""
-    sys.path.insert(0, str(KORIJEN))
     import tablice
     from zoho_to_excel import load_config
     mapa = Path(load_config()["output_dir"])
@@ -301,7 +299,7 @@ def odradi(put: Path) -> None:
 
     # makni zahtjev prije pokretanja: ako posao padne usred, ne pokreće se
     # ponovno sam od sebe
-    arhiva.mkdir(parents=True, exist_ok=True)
+    prava.mapa(arhiva)
     put.replace(arhiva / "zahtjev.json")
 
     osnova = {"oznaka": oznaka, "posao": posao, "tablica": tablica,
@@ -332,7 +330,7 @@ def odradi(put: Path) -> None:
 
 
 def main():
-    ZAHTJEVI.mkdir(parents=True, exist_ok=True)
+    prava.mapa(ZAHTJEVI)
     # Petlja, a ne jedan prolaz: ako zahtjev stigne dok ovaj posao traje,
     # systemd ga možda neće ponovno pokrenuti - mapa nikad nije bila prazna.
     while True:

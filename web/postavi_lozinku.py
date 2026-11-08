@@ -16,13 +16,14 @@ setup_config.py.
 import getpass
 import json
 import secrets
-import shutil
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import lozinka
+import prava
 
 CONFIG = Path(__file__).resolve().parent.parent / "config.json"
 
@@ -44,7 +45,9 @@ def main():
     if prva != getpass.getpass("Ponovi lozinku: "):
         sys.exit("Lozinke se ne poklapaju - ništa nije promijenjeno.")
 
-    shutil.copy2(CONFIG, CONFIG.with_name("config.json.prije-izmjene"))
+    # prava.kopiraj, ne copy2 - vidi prava.py: kopija ne smije naslijediti
+    # prava izvora, u njoj je Zoho lozinka i tajni ključ weba.
+    prava.kopiraj(CONFIG, CONFIG.with_name("config.json.prije-izmjene"))
 
     config["web_user"] = korisnik
     config["web_password_hash"] = lozinka.napravi(prva)

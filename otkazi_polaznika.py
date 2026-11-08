@@ -22,7 +22,6 @@ Pokretanje:
 
 import argparse
 import json
-import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -38,6 +37,8 @@ from zoho_to_excel import (
     with_retry,
     write_totals_formulas,
 )
+
+import prava
 
 COL_UPLATA = 12
 ZAPISNIK = Path(__file__).with_name("otkazani.json")
@@ -121,10 +122,13 @@ def otkazi(put: Path, email: str, ime: str, stvarno: bool) -> int:
               f"riješi odvojeno.")
 
     # 1. kopija cijele tablice, prije ijedne izmjene
-    kopije = put.parent / MAPA_KOPIJA
-    kopije.mkdir(exist_ok=True)
+    # prava.mapa i prava.kopiraj, ne mkdir i copy2: u kopiji su imena,
+    # adrese, mailovi i mobiteli svih polaznika, a copy2 bi joj prepisao
+    # prava izvora i preskočio umask - kako je izvor 644, takva bi bila i
+    # kopija. mkdir(exist_ok=True) isto ne dira mapu koja već postoji.
+    kopije = prava.mapa(put.parent / MAPA_KOPIJA)
     kopija = kopije / f"{put.stem} prije otkaza {datetime.now():%Y-%m-%d %H-%M-%S}.xlsx"
-    shutil.copy2(put, kopija)
+    prava.kopiraj(put, kopija)
     print(f"  kopija: {kopija.name}")
 
     # 2. brisanje, pa popravak onoga što openpyxl ne popravlja sam

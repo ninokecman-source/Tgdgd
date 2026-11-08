@@ -51,6 +51,8 @@ from send_reminders import (
 )
 from zoho_to_excel import load_config, with_retry
 
+import prava
+
 STATE_PATH = Path(__file__).with_name("napravljeni_certifikati.json")
 
 MJESECI = ["January", "February", "March", "April", "May", "June",
@@ -269,7 +271,7 @@ def obradi(xlsx_path: Path, config: dict, state: dict, danas: date,
               f"{datum['@@MJESEC@@']} {datum['@@GODINA@@']}")
         return len(polaznici)
 
-    cilj.mkdir(parents=True, exist_ok=True)
+    prava.mapa(cilj)
     dodatno = config.get("chrome_args", [])
     napravljeno = []
     for ime in polaznici:

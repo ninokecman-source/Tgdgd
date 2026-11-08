@@ -29,6 +29,8 @@ from openpyxl import Workbook, load_workbook
 import posta
 import predlosci
 
+import prava
+
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
 # --- Predložak: struktura Emmett administrativne tablice -------------------
@@ -664,8 +666,7 @@ def prodji():
     state_path = Path(config.get("state_path", "processed_uids.json"))
     if not state_path.is_absolute():
         state_path = Path(__file__).with_name(str(state_path))
-    output_dir = Path(config["output_dir"])
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = prava.mapa(Path(config["output_dir"]))
 
     processed = load_state(state_path)
 

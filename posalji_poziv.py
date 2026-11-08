@@ -31,6 +31,8 @@ import tablice
 from send_reminders import course_info
 from zoho_to_excel import load_config, with_retry
 
+import prava
+
 STATE_PATH = Path(__file__).with_name("poslani_pozivi.json")
 
 

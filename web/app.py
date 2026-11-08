@@ -38,11 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import lozinka
 
-# Svaka datoteka koju ova aplikacija napravi (zahtjevi u ~/zahtjevi) nastaje
-# kao 600, a mapa kao 700. Zadani umask bi dao 644, pa bi ih na serveru mogao
-# pročitati i svaki drugi korisnik - a u njima su mailovi polaznika i tekstovi
-# poruka. Mora stajati prije prvog pisanja, dakle ovdje.
-os.umask(0o077)
+import prava
 
 KORIJEN = Path(__file__).resolve().parent.parent
 CONFIG = KORIJEN / "config.json"
@@ -152,7 +148,7 @@ def _promasaji(promijeni=None) -> dict:
     pauza se sama resetira. `promijeni` je funkcija koja smije dirati popis;
     bez nje se samo čita."""
     try:
-        ZAHTJEVI.mkdir(parents=True, exist_ok=True)
+        prava.mapa(ZAHTJEVI)
         with open(PROMASAJI_PUT, "a+", encoding="utf-8") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
             f.seek(0)
@@ -374,7 +370,7 @@ def ceka_zahtjev(tablica: str) -> bool:
 def zatrazi(posao: str, tablica: str, **dodatno) -> None:
     """Ostavi zahtjev; posao odradi server/izvrsi.py. `dodatno` su polja koja
     taj posao treba - adresa, ime, naslov i tijelo poruke."""
-    ZAHTJEVI.mkdir(parents=True, exist_ok=True)
+    prava.mapa(ZAHTJEVI)
     zahtjev = {"posao": posao, "tablica": tablica,
                "trazio": config.get("web_user", "?"),
                "kada": datetime.now().isoformat(timespec="seconds"),

@@ -24,6 +24,8 @@ from pathlib import Path
 from provjeri_logove import DEFAULT_LOGS
 from zoho_to_excel import load_config
 
+import prava
+
 STANJE = Path(__file__).with_name("greske_potvrdene.json")
 
 

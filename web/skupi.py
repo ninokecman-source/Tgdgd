@@ -46,13 +46,11 @@ from send_reminders import (
 )
 from zoho_to_excel import FIRST_PARTICIPANT_ROW, find_totals_row, load_config, with_retry
 
-# stanje.json se ne prepisuje na mjestu: piše se u stanje.tmp pa preimenuje,
-# pa svaki prolaz stvori NOVU datoteku s pravima iz umaska. Bez ovoga bi bila
-# 644 i svaki bi je korisnik na serveru mogao pročitati - a u njoj su imena,
-# mailovi, mobiteli i iznosi svih polaznika. `chmod` rukom ne pomaže, jer ga
-# sljedeći prolaz izbriše.
-os.umask(0o077)
+import prava
 
+# stanje.json se ne prepisuje na mjestu: piše se u stanje.tmp pa preimenuje,
+# pa svaki prolaz stvori NOVU datoteku - prava joj dolaze iz umaska, koji
+# postavlja prava.py. `chmod` rukom ne pomaže, jer ga sljedeći prolaz izbriše.
 SNIMKA = Path(__file__).with_name("stanje.json")
 
 COL_MOBITEL = 9

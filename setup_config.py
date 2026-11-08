@@ -12,8 +12,9 @@ Pokretanje:
 """
 
 import json
-import shutil
 from pathlib import Path
+
+import prava
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
@@ -103,7 +104,9 @@ def main():
     config["zoho_app_password"] = app_password
 
     if CONFIG_PATH.exists():
-        shutil.copy2(CONFIG_PATH, CONFIG_PATH.with_name("config.json.prije-izmjene"))
+        # prava.kopiraj: u kopiji su Zoho lozinka i tajni ključ weba, a
+        # copy2 bi joj prepisao prava izvora umjesto da primijeni umask.
+        prava.kopiraj(CONFIG_PATH, CONFIG_PATH.with_name("config.json.prije-izmjene"))
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=2)

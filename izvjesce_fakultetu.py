@@ -52,6 +52,8 @@ from send_reminders import (
 )
 from zoho_to_excel import load_config, with_retry
 
+import prava
+
 NAZIV_PREDLOSKA = "izvjesce fakultetu"
 COL_FIRST_NAME, COL_LAST_NAME = 2, 3
 COL_NOVI_ILI_PONOVNI = 11
@@ -346,7 +348,7 @@ def napravi(predlozak: Path, cilj: Path, info: dict, config: dict,
 
     dijelovi["word/document.xml"] = xml.encode("utf-8")
 
-    cilj.parent.mkdir(parents=True, exist_ok=True)
+    prava.mapa(cilj.parent)
     privremeno = cilj.with_suffix(".tmp.docx")
     with zipfile.ZipFile(privremeno, "w", zipfile.ZIP_DEFLATED) as zip_izlaz:
         for ime, sadrzaj in dijelovi.items():

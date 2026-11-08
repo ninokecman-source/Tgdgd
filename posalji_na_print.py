@@ -61,6 +61,8 @@ from send_reminders import (
 )
 from zoho_to_excel import load_config, with_retry
 
+import prava
+
 STANJE = Path(__file__).with_name("poslani_printovi.json")
 ZADANA_MAPA = "Print"
 ZADANI_PAPIR = "običan papir"

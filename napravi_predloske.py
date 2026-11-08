@@ -27,6 +27,8 @@ from posalji_certifikate import ZADANI_TEKST as POTVRDNICA_TEKST
 from send_reminders import ZADANI_NASLOV
 from zoho_to_excel import load_config
 
+import prava
+
 sys.path.insert(0, str(Path(__file__).with_name("bank_solo")))
 
 

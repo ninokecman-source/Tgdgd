@@ -41,6 +41,8 @@ from zoho_to_excel import (
     with_retry,
 )
 
+import prava
+
 # Retci koji znače da poruka nije otišla.
 NEUSPJEH = [
     re.compile(r"Nije poslano na", re.IGNORECASE),

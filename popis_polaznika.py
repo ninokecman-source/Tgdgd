@@ -39,6 +39,8 @@ from napravi_certifikate import (
 from send_reminders import course_info, find_totals_row, parse_course_dates
 from zoho_to_excel import load_config, with_retry
 
+import prava
+
 # Wordmark stoji uz tablice, u mapi 'Marka' - font mu je komercijalan, pa ne
 # može u javni repozitorij. Ako ga nema, popis ide bez njega.
 WORDMARK = "wordmark-navy.svg"
@@ -143,8 +145,7 @@ def obradi(xlsx_path: Path, config: dict, chrome: str, dry_run: bool) -> Path:
             print(f"    {redni}. {ime}")
         return None
 
-    mapa = Path(config["output_dir"]) / "Popisi"
-    mapa.mkdir(parents=True, exist_ok=True)
+    mapa = prava.mapa(Path(config["output_dir"]) / "Popisi")
     naziv = ime_datoteke(f"{info['location']} {info['course_code']} {godina}".strip())
     pdf_put = mapa / f"{naziv}.pdf"
 

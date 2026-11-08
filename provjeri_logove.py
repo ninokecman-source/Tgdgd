@@ -34,6 +34,8 @@ from zoho_to_excel import load_config, with_retry
 
 import posta
 
+import prava
+
 STATE_PATH = Path(__file__).with_name("log_check_state.json")
 
 # Logovi koji se prate, ako u config.json nije navedeno drugačije.
