@@ -487,6 +487,45 @@ Redoslijed modula je u `config.json`:
 "module_order": ["Modul 1&2", "Modul 3", "Modul 4", "Modul 5", "Modul 6"]
 ```
 
+### `uskladi_kodove.py` - tablica i config govore isto
+
+Kod tečaja iz ćelije **C4** nije naljepnica nego ključ: po njemu se traži
+koja potvrdnica ide, prepoznaje li se prijava iz maila, kako se zove opis na
+Solo ponudi i što ide u tiskaru. Tablice ispunjava čovjek, pa jedno slovo
+razlike tiho prekine sve to - skripta javi "za tečaj ... nema potvrdnice", a
+prijave za taj tečaj prestanu ulaziti.
+
+```bash
+python3 uskladi_kodove.py                      # samo pokaži što bi promijenio
+python3 uskladi_kodove.py --stvarno
+python3 uskladi_kodove.py \
+    --preimenuj "stari kod" "novi kod" --stvarno
+```
+
+Radi tri stvari:
+
+1. Pospremi razmake u C4, C5 i C6 u svim tablicama - samo razmake, nikad
+   slova. Razmak na kraju C4 ne kvari prepoznavanje (`kljuc_tecaja` ga
+   sabija), ali ulazi u naslov maila polazniku kao dvostruki razmak.
+2. Nađe kod u `config.json` ili `bank_solo/config.json` kojeg nema ni u
+   jednoj tablici, a očito je isti tečaj - i prepiše ga na pravopis iz
+   tablice. Mijenja `course_codes`, `deposit_course_codes`,
+   `no_certificate_course_codes`, `module_order`, `certificate_templates`,
+   `print_items` i `course_description_map`.
+3. Ispiše svaki kod iz configa koji nijedna tablica ne koristi. To je uredno
+   stanje dok tečaj nije imao prijava, pa se takav kod ne dira - ali se mora
+   vidjeti, da pogrešno napisan ne ostane tiho pokvaren.
+
+Što znači "očito je isti tečaj": cifre moraju biti iste i imena moraju
+nalikovati barem 80% (`difflib`). Oba uvjeta postoje zbog mjerenja na pravim
+imenima - `praktočarski`/`praktičarski` je 0.889, pa prolazi; `Modul 6` i
+`Modul 6 obnova` je 0.667, pa ne; `Modul 1&2` i `Modul 2` je 0.875, dakle
+iznad praga, ali ga odbijaju cifre. Kad skripta nije sigurna, ne nagađa -
+javi i ponudi `--preimenuj`.
+
+Prije izmjene nastane kopija: tablica u podmapu **`Kopije`**, a config u
+`config.json.prije-uskladivanja`.
+
 ## Slanje maila (`posta.py`)
 
 Sve skripte šalju kroz `posta.py`. Vrsta šifriranja bira se po portu, jer se
