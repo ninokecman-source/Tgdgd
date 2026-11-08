@@ -27,6 +27,9 @@ set -euo pipefail
 KORIJEN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$KORIJEN/server/postavke.sh"
 
+# Bez -m namjerno: PRIJAVE_LOKALNO se zadaje izvana i moze pokazivati na
+# mapu koja nije nasa (iCloud Drive, dijeljena mapa), pa joj prava ne
+# namecemo. Nova mapa ionako nastaje kao 700, iz umaska u postavke.sh.
 mkdir -p "$PRIJAVE_LOKALNO"
 
 exec rclone bisync "$PRIJAVE_LOKALNO" "$DROPBOX_REMOTE" \

@@ -136,7 +136,12 @@ systemctl status emmett-zahtjev.path --no-pager | head -3
 Provjera cijelog puta, kao `emmett`:
 
 ```bash
-mkdir -p ~/zahtjevi
+# install -d, a ne `mkdir -p -m 700`: mkdir primjenjuje -m samo na mapu koju
+# stvarno stvara, pa nad postojećom mapom s 755 ne mijenja ništa - a i daje
+# `-m` prednost pred umaskom, pa moze i otvoriti mapu vise nego umask dopusta.
+# install -d radi i jedno i drugo kako izgleda da radi. (Na primjedbu Poprio
+# tima; u mapi su adrese polaznika i tekstovi poruka.)
+install -d -m 700 ~/zahtjevi
 # pritisak na tipku "Pregled, bez slanja" ovo napravi sam
 printf '{"posao":"pregled_certifikata","tablica":"Modul 1&2 Split.xlsx","trazio":"rucno"}' \
     > ~/zahtjevi/proba.json
