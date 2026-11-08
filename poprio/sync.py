@@ -25,6 +25,7 @@ import requests
 
 from alerts import Alerter
 from cliniko_client import ClinikoClient
+from datoteke import postavi_umask
 from lock import AlreadyRunning, single_instance
 from solo_client import SoloClient
 from state import StateStore
@@ -1144,6 +1145,10 @@ def main():
         help="Ispiši katalog usluga iz Clinika s ID-evima i izađi (za popunjavanje configa).",
     )
     args = parser.parse_args()
+
+    # Prije ijednog stvaranja datoteke: baza, zaključavanje i SQLite-ove
+    # privremene datoteke nose imena pacijenata, a bez ovoga nastaju kao 644.
+    postavi_umask()
 
     config = load_config()
 

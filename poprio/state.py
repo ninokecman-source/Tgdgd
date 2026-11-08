@@ -18,6 +18,8 @@ operateru.
 import sqlite3
 from pathlib import Path
 
+from datoteke import privatna_mapa
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS processed_invoices (
     cliniko_invoice_id TEXT PRIMARY KEY,
@@ -48,7 +50,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 
 class StateStore:
     def __init__(self, db_path):
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        privatna_mapa(Path(db_path).parent)
         # timeout: dva procesa mogu nakratko čekati jedan drugoga na upisu
         self.conn = sqlite3.connect(db_path, timeout=10)
         self.conn.executescript(SCHEMA)

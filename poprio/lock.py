@@ -18,6 +18,8 @@ import fcntl
 from contextlib import contextmanager
 from pathlib import Path
 
+from datoteke import privatna_mapa
+
 
 class AlreadyRunning(Exception):
     pass
@@ -28,7 +30,7 @@ def single_instance(lock_path):
     """Drži ekskluzivno zaključavanje dok traje blok. Diže AlreadyRunning ako
     ga već drži neki drugi proces."""
     path = Path(lock_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    privatna_mapa(path.parent)
 
     handle = path.open("w")
     try:
