@@ -70,6 +70,15 @@ def kodovi_iz_tablica(output_dir: Path) -> list:
     return kodovi
 
 
+def uredan_naziv(put: Path) -> str:
+    """Naziv datoteke bez nastavka i bez viška razmaka.
+
+    Neke datoteke u mapi imaju razmak na kraju naziva ('Modul1&2-2020 .pdf').
+    Usporedba to podnosi, jer kljuc_tecaja sabija razmake, ali u config ne
+    treba ulaziti - ondje bi izgledao kao greška."""
+    return " ".join(put.stem.split())
+
+
 def kljuc_datoteke(naziv: str) -> str:
     """Naziv sveden na slova i cifre: 'Modul1&2-2020' i 'Modul 1&2' postaju
     'modul122020' i 'modul12'. Razmaci, crtice i & otpadaju, jer se u nazivu
@@ -113,9 +122,9 @@ def popravi_nazive(stavke, mapa_print: Path) -> tuple:
         naziv = zapis.get("datoteka")
         if naziv and nadji_datoteku(mapa_print, naziv) is None:
             put = nadji_skriptu(mapa_print, naziv)
-            if put is not None:
-                promjene.append((naziv, put.stem))
-                zapis["datoteka"] = put.stem
+            if put is not None and uredan_naziv(put) != naziv:
+                promjene.append((naziv, uredan_naziv(put)))
+                zapis["datoteka"] = uredan_naziv(put)
         nove.append(zapis)
     return nove, promjene
 
@@ -130,7 +139,7 @@ def stavke_za_kod(kod: str, mapa_print: Path) -> list:
     stavke = []
     skripta = nadji_skriptu(mapa_print, kod)
     if skripta is not None:
-        stavke.append({"datoteka": skripta.stem})
+        stavke.append({"datoteka": uredan_naziv(skripta)})
 
     kljuc = kljuc_tecaja(kod)
     for dio, dodatne in PRAVILA:
@@ -142,7 +151,7 @@ def stavke_za_kod(kod: str, mapa_print: Path) -> list:
                     # i ovdje pravi naziv, da se 'PRAKTIČARSKI ISPIT' upiše
                     # kako piše, a ne kako sam ga ja nazvao
                     put = nadji_datoteku(mapa_print, naziv)
-                    zapis["datoteka"] = put.stem if put else naziv
+                    zapis["datoteka"] = uredan_naziv(put) if put else naziv
                 stavke.append(zapis)
             break
     return stavke
