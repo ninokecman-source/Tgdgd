@@ -191,6 +191,11 @@ def put_baze(config_banka: dict) -> Path:
     return uz_korijen if uz_korijen.exists() else KORIJEN / "bank_solo" / put
 
 
+# Oznaka zanemarene uplate. Mora biti isti niz kao OZNAKA_ZANEMARENO u
+# bank_solo/rijesi_uplatu.py.
+ZANEMARENO = "zanemareno"
+
+
 def citaj_uplate() -> dict:
     """Proknjižene uplate iz baze bankovne skripte."""
     config_banka = citaj_json(KORIJEN / "bank_solo" / "config.json")
@@ -201,22 +206,32 @@ def citaj_uplate() -> dict:
     # samo za čitanje - web ne smije dirati stanje bankovne skripte
     veza = sqlite3.connect(f"file:{baza}?mode=ro", uri=True)
     try:
+        # Zanemarene uplate stoje u istoj tablici, jer sync.py po njoj zna
+        # koji ref_id preskočiti. Ali nisu kotizacija, pa ne ulaze ni u
+        # ukupan iznos ni u popis zadnjih - inače bi brojka na stranici bila
+        # napuhana vlastitim prijenosima i povratima.
         ukupno, broj_uplata = veza.execute(
-            "SELECT COALESCE(SUM(amount), 0), COUNT(*) FROM processed_transactions"
-        ).fetchone()
+            "SELECT COALESCE(SUM(amount), 0), COUNT(*) "
+            "FROM processed_transactions WHERE solo_ponuda IS NOT ?",
+            (ZANEMARENO,)).fetchone()
         zadnje = [
             {"ime": r[0], "iznos": r[1], "ponuda": r[2], "kada": r[3]}
             for r in veza.execute(
                 "SELECT matched_name, amount, solo_ponuda, processed_at "
-                "FROM processed_transactions ORDER BY processed_at DESC, rowid DESC "
-                "LIMIT 20")
+                "FROM processed_transactions WHERE solo_ponuda IS NOT ? "
+                "ORDER BY processed_at DESC, rowid DESC LIMIT 20",
+                (ZANEMARENO,))
         ]
+        zanemareno = veza.execute(
+            "SELECT COUNT(*) FROM processed_transactions WHERE solo_ponuda IS ?",
+            (ZANEMARENO,)).fetchone()[0]
         nepovezane = citaj_nepovezane(veza)
     finally:
         veza.close()
 
     return {"baza": str(baza), "ima": True, "ukupno": round(ukupno or 0, 2),
-            "broj": broj_uplata, "zadnje": zadnje, "nepovezane": nepovezane}
+            "broj": broj_uplata, "zadnje": zadnje, "nepovezane": nepovezane,
+            "zanemareno": zanemareno}
 
 
 def citaj_nepovezane(veza) -> list:

@@ -12,6 +12,8 @@
   <div class="redak-detalj tiho">Oznaka: {{ uplata.ref }}</div>
 </div>
 
+{% if greska %}<p class="traka lose">{{ greska }}</p>{% endif %}
+
 {% if not izbor %}
 <p class="traka lose">Ni u jednoj tablici nema polaznika s upisanom adresom,
   pa nemam kome pripisati uplatu.</p>
@@ -20,14 +22,17 @@
 {% else %}
 <form method="post">
   <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="ref" value="{{ uplata.ref }}">
 
+  {# Vrijednost nosi i tablicu i adresu: ista adresa stoji na svakom modulu
+     koji polaznik slusa, pa sama adresa ne kaze na koji tecaj uplata ide. #}
   <label class="polje">Polaznik
-    <select name="email" required>
+    <select name="polaznik" required>
       <option value="">— odaberi —</option>
       {% for t, ljudi in izbor %}
       <optgroup label="{{ t.kod }} · {{ t.mjesto }} ({{ t.datumi }})">
         {% for p in ljudi %}
-        <option value="{{ p.email }}">{{ p.ime }}
+        <option value="{{ t.datoteka }}|{{ p.email }}">{{ p.ime }}
           {%- if p.manjka > 0 %} — manjka {{ p.manjka|eur }}{% endif %}</option>
         {% endfor %}
       </optgroup>
@@ -44,6 +49,17 @@
     <button class="tipka glavna" type="submit">Poveži i upiši u tablicu</button>
     <a class="tipka tiha" href="{{ url_for('uplate') }}">Odustani</a>
   </div>
+</form>
+
+<h2>Nije kotizacija?</h2>
+<p class="tiho">Vlastiti prijenos, povrat ili novac koji nema polaznika.
+  Uplata nestane s popisa, ne upisuje se u nijednu tablicu i ne ulazi u
+  ukupan iznos — ali ostaje zapisana kao preskočena, pa se ne proknjiži ni
+  ako izvod jednom stigne ponovno.</p>
+<form method="post" action="{{ url_for('zanemari_uplatu', broj=broj) }}">
+  <input type="hidden" name="token" value="{{ token }}">
+  <input type="hidden" name="ref" value="{{ uplata.ref }}">
+  <button class="tipka tiha" type="submit">Zanemari ovu uplatu</button>
 </form>
 
 <p class="tiho">Polaznici bez upisane adrese nisu na popisu — uplata se

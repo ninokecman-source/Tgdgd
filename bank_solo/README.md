@@ -218,6 +218,13 @@ za sustav više nije ni postojao, iako je novac stvarno stigao.
 python3 bank_solo/rijesi_uplatu.py --popis
 python3 bank_solo/rijesi_uplatu.py --ref 1234567 --email ana@primjer.hr
 python3 bank_solo/rijesi_uplatu.py --ref 1234567 --email ana@primjer.hr --stvarno
+
+# polaznik na više modula - treba reći na koji tečaj uplata ide
+python3 bank_solo/rijesi_uplatu.py --ref 1234567 --email ana@primjer.hr \
+    --tecaj "Modul 4 Split.xlsx" --stvarno
+
+# uplata nije kotizacija (vlastiti prijenos, povrat)
+python3 bank_solo/rijesi_uplatu.py --ref 1234567 --zanemari --stvarno
 ```
 
 Bez `--stvarno` je samo pregled: pokaže na koga bi uplata išla, u koju
@@ -237,12 +244,32 @@ poslije vidi za koje uplate ponuda nije išla automatski.
 
 Uplata koja je već povezana odbija se izrijekom.
 
-Polaznik se bira po **email adresi**, jer je ona jedina jedinstvena. Ako se
-ista adresa pojavi na više tečajeva, skripta odustaje i traži da to riješiš
-ručno - ne pogađa.
+Polaznik se bira po **email adresi**, jer je ona jedina jedinstvena unutar
+tablice. Ali ista adresa stoji na svakom modulu koji polaznik sluša - tko je
+prošao Modul 3 i nastavio na Modul 4 je u obje tablice - pa adresa sama ne
+kaže na koji tečaj uplata ide. Zato `--tecaj`. Bez njega skripta na takvoj
+adresi odustaje i kaže na kojim je tečajevima, umjesto da pogađa.
 
-Isto se radi i s mobitela, tipkom **Poveži** na stranici Uplate
-(vidi `web/README.md`).
+Zbog toga tipka **Poveži** dugo nije radila: stranica je slala samo adresu, a
+tablicu pogađala kao prvi tečaj u kojem se ta adresa nađe. Za svakoga tko
+sluša više modula skripta bi stala na "više tečajeva". Sad izbornik na
+stranici vraća i tablicu, pa je odabrani tečaj onaj na koji uplata ide.
+
+### `--zanemari` - uplata nije kotizacija
+
+Vlastiti prijenosi, povrati, novac koji nema polaznika. Uplata nestane s
+popisa nepovezanih, ne upisuje se u nijednu tablicu i ne ulazi u ukupan
+iznos na stranici. Ali se **pamti kao preskočena**: u
+`processed_transactions` ide zapis s oznakom `zanemareno`, a `sync.py`
+preskače svaki `ref_id` koji je ondje. Bez toga bi se uplata mogla
+proknjižiti ako izvod jednom stigne ponovno i ime se slučajno upari.
+
+Iznos se u bazu upisuje pravi, ne nula - `web/skupi.py` ga po oznaci
+izostavlja iz ukupnog, pa baza ostaje točna a brojka na stranici nije
+napuhana.
+
+Isto se radi i s mobitela, tipkama **Poveži** i **Zanemari** na stranici
+Uplate (vidi `web/README.md`).
 
 ## Potvrda uplate polazniku
 

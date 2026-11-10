@@ -143,16 +143,27 @@ def _poziv(zahtjev, tablica, mapa):
             "--posalji"]
 
 
-def _rijesi_uplatu(zahtjev, tablica, mapa):
-    adresa = provjeri_adresu(zahtjev)
+def provjeri_ref(zahtjev: dict) -> str:
     ref = str(zahtjev.get("ref", "")).strip()
     # Prvi znak mora biti slovo ili broj, da argparse oznaku ne pročita kao
-    # opciju. Ostalo ostaje široko kao prije: ref_id je zadnji token iz
-    # bankovnog izvoda, pa mu se oblik ne izmišlja - u upit ide kao parametar.
+    # opciju. Ostalo ostaje široko: ref_id je zadnji token iz bankovnog
+    # izvoda, pa mu se oblik ne izmišlja - u upit ide kao parametar.
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9/._-]{0,63}", ref):
         raise Odbijeno(f"neispravna oznaka uplate: {ref!r}")
-    return ["bank_solo/rijesi_uplatu.py", "--ref", ref, "--email", adresa,
+    return ref
+
+
+def _rijesi_uplatu(zahtjev, tablica, mapa):
+    # Tablica ide skripti: ista adresa stoji na svakom modulu koji polaznik
+    # sluša, pa bez nje ne zna na koji tečaj uplata ide i stane.
+    return ["bank_solo/rijesi_uplatu.py", "--ref", provjeri_ref(zahtjev),
+            "--email", provjeri_adresu(zahtjev), "--tecaj", tablica,
             "--stvarno"]
+
+
+def _zanemari_uplatu(zahtjev, tablica, mapa):
+    return ["bank_solo/rijesi_uplatu.py", "--ref", provjeri_ref(zahtjev),
+            "--zanemari", "--stvarno"]
 
 
 def _popis_polaznika(zahtjev, tablica, mapa):
@@ -201,6 +212,7 @@ POSLOVI = {
     "podsjetnik_uplata": _podsjetnik,
     "otkazi_polaznika": _otkazi,
     "rijesi_uplatu": _rijesi_uplatu,
+    "zanemari_uplatu": _zanemari_uplatu,
     "posalji_poziv": _poziv,
     "popis_polaznika": _popis_polaznika,
     "izvjesce_fakultetu": _izvjesce,
@@ -211,7 +223,7 @@ POSLOVI = {
 
 # Poslovi koji se ne tiču nijedne tablice. Svi ostali moraju imenovati
 # postojeću, jer naziv ide u naredbu.
-BEZ_TABLICE = {"potvrdi_greske"}
+BEZ_TABLICE = {"potvrdi_greske", "zanemari_uplatu"}
 
 
 def sada() -> str:

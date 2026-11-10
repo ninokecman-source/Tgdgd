@@ -803,32 +803,80 @@ def polaznici_za_izbor(podaci: dict) -> list:
     return izbor
 
 
-@app.route("/uplata/<int:broj>/povezi", methods=["GET", "POST"])
-@treba_prijava
-def povezi_uplatu(broj):
-    """Nepovezana uplata - reci čija je. Knjiži se isto kao da je sustav sam
-    prepoznao: Solo ponuda, iznos u tablicu, uplata više nije greška."""
-    podaci = snimka()
+def nadji_uplatu(podaci: dict, broj: int, ref: str) -> dict:
+    """Nepovezana uplata po mjestu na popisu, uz provjeru oznake.
+
+    Mjesto dolazi iz snimke, a snimka se osvježava svakih 20 minuta - da se
+    popis pomaknuo između prikaza obrasca i potvrde, `broj` bi pokazivao na
+    tuđu uplatu. Zato obrazac vraća i oznaku, pa se radi samo s onom koja je
+    i bila na ekranu."""
     popis = nepovezane(podaci)
     if broj < 0 or broj >= len(popis):
         abort(404)
     uplata = popis[broj]
+    if ref and ref != uplata["ref"]:
+        abort(409)
+    return uplata
+
+
+@app.route("/uplata/<int:broj>/povezi", methods=["GET", "POST"])
+@treba_prijava
+def povezi_uplatu(broj):
+    """Nepovezana uplata - reci čija je. Iznos ide u tablicu tog tečaja;
+    Solo ponudu izdaje čovjek, s podacima koje skripta ispiše."""
+    podaci = snimka()
 
     if request.method == "POST":
         if not token_valja():
             abort(400)
-        email = request.form.get("email", "").strip()
-        tablica = ""
-        for t in podaci["tecajevi"]:
-            if any(p["email"].lower() == email.lower() for p in t["polaznici"] if p["email"]):
-                tablica = t["datoteka"]
-                break
-        if email and tablica and not ceka_zahtjev(tablica):
-            zatrazi("rijesi_uplatu", tablica, email=email, ref=uplata["ref"])
-        return redirect(url_for("uplate"))
+        uplata = nadji_uplatu(podaci, broj, request.form.get("ref", ""))
+        # Izbornik vraća i tablicu i adresu: ista adresa stoji na svakom
+        # modulu koji polaznik sluša, pa sama adresa ne kaže na koji tečaj
+        # uplata ide. Prije se tablica pogađala kao prvi tečaj u kojem se ta
+        # adresa nađe, a skripta bi onda stala na "više tečajeva".
+        tablica, _, email = request.form.get("polaznik", "").partition("|")
+        tablica, email = tablica.strip(), email.strip()
+        u_tablici = {p["email"].lower()
+                     for t in podaci["tecajevi"] if t["datoteka"] == tablica
+                     for p in t["polaznici"] if p["email"]}
 
-    return render_template("povezi.html", podaci=podaci, uplata=uplata,
-                           izbor=polaznici_za_izbor(podaci))
+        if not email or not tablica:
+            greska = "Nisi odabrao polaznika."
+        elif not u_tablici:
+            greska = (f"Tablicu {tablica!r} ne poznajem - snimka se u "
+                      f"međuvremenu promijenila. Osvježi stranicu.")
+        elif email.lower() not in u_tablici:
+            greska = f"U tablici {tablica} nema polaznika s adresom {email}."
+        elif ceka_zahtjev(tablica):
+            greska = (f"Za {tablica} već čeka jedan posao. Pričekaj da završi "
+                      f"pa pokušaj ponovno.")
+        else:
+            zatrazi("rijesi_uplatu", tablica, email=email, ref=uplata["ref"])
+            return redirect(url_for("uplate"))
+
+        return render_template("povezi.html", podaci=podaci, uplata=uplata,
+                               izbor=polaznici_za_izbor(podaci),
+                               broj=broj, greska=greska), 400
+
+    return render_template("povezi.html", podaci=podaci,
+                           uplata=nadji_uplatu(podaci, broj, ""),
+                           izbor=polaznici_za_izbor(podaci), broj=broj)
+
+
+@app.route("/uplata/<int:broj>/zanemari", methods=["POST"])
+@treba_prijava
+def zanemari_uplatu(broj):
+    """Uplata koja nije kotizacija - skloni je s popisa, bez knjiženja.
+
+    Vlastiti prijenosi, povrati, novac koji nema polaznika. Ne upisuje se u
+    nijednu tablicu i ne ulazi u ukupan iznos, ali se pamti kao preskočena -
+    da se ne proknjiži ako izvod jednom stigne ponovno."""
+    if not token_valja():
+        abort(400)
+    podaci = snimka()
+    uplata = nadji_uplatu(podaci, broj, request.form.get("ref", ""))
+    zatrazi("zanemari_uplatu", "", ref=uplata["ref"])
+    return redirect(url_for("uplate"))
 
 
 @app.route("/stanje")

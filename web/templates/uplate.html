@@ -44,6 +44,11 @@
       </div>
       <div class="tipke uz-ime">
         <a class="tipka mala" href="{{ url_for('povezi_uplatu', broj=loop.index0) }}">Poveži</a>
+        <form method="post" action="{{ url_for('zanemari_uplatu', broj=loop.index0) }}">
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="ref" value="{{ u.ref }}">
+          <button class="tipka mala tiha" type="submit">Zanemari</button>
+        </form>
       </div>
     </div>
   </div>
@@ -79,7 +84,10 @@
   <h2>Zadnji poslovi</h2>
   {% for i in ishodi %}
   <div class="ishod {{ 'lose' if i.status in ('greška', 'odbijeno') }}">
-    <div class="tiho">{{ i.posao }} · {{ i.status }}
+    <div class="tiho">{{ {'rijesi_uplatu': 'Povezivanje uplate',
+                          'zanemari_uplatu': 'Zanemarena uplata',
+                          'podsjetnik_uplata': 'Podsjetnik'}
+                         .get(i.posao, i.posao) }} · {{ i.status }}
       {%- if i.osoba %} · {{ i.osoba }}{% endif %} ·
       {{ (i.gotovo or i.trazeno)|vrijeme }}</div>
     {% if i.ispis %}<pre>{{ i.ispis }}</pre>{% endif %}
