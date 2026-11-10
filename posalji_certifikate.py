@@ -70,6 +70,37 @@ EMMETT Hrvatska
 PDF_MIME = "application/pdf"
 
 
+# Gdje napravi_certifikate.py bilježi što je napravio i u koju mapu.
+NAPRAVLJENI_PATH = Path(__file__).with_name("napravljeni_certifikati.json")
+
+
+def nadji_mapu(xlsx_path: Path, info: dict, kraj):
+    """Mapa s potvrdnicama tog tečaja, ili None ako je nema.
+
+    Ime mape nastaje iz koda tečaja, pa se ispravi li se kod u ćeliji C4
+    (tipfeler, 'modula 6' u 'M6'), izračunato ime više ne pokazuje na mapu u
+    kojoj potvrdnice stvarno stoje - a slanje bi tiho vratilo nulu, kao da
+    nisu napravljene. Zato se, kad izračunate mape nema, gleda put koji je
+    napravi_certifikate.py zapisao kad ih je napravio."""
+    mapa = xlsx_path.parent / "Certifikati" / ime_mape(info, kraj)
+    if mapa.is_dir():
+        return mapa
+    try:
+        with open(NAPRAVLJENI_PATH, encoding="utf-8") as f:
+            zapisano = json.load(f).get(xlsx_path.name, {}).get("mapa", "")
+    except (ValueError, OSError):
+        return None
+    if not zapisano:
+        return None
+    stara = Path(zapisano)
+    if not stara.is_dir():
+        return None
+    print(f"  [!] Mapa {mapa.name!r} ne postoji - potvrdnice su u "
+          f"{stara.name!r}, kako su i napravljene. (Kod tečaja se u "
+          f"međuvremenu promijenio.)")
+    return stara
+
+
 def load_state() -> dict:
     if STATE_PATH.exists():
         with open(STATE_PATH, encoding="utf-8") as f:
@@ -151,8 +182,8 @@ def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool,
     if kraj is None:
         return 0
 
-    mapa = xlsx_path.parent / "Certifikati" / ime_mape(info, kraj)
-    if not mapa.is_dir():
+    mapa = nadji_mapu(xlsx_path, info, kraj)
+    if mapa is None:
         return 0   # za ovaj tečaj potvrdnice još nisu napravljene
 
     polaznici = citaj_polaznike(ws, find_totals_row(ws))
