@@ -32,6 +32,7 @@ from openpyxl import load_workbook
 
 import posta
 import predlosci
+from predlosci import broj_rijecima
 import tablice
 from napravi_certifikate import ime_datoteke, ime_mape
 from send_reminders import (
@@ -313,9 +314,11 @@ def main():
 
     print()
     if args.posalji:
-        print(f"Gotovo. Poslano {ukupno} potvrdnica.")
+        print("Gotovo. Poslano "
+              + broj_rijecima(ukupno, "potvrdnica", "potvrdnice", "potvrdnica") + ".")
     elif ukupno:
-        print(f"Spremno za slanje: {ukupno} potvrdnica.")
+        print("Spremno za slanje: "
+              + broj_rijecima(ukupno, "potvrdnica", "potvrdnice", "potvrdnica") + ".")
         print("Za stvarno slanje pokreni istu naredbu s  --posalji")
     else:
         print("Nema nijedne potvrdnice za poslati.")

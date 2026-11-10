@@ -58,6 +58,24 @@ def kljuc_tecaja(kod) -> str:
     return " ".join(bez_dijakritika(str(kod)).split())
 
 
+def broj_rijecima(koliko: int, jedan: str, dva: str, pet: str) -> str:
+    """'1 komplet', '3 kompleta', '7 kompleta' - hrvatski broji na tri
+    načina, pa brojka u ispisu i u narudžbi tiskari treba pravi oblik.
+
+    Pravilo je po zadnjoj cifri, osim 11-14, koji uvijek idu kao 'pet':
+    21 komplet, 22 kompleta, ali 11 kompleta i 12 kompleta."""
+    zadnje, zadnja_dva = koliko % 10, koliko % 100
+    if zadnja_dva in range(11, 15):
+        oblik = pet
+    elif zadnje == 1:
+        oblik = jedan
+    elif zadnje in (2, 3, 4):
+        oblik = dva
+    else:
+        oblik = pet
+    return f"{koliko} {oblik}"
+
+
 def nadji_dokument(mapa: Path, nazivi):
     """Nađi dokument po nazivu (bez nastavka). `nazivi` smije biti jedan
     naziv ili popis mogućih - vraća se prvi koji postoji. Velika/mala slova

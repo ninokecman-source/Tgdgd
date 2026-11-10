@@ -52,7 +52,7 @@ import posta
 import predlosci
 import tablice
 from napravi_certifikate import ime_mape
-from predlosci import kljuc_tecaja
+from predlosci import broj_rijecima, kljuc_tecaja
 from send_reminders import (
     FIRST_PARTICIPANT_ROW,
     course_info,
@@ -167,21 +167,6 @@ def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
         })
 
     return narudzba, fali
-
-
-def broj_rijecima(koliko: int, jedan: str, dva: str, pet: str) -> str:
-    """'1 komplet', '3 kompleta', '7 kompleta' - hrvatski broji na tri
-    načina, a narudžba se čita naglas u tiskari."""
-    zadnje, zadnja_dva = koliko % 10, koliko % 100
-    if zadnja_dva in range(11, 15):
-        oblik = pet
-    elif zadnje == 1:
-        oblik = jedan
-    elif zadnje in (2, 3, 4):
-        oblik = dva
-    else:
-        oblik = pet
-    return f"{koliko} {oblik}"
 
 
 def opis_stavki(narudzba: list) -> str:

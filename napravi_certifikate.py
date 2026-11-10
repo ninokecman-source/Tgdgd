@@ -42,7 +42,7 @@ from openpyxl import load_workbook
 
 import predlosci
 import tablice
-from predlosci import kljuc_tecaja
+from predlosci import broj_rijecima, kljuc_tecaja
 from send_reminders import (
     FIRST_PARTICIPANT_ROW,
     course_info,
@@ -354,7 +354,8 @@ def main():
     if args.pregled:
         print(f"Pregled gotov ({len(datoteke)} tablica) - ništa nije napravljeno.")
     else:
-        print(f"Gotovo. Napravljeno {ukupno} potvrdnica.")
+        print("Gotovo. Napravljeno "
+              + broj_rijecima(ukupno, "potvrdnica", "potvrdnice", "potvrdnica") + ".")
 
 
 if __name__ == "__main__":
