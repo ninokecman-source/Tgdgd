@@ -46,6 +46,16 @@ CONFIG = Path(__file__).resolve().parent / "config.json"
 #
 #   koliko: "polaznici" (koliko ih je), "pola" (pola toliko, gore), ili broj
 #   certifikati: sve gotove potvrdnice tog tečaja, svaka u jednom primjerku
+# Korice tečaja: dobiva ih samo onaj tko tek ulazi u program, pa je količina
+# "novi". Na Modulu 1&2 ranijih modula nema, pa su svi novi - isto pravilo
+# vrijedi za cijeli niz, bez posebnog slučaja. Ponavljanje nije u nizu i
+# korice ne dobiva: ti polaznici ih imaju od prije.
+KORICE = [
+    {"datoteka": "CourseCover", "koliko": "novi",
+     "napomena": "na dvije stranice"},
+    {"datoteka": "CourseCover- spine", "koliko": "novi"},
+]
+
 PRAVILA = [
     ("modul 1&2", [
         {"datoteka": "Disclaimer"},
@@ -101,16 +111,36 @@ def nadji_skriptu(mapa: Path, kod: str):
     for p in datoteke:
         if kljuc_datoteke(p.stem) == trazeni:
             return p
-    pocinju = [p for p in datoteke if kljuc_datoteke(p.stem).startswith(trazeni)]
+    # Prefiks vrijedi samo kad je ostatak cifra - skripte se razlikuju
+    # godinom ('Modul1&2-2020'). Da se gledala bilo kakva dopuna, 'CourseCover'
+    # bi se uhvatio za 'CourseCover- spine' kad prvog nema.
+    pocinju = [p for p in datoteke
+               if kljuc_datoteke(p.stem).startswith(trazeni)
+               and kljuc_datoteke(p.stem)[len(trazeni):].isdigit()]
     return pocinju[0] if len(pocinju) == 1 else None
 
 
-def popravi_nazive(stavke, mapa_print: Path) -> tuple:
-    """(ispravljene stavke, [(staro, novo)]) za zapis koji već postoji.
+def oznaka_stavke(zapis) -> str:
+    """Po čemu se dvije stavke smatraju istom."""
+    if not isinstance(zapis, dict):
+        return str(zapis)
+    if zapis.get("certifikati"):
+        return "certifikati"
+    return kljuc_tecaja(zapis.get("datoteka") or "")
 
-    Mijenja se samo naziv datoteke koje u mapi nema, i to samo kad se jedna
-    jedina očito odnosi na nju. Količine, papir i redoslijed ostaju kakvi
-    jesu - to je tvoja odluka, ne moja."""
+
+def popravi_nazive(stavke, mapa_print: Path, predlozene: list) -> tuple:
+    """(dopunjene stavke, [poruke o promjenama]) za zapis koji već postoji.
+
+    Dvije stvari, obje uske:
+
+    - naziv datoteke koje u mapi nema popravi se, ali samo kad se jedna
+      jedina očito odnosi na nju
+    - stavka koju pravilo traži a u zapisu je nema se dopiše na kraj
+
+    Količine, papir i redoslijed postojećih stavki ostaju kakvi jesu. Zapis
+    upisan prije nego su korice uopće postojale inače ih nikad ne bi dobio -
+    'već upisan, ne diram' bi ga zauvijek ostavio nepotpunim."""
     if not isinstance(stavke, list):
         return stavke, []
     nove, promjene = [], []
@@ -123,25 +153,45 @@ def popravi_nazive(stavke, mapa_print: Path) -> tuple:
         if naziv and nadji_datoteku(mapa_print, naziv) is None:
             put = nadji_skriptu(mapa_print, naziv)
             if put is not None and uredan_naziv(put) != naziv:
-                promjene.append((naziv, uredan_naziv(put)))
+                promjene.append(f"{naziv!r} -> {uredan_naziv(put)!r}")
                 zapis["datoteka"] = uredan_naziv(put)
         nove.append(zapis)
+
+    ima = {oznaka_stavke(z) for z in nove}
+    for zapis in predlozene:
+        if oznaka_stavke(zapis) in ima:
+            continue
+        nove.append(dict(zapis))
+        ima.add(oznaka_stavke(zapis))
+        opis = ("sve potvrdnice tog tečaja" if zapis.get("certifikati")
+                else zapis.get("datoteka"))
+        promjene.append(f"dopisano: {opis}")
     return nove, promjene
 
 
-def stavke_za_kod(kod: str, mapa_print: Path) -> list:
+def stavke_za_kod(kod: str, mapa_print: Path, config: dict) -> list:
     """Što ide na print za taj kod tečaja, s pravim nazivima datoteka.
 
     U config se upisuje naziv datoteke kakav u mapi stvarno jest, a ne kod
     tečaja - inače posalji_na_print.py tu datoteku ne nađe, jer uspoređuje
     točno. Skripta se dodaje samo ako postoji: ponavljanje M6 je nema, a i
     ne treba mu - njemu idu praktičarski ispit i potvrdnice."""
+    import pozivi
+
     stavke = []
     skripta = nadji_skriptu(mapa_print, kod)
     if skripta is not None:
         stavke.append({"datoteka": uredan_naziv(skripta)})
 
     kljuc = kljuc_tecaja(kod)
+    if kljuc in pozivi.redoslijed(config):
+        for zapis in KORICE:
+            zapis = dict(zapis)
+            put = nadji_skriptu(mapa_print, zapis["datoteka"])
+            if put is not None:
+                zapis["datoteka"] = uredan_naziv(put)
+            stavke.append(zapis)
+
     for dio, dodatne in PRAVILA:
         if kljuc_tecaja(dio) in kljuc:
             for zapis in dodatne:
@@ -210,8 +260,8 @@ def main():
     print("\nŠto ide na print (print_items)")
     mapa_print = output_dir / config.get("print_folder", ZADANA_MAPA)
     for kod in kodovi:
-        stavke = stavke_za_kod(kod, mapa_print)
-        if not stavke:
+        stavke = stavke_za_kod(kod, mapa_print, config)
+        if not stavke and kljuc_tecaja(kod) not in imaju:
             print(f"  {kod}: nema se što upisati")
             continue
         if kljuc_tecaja(kod) in imaju:
@@ -221,12 +271,12 @@ def main():
             # koji u mapi stvarno stoji, i to samo ako je nedvojben.
             stari = next(v for k, v in postojece.items()
                          if kljuc_tecaja(k) == kljuc_tecaja(kod))
-            popravljen, promjene = popravi_nazive(stari, mapa_print)
+            popravljen, promjene = popravi_nazive(stari, mapa_print, stavke)
             if promjene:
                 popravci[kod] = popravljen
-                print(f"  {kod}: upisan, ali nazivi ne valjaju")
-                for staro_ime, novo_ime in promjene:
-                    print(f"    {staro_ime!r} -> {novo_ime!r}")
+                print(f"  {kod}: upisan, ali nije kako treba")
+                for poruka in promjene:
+                    print(f"    {poruka}")
             else:
                 print(f"  {kod}: već upisan, ne diram")
             continue
@@ -237,9 +287,11 @@ def main():
                 print(f"    - sve potvrdnice tog tečaja, {s['papir']}")
             else:
                 koliko = {"pola": "pola broja polaznika",
+                          "novi": "koliko ih je prvi put u programu",
                           None: "koliko i polaznika"}.get(s.get("koliko"),
                                                           s.get("koliko"))
-                print(f"    - {s['datoteka']}: {koliko}")
+                napomena = f", {s['napomena']}" if s.get("napomena") else ""
+                print(f"    - {s['datoteka']}: {koliko}{napomena}")
 
     # --- jesu li datoteke u mapi Print ----------------------------------
     print(f"\nDatoteke u mapi {mapa_print.name}")

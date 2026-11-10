@@ -512,20 +512,37 @@ pogađa nego javi.
 
 Uz skriptu idu i:
 
+- **svaki modul u nizu** - korice tečaja, `CourseCover` (na dvije stranice) i
+  `CourseCover- spine`
 - **Modul 1&2** - disclaimer (po jedan za svakog polaznika) i zdravstveni
   obrazac (pola toga, zaokruženo gore)
 - **ponavljanje** - praktičarski ispit i sve gotove potvrdnice tog tečaja, na
-  tvrđem papiru. Skripte tu nema i ne treba mu.
+  tvrđem papiru. Skripte i korica tu nema: ponavljanje nije u nizu modula, a
+  ti polaznici korice imaju od prije.
+
+Korice se ne broje po broju polaznika nego po **`"koliko": "novi"`** - koliko
+ih prvi put ulazi u program. Tko je prošao raniji modul, mapu već ima. Na
+Modulu 1&2 ranijih modula nema, pa su svi novi i pravilo je isto za cijeli
+niz, bez posebnog slučaja.
+
+Tko je "nov" računa se po adresi, ne po imenu: ista osoba zna biti upisana
+kao `Mara Radic` i `Mara Radić`. Gledaju se tablice svih mjesta, jer tko je
+Modul 1&2 odradio u Zagrebu mapu ima i kad na Modul 3 dolazi u Split.
+Polaznik bez adrese broji se kao nov - ne može se provjeriti, a bolje jedne
+korice viška nego da netko ostane bez. Kad nitko nije nov, korice ispadnu iz
+narudžbe umjesto da u njoj stoji "0 kompleta".
 
 Gledaju se i moduli koji još nemaju tablicu, ako su u `course_codes`: skripta
 im već stoji u mapi, pa ih je bolje podesiti sad nego da narudžba padne na
 dan kad tečaj krene.
 
-Postojeći zapis se ne prepisuje, uz jednu iznimku: ako imenuje datoteku koje
-u mapi nema, a jedna se očito odnosi na nju, popravi se **samo naziv**.
-Količine, papir i redoslijed ostaju kakvi jesu - to je tvoja odluka. Bez toga
-bi zapis upisan ranije, s kodom tečaja umjesto naziva datoteke, zauvijek
-rušio narudžbu.
+Postojeći zapis se ne prepisuje, uz dvije uske iznimke: ako imenuje datoteku
+koje u mapi nema a jedna se očito odnosi na nju, popravi se **samo naziv**;
+i ako mu nedostaje stavka koju pravilo traži, ona se **dopiše na kraj**.
+Količine, papir i redoslijed postojećih stavki ostaju kakvi jesu - to je
+tvoja odluka. Bez prvog bi zapis s kodom tečaja umjesto naziva datoteke
+zauvijek rušio narudžbu; bez drugog zapis upisan prije nego su korice
+postojale nikad ne bi dobio korice.
 
 Usput se provjeri jesu li imenovane datoteke u mapi `Print` i javi koje
 nema. Prije izmjene nastane kopija `config.json.prije-printa`.

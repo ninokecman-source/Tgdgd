@@ -93,17 +93,71 @@ def stavke_za(config: dict, kod: str) -> list:
     return [{"datoteka": kod}]
 
 
-def kolicina(zapis, polaznika: int) -> int:
+def kolicina(zapis, polaznika: int, novih: int = 0) -> int:
     """'polaznici' -> koliko ih je, 'pola' -> pola toliko (zaokruženo gore),
-    broj -> taj broj."""
+    'novi' -> koliko ih prvi put ulazi u program, broj -> taj broj."""
     if zapis in (None, "", "polaznici"):
         return polaznika
     if zapis == "pola":
         return math.ceil(polaznika / 2)
+    if zapis == "novi":
+        return novih
     try:
         return max(0, int(zapis))
     except (TypeError, ValueError):
         raise ValueError(f"ne razumijem koliko: {zapis!r}")
+
+
+def broj_novih(config: dict, xlsx_path: Path, info: dict) -> int:
+    """Koliko polaznika ovog modula nije bilo ni na jednom ranijem.
+
+    Korice tečaja dobiva samo onaj tko tek ulazi u program: tko je prošao
+    raniji modul, mape već ima. Na Modulu 1&2 ranijih nema, pa su svi novi -
+    pravilo je isto za sve module, bez posebnog slučaja.
+
+    Uspoređuje se po adresi, ne po imenu: ista osoba zna biti upisana kao
+    'Mara Radic' i 'Mara Radić'. Polaznik bez adrese se broji kao nov - ne
+    može se provjeriti, a bolje je jedne korice viška nego da ih netko
+    ostane bez.
+
+    Gledaju se tablice svih mjesta: tko je Modul 1&2 odradio u Zagrebu, mapu
+    ima i kad na Modul 3 dolazi u Split."""
+    import pozivi
+
+    popis = pozivi.redoslijed(config)
+    kljuc = kljuc_tecaja(info["course_code"])
+    if kljuc not in popis:
+        # Ponavljanje i praktičarski dan nisu u nizu modula, pa pojam "prvi
+        # put u programu" za njih ne znači ništa - ne broji se.
+        return None
+    raniji = set(popis[:popis.index(kljuc)])
+    if not raniji:
+        return broj_polaznika(load_workbook(xlsx_path)["podaci"])
+
+    bili = set()
+    for put in tablice.nadji(xlsx_path.parent, javi=lambda _: None):
+        if put == xlsx_path:
+            continue
+        wb = with_retry(lambda: load_workbook(put), retry_on=(PermissionError, OSError))
+        if "podaci" not in wb.sheetnames:
+            continue
+        ws = wb["podaci"]
+        if kljuc_tecaja(ws["C4"].value or "") not in raniji:
+            continue
+        for row in range(FIRST_PARTICIPANT_ROW, find_totals_row(ws)):
+            adresa = str(ws.cell(row=row, column=8).value or "").strip().lower()
+            if adresa:
+                bili.add(adresa)
+
+    ws = load_workbook(xlsx_path)["podaci"]
+    novih = 0
+    for row in range(FIRST_PARTICIPANT_ROW, find_totals_row(ws)):
+        if not (ws.cell(row=row, column=2).value or ws.cell(row=row, column=3).value):
+            continue
+        adresa = str(ws.cell(row=row, column=8).value or "").strip().lower()
+        if adresa not in bili:
+            novih += 1
+    return novih
 
 
 def nadji_datoteku(mapa: Path, naziv: str):
@@ -129,7 +183,7 @@ def mapa_certifikata(xlsx_path: Path, info: dict):
 
 
 def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
-                   polaznika: int) -> tuple:
+                   polaznika: int, novih: int = 0) -> tuple:
     """([stavke], [što nedostaje]). Stavka je
     {naziv, datoteke, kolicina, papir, po_datoteci}."""
     mapa_print = Path(config["output_dir"]) / config.get("print_folder", ZADANA_MAPA)
@@ -154,6 +208,7 @@ def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
                 "datoteke": pdfovi,
                 "kolicina": 1,
                 "papir": papir,
+                "napomena": (zapis.get("napomena") or "").strip(),
                 "po_datoteci": True,
             })
             continue
@@ -163,11 +218,17 @@ def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
         if put is None:
             fali.append(f"'{naziv}' u mapi {mapa_print}")
             continue
+        koliko = kolicina(zapis.get("koliko"), polaznika, novih)
+        if koliko < 1:
+            # Npr. korice na modulu na kojem nitko nije nov - nema se što
+            # tražiti, a "0 kompleta" u narudžbi samo zbunjuje tiskaru.
+            continue
         narudzba.append({
             "naziv": put.name,
             "datoteke": [put],
-            "kolicina": kolicina(zapis.get("koliko"), polaznika),
+            "kolicina": koliko,
             "papir": papir,
+            "napomena": (zapis.get("napomena") or "").strip(),
             "po_datoteci": False,
         })
 
@@ -180,12 +241,15 @@ def opis_stavki(narudzba: list) -> str:
         if s["po_datoteci"]:
             koliko = broj_rijecima(len(s["datoteke"]), "datoteka", "datoteke",
                                    "datoteka")
-            redci.append(f"- {s['naziv']}: {koliko}, svaka u jednom "
-                         f"primjerku, {s['papir']}")
+            redak = (f"- {s['naziv']}: {koliko}, svaka u jednom "
+                     f"primjerku, {s['papir']}")
         else:
             koliko = broj_rijecima(s["kolicina"], "komplet", "kompleta",
                                    "kompleta")
-            redci.append(f"- {s['naziv']}: {koliko}, {s['papir']}")
+            redak = f"- {s['naziv']}: {koliko}, {s['papir']}"
+        if s.get("napomena"):
+            redak += f", {s['napomena']}"
+        redci.append(redak)
     return "\n".join(redci) + "\n"
 
 
@@ -266,18 +330,27 @@ def main():
     info = course_info(ws, config)
     polaznika = broj_polaznika(ws)
 
+    novih = broj_novih(config, xlsx_path, info)
+
     try:
-        narudzba, fali = slozi_narudzbu(config, xlsx_path, info, polaznika)
+        narudzba, fali = slozi_narudzbu(config, xlsx_path, info, polaznika,
+                                        novih or 0)
     except ValueError as e:
         sys.exit(f"Postavka 'print_items' za {info['course_code']!r}: {e}")
 
     print(f"{info['course_code']} / {info['location']} ({info['dates']})")
-    print(f"  polaznika: {polaznika}")
+    print(f"  polaznika: {polaznika}"
+          + (f", od toga prvi put u programu: {novih}"
+             if novih is not None and novih < polaznika else ""))
     print(f"  tiskara:   {kome}")
     for stavka in narudzba:
-        koliko = (f"{len(stavka['datoteke'])} datoteka, svaka jednom"
-                  if stavka["po_datoteci"] else f"{stavka['kolicina']} kompleta")
-        print(f"    {stavka['naziv']:<34} {koliko}, {stavka['papir']}")
+        koliko = (broj_rijecima(len(stavka["datoteke"]), "datoteka",
+                                "datoteke", "datoteka") + ", svaka jednom"
+                  if stavka["po_datoteci"]
+                  else broj_rijecima(stavka["kolicina"], "komplet",
+                                     "kompleta", "kompleta"))
+        napomena = f", {stavka['napomena']}" if stavka.get("napomena") else ""
+        print(f"    {stavka['naziv']:<34} {koliko}, {stavka['papir']}{napomena}")
     for sto in fali:
         print(f"  [!] nedostaje {sto}")
 
