@@ -289,6 +289,12 @@ code {
 /* Marka izrijekom zabranjuje kartice s obojenim rubom slijeva, pa se onaj
    tko nešto duguje označava plohom, ne crtom. */
 .redak.duzan { background: var(--pazi-ploha); box-shadow: none; }
+
+/* Polaznik koji jos nije presao na sljedeci modul. Traka s lijeva, a ne
+   druga pozadina: dio njih su i duznici, pa bi se dvije plohe potukle.
+   Boja je iz marke, ne upozoravajuca - nenastavak nije greska nego podatak
+   koga jos treba pozvati. */
+.redak.bez-dalje { border-left: 3px solid var(--azure); padding-left: 11px; }
 .redak-ime { font-weight: 700; color: var(--naslov); }
 .redak-detalj { font-size: 13px; margin-top: 2px; word-break: break-word; }
 .redak-novac { font-size: 14px; margin-top: 4px; font-variant-numeric: tabular-nums; }

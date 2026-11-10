@@ -11,6 +11,11 @@
   <div class="plocica"><span class="broj">{{ tecaj.uplaceno|eur }}</span><span class="natpis">uplaćeno</span></div>
   <div class="plocica {% if tecaj.duznika %}pazi{% endif %}">
     <span class="broj">{{ tecaj.duznika }}</span><span class="natpis">nije platilo</span></div>
+  {% if dalje_tecaj %}
+  <div class="plocica">
+    <span class="broj">{{ nije_nastavilo }}</span>
+    <span class="natpis">nije nastavilo na {{ dalje_tecaj.kod }}</span></div>
+  {% endif %}
 </div>
 
 <section>
@@ -138,15 +143,19 @@
   {% if dalje_tecaj %}
   <p class="tiho"><strong>Nastavlja dalje</strong> upisuje polaznika na
     {{ dalje_tecaj.kod }} u {{ dalje_tecaj.mjesto }} ({{ dalje_tecaj.datumi }})
-    i šalje mu istu potvrdu kao da se prijavio sam.</p>
+    i šalje mu istu potvrdu kao da se prijavio sam. Tko je već ondje nosi
+    značku <span class="znacka tiha">nastavio</span>; ostali su označeni
+    plavom crtom s lijeva.</p>
   {% endif %}
   {% for p in tecaj.polaznici %}
-  <div class="redak {% if p.manjka > 0 %}duzan{% endif %}">
+  <div class="redak {% if p.manjka > 0 %}duzan{% endif %}
+       {%- if p.nastavio is false %} bez-dalje{% endif %}">
     <div class="redak-glava">
       <div class="redak-podaci">
         <div class="redak-ime">
           {{ loop.index }}. {{ p.ime }}
           {% if p.nr %}<span class="znacka tiha">{{ p.nr }}</span>{% endif %}
+          {% if p.nastavio %}<span class="znacka tiha">nastavio</span>{% endif %}
         </div>
         <div class="redak-detalj tiho">
           {% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% else %}bez adrese{% endif %}
@@ -164,7 +173,9 @@
         <a class="tipka mala" href="{{ url_for('podsjetnik', oznaka=tecaj.oznaka,
            broj=loop.index0) }}">Podsjetnik</a>
         {% endif %}
-        {% if dalje_tecaj and p.email %}
+        {# tipka samo onome tko jos nije ondje - klik na ostale bi se ionako
+           vratio s 'vec je na popisu tog tecaja' #}
+        {% if dalje_tecaj and p.email and not p.nastavio %}
         <form method="post" action="{{ url_for('nastavlja', oznaka=tecaj.oznaka,
               broj=loop.index0) }}">
           <input type="hidden" name="token" value="{{ token }}">

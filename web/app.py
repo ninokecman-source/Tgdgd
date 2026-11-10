@@ -510,6 +510,31 @@ def pregled():
                            prijavljenih=sum(t["polaznika"] for t in dolazi))
 
 
+def oznaci_nastavak(tecaj: dict, dalje: dict) -> int:
+    """Uz svakog polaznika upiši je li već prešao na sljedeći modul; vrati
+    koliko ih nije.
+
+    Prešao je onaj koji je u tablici sljedećeg tečaja - a upisuje ga ondje
+    tipka 'Nastavlja dalje' ili vlastita prijava. Uspoređuje se po adresi,
+    jer je ime u dvije tablice znalo biti napisano različito.
+
+    Polaznik bez adrese ostaje None: ne može se provjeriti, pa se niti
+    označava niti broji - bolje prazno nego krivo."""
+    if not dalje:
+        for p in tecaj["polaznici"]:
+            p["nastavio"] = None
+        return 0
+    nastavili = {p["email"].strip().lower()
+                 for p in dalje.get("polaznici", []) if p.get("email")}
+    nije = 0
+    for p in tecaj["polaznici"]:
+        adresa = (p.get("email") or "").strip().lower()
+        p["nastavio"] = adresa in nastavili if adresa else None
+        if p["nastavio"] is False:
+            nije += 1
+    return nije
+
+
 @app.route("/tecaj/<oznaka>")
 @treba_prijava
 def tecaj(oznaka):
@@ -519,8 +544,10 @@ def tecaj(oznaka):
     poslani = slanja.get("certifikati_poslani", {}).get(datoteka)
     ishod = zadnji_ishod(datoteka)
     ceka = ceka_zahtjev(datoteka)
+    dalje_tecaj = sljedeci_tecaj(podaci, nadjen)
     return render_template(
         "tecaj.html", podaci=podaci, tecaj=nadjen,
+        nije_nastavilo=oznaci_nastavak(nadjen, dalje_tecaj),
         podsjetnici=slanja.get("podsjetnici", {}).get(datoteka, []),
         tablica=slanja.get("tablice", {}).get(datoteka),
         napravljeni=slanja.get("certifikati_napravljeni", {}).get(datoteka),
@@ -529,7 +556,7 @@ def tecaj(oznaka):
         za_poziv=sum(len(s["ljudi"]) for s in (nadjen.get("pozvati") or [])),
         ishod=ishod,
         izvjesce_ide=izvjesce_ide(nadjen),
-        dalje_tecaj=sljedeci_tecaj(podaci, nadjen),
+        dalje_tecaj=dalje_tecaj,
         radi=ceka or bool(ishod and ishod.get("u_tijeku")))
 
 
