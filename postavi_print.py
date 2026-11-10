@@ -96,6 +96,30 @@ def nadji_skriptu(mapa: Path, kod: str):
     return pocinju[0] if len(pocinju) == 1 else None
 
 
+def popravi_nazive(stavke, mapa_print: Path) -> tuple:
+    """(ispravljene stavke, [(staro, novo)]) za zapis koji već postoji.
+
+    Mijenja se samo naziv datoteke koje u mapi nema, i to samo kad se jedna
+    jedina očito odnosi na nju. Količine, papir i redoslijed ostaju kakvi
+    jesu - to je tvoja odluka, ne moja."""
+    if not isinstance(stavke, list):
+        return stavke, []
+    nove, promjene = [], []
+    for zapis in stavke:
+        if not isinstance(zapis, dict):
+            nove.append(zapis)
+            continue
+        zapis = dict(zapis)
+        naziv = zapis.get("datoteka")
+        if naziv and nadji_datoteku(mapa_print, naziv) is None:
+            put = nadji_skriptu(mapa_print, naziv)
+            if put is not None:
+                promjene.append((naziv, put.stem))
+                zapis["datoteka"] = put.stem
+        nove.append(zapis)
+    return nove, promjene
+
+
 def stavke_za_kod(kod: str, mapa_print: Path) -> list:
     """Što ide na print za taj kod tečaja, s pravim nazivima datoteka.
 
@@ -173,7 +197,7 @@ def main():
     # --- stavke ---------------------------------------------------------
     postojece = dict(config.get("print_items") or {})
     imaju = {kljuc_tecaja(k) for k in postojece}
-    novi = {}
+    novi, popravci = {}, {}
     print("\nŠto ide na print (print_items)")
     mapa_print = output_dir / config.get("print_folder", ZADANA_MAPA)
     for kod in kodovi:
@@ -182,7 +206,20 @@ def main():
             print(f"  {kod}: nema se što upisati")
             continue
         if kljuc_tecaja(kod) in imaju:
-            print(f"  {kod}: već upisan, ne diram")
+            # Zapis postoji, ali može pokazivati na datoteku koje nema - tako
+            # je ostalo kad se u config upisao kod tečaja umjesto naziva
+            # datoteke. Sadržaj se ne mijenja, samo se naziv popravi na onaj
+            # koji u mapi stvarno stoji, i to samo ako je nedvojben.
+            stari = next(v for k, v in postojece.items()
+                         if kljuc_tecaja(k) == kljuc_tecaja(kod))
+            popravljen, promjene = popravi_nazive(stari, mapa_print)
+            if promjene:
+                popravci[kod] = popravljen
+                print(f"  {kod}: upisan, ali nazivi ne valjaju")
+                for staro_ime, novo_ime in promjene:
+                    print(f"    {staro_ime!r} -> {novo_ime!r}")
+            else:
+                print(f"  {kod}: već upisan, ne diram")
             continue
         novi[kod] = stavke
         print(f"  {kod}:")
@@ -198,7 +235,10 @@ def main():
     # --- jesu li datoteke u mapi Print ----------------------------------
     print(f"\nDatoteke u mapi {mapa_print.name}")
     trazene = []
-    for stavke in list(novi.values()) + list(postojece.values()):
+    pregledati = list(novi.values()) + list(popravci.values()) + [
+        v for k, v in postojece.items()
+        if kljuc_tecaja(k) not in {kljuc_tecaja(x) for x in popravci}]
+    for stavke in pregledati:
         for s in stavke if isinstance(stavke, list) else []:
             naziv = s.get("datoteka")
             if naziv and naziv not in trazene:
@@ -216,7 +256,8 @@ def main():
               "nepotpunu narudžbu.")
 
     # --- upis -----------------------------------------------------------
-    mijenjam = bool(novi) or (nova_adresa and nova_adresa != stara_adresa)
+    mijenjam = (bool(novi) or bool(popravci)
+                or (nova_adresa and nova_adresa != stara_adresa))
     if not mijenjam:
         print("\nNema se što upisati.")
         return
@@ -228,8 +269,14 @@ def main():
         na_disku = json.load(f)
     if nova_adresa:
         na_disku["print_email"] = nova_adresa
-    if novi:
-        na_disku["print_items"] = {**postojece, **novi}
+    if novi or popravci:
+        spojeno = dict(postojece)
+        for kod, stavke in popravci.items():
+            kljuc = kljuc_tecaja(kod)
+            for k in list(spojeno):
+                if kljuc_tecaja(k) == kljuc:
+                    spojeno[k] = stavke
+        na_disku["print_items"] = {**spojeno, **novi}
 
     kopija = CONFIG.with_name(CONFIG.name + ".prije-printa")
     prava.kopiraj(CONFIG, kopija)

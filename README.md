@@ -521,9 +521,14 @@ Gledaju se i moduli koji još nemaju tablicu, ako su u `course_codes`: skripta
 im već stoji u mapi, pa ih je bolje podesiti sad nego da narudžba padne na
 dan kad tečaj krene.
 
-Postojeći zapisi se ne diraju. Usput se provjeri jesu li imenovane datoteke
-u mapi `Print` i javi koje nema. Prije izmjene nastane kopija
-`config.json.prije-printa`.
+Postojeći zapis se ne prepisuje, uz jednu iznimku: ako imenuje datoteku koje
+u mapi nema, a jedna se očito odnosi na nju, popravi se **samo naziv**.
+Količine, papir i redoslijed ostaju kakvi jesu - to je tvoja odluka. Bez toga
+bi zapis upisan ranije, s kodom tečaja umjesto naziva datoteke, zauvijek
+rušio narudžbu.
+
+Usput se provjeri jesu li imenovane datoteke u mapi `Print` i javi koje
+nema. Prije izmjene nastane kopija `config.json.prije-printa`.
 
 ### `uskladi_kodove.py` - tablica i config govore isto
 
