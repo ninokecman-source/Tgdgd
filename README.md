@@ -487,6 +487,36 @@ Redoslijed modula je u `config.json`:
 "module_order": ["Modul 1&2", "Modul 3", "Modul 4", "Modul 5", "Modul 6"]
 ```
 
+### `postavi_print.py` - adresa tiskare i što ide na print
+
+Upisuje u `config.json` dva polja: `print_email` (kome ide narudžba) i
+`print_items` (što ide uz koji modul i u koliko primjeraka).
+
+```bash
+python3 postavi_print.py                                  # pokaži što bi upisao
+python3 postavi_print.py --email tiskara@primjer.com
+python3 postavi_print.py --email tiskara@primjer.com --stvarno
+```
+
+Ključ u `print_items` **mora** biti kod tečaja kakav piše u ćeliji C4, jer se
+po njemu i traži. Zato se kodovi ne pišu iz glave nego čitaju iz tablica -
+ne poklopi li se ključ, narudžba tiho ispadne nepotpuna: pošalje se samo
+skripta, bez disclaimera, obrasca i potvrdnica.
+
+Predlažu se samo moduli kojima uz skriptu ide još nešto:
+
+- **Modul 1&2** - skripta, disclaimer (po jedan za svakog polaznika) i
+  zdravstveni obrazac (pola toga, zaokruženo gore)
+- **ponavljanje** - skripta, praktičarski ispit i sve gotove potvrdnice tog
+  tečaja, na tvrđem papiru
+
+Za ostale module nema što upisivati: bez zapisa `posalji_na_print.py` ionako
+šalje skriptu imenovanu po kodu tečaja, što je točno ono što treba.
+
+Postojeći zapisi se ne diraju. Usput se provjeri jesu li imenovane datoteke
+u mapi `Print` i javi koje nema. Prije izmjene nastane kopija
+`config.json.prije-printa`.
+
 ### `uskladi_kodove.py` - tablica i config govore isto
 
 Kod tečaja iz ćelije **C4** nije naljepnica nego ključ: po njemu se traži

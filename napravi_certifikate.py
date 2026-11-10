@@ -158,6 +158,31 @@ def ime_mape(info: dict, kraj: date) -> str:
     return re.sub(r'[\\/:*?"<>|]', "", naziv).strip()
 
 
+def nadji_mapu(xlsx_path: Path, info: dict, kraj):
+    """Mapa s potvrdnicama tog tečaja, ili None ako je nema.
+
+    Ime mape nastaje iz koda tečaja, pa se ispravi li se kod u ćeliji C4
+    (tipfeler, 'modula 6' u 'M6'), izračunato ime više ne pokazuje na mapu u
+    kojoj potvrdnice stvarno stoje. Slanje bi tiho vratilo nulu, a narudžba
+    tiskari rekla da potvrdnica nema - kao da nisu napravljene. Zato se, kad
+    izračunate mape nema, gleda put koji je zapisan pri izradi.
+
+    Koriste ju posalji_certifikate.py i posalji_na_print.py."""
+    mapa = xlsx_path.parent / "Certifikati" / ime_mape(info, kraj)
+    if mapa.is_dir():
+        return mapa
+    zapisano = load_state().get(xlsx_path.name, {}).get("mapa", "")
+    if not zapisano:
+        return None
+    stara = Path(zapisano)
+    if not stara.is_dir():
+        return None
+    print(f"  [!] Mapa {mapa.name!r} ne postoji - potvrdnice su u "
+          f"{stara.name!r}, kako su i napravljene. (Kod tečaja se u "
+          f"međuvremenu promijenio.)")
+    return stara
+
+
 def citaj_polaznike(ws, totals_row: int) -> list:
     """Imena izravno iz redaka - potvrdnica ne treba email, pa se uzima i
     polaznik upisan ručno, bez adrese."""

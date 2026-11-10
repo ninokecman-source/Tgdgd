@@ -51,7 +51,7 @@ from openpyxl import load_workbook
 import posta
 import predlosci
 import tablice
-from napravi_certifikate import ime_mape
+from napravi_certifikate import nadji_mapu
 from predlosci import broj_rijecima, kljuc_tecaja
 from send_reminders import (
     FIRST_PARTICIPANT_ROW,
@@ -120,10 +120,12 @@ def nadji_datoteku(mapa: Path, naziv: str):
 
 
 def mapa_certifikata(xlsx_path: Path, info: dict):
+    """Mapa s gotovim potvrdnicama. Ide kroz nadji_mapu, pa nađe potvrdnice i
+    kad se kod tečaja u međuvremenu ispravio i ime mape se razišlo."""
     _, kraj = parse_course_dates(info["dates"])
     if kraj is None:
         return None
-    return xlsx_path.parent / "Certifikati" / ime_mape(info, kraj)
+    return nadji_mapu(xlsx_path, info, kraj)
 
 
 def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
@@ -279,6 +281,12 @@ def main():
     if fali:
         sys.exit("\nNarudžba nije potpuna, pa nije ni poslana. "
                  "Dopuni pa pokreni ponovno.")
+    if polaznika < 1:
+        # Količina se računa po broju polaznika, pa bi tiskara dobila
+        # narudžbu za nula kompleta svega. To nikad nije ono što se htjelo -
+        # prije je tablica prazna jer prijave još nisu stigle.
+        sys.exit(f"\nU tablici nema nijednog polaznika, pa bi narudžba bila "
+                 f"za nula kompleta. Nije poslana.")
     if not narudzba:
         sys.exit(f"\nZa {info['course_code']!r} nema što slati u tiskaru.")
 
