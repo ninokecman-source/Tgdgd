@@ -503,15 +503,23 @@ po njemu i traži. Zato se kodovi ne pišu iz glave nego čitaju iz tablica -
 ne poklopi li se ključ, narudžba tiho ispadne nepotpuna: pošalje se samo
 skripta, bez disclaimera, obrasca i potvrdnica.
 
-Predlažu se samo moduli kojima uz skriptu ide još nešto:
+U config se upisuje **naziv datoteke kakav u mapi stvarno jest**, a ne kod
+tečaja. To nije sitnica: skripte se zovu `Modul1&2-2020`, `Modul3-2020`, a
+kodovi su `Modul 1&2`, `Modul 3` - razmak i godina su razlika, a
+`posalji_na_print.py` uspoređuje točno. Zato se svakom modulu traži datoteka
+čiji naziv počinje kodom, i to samo ako je takva jedna jedina; inače se ne
+pogađa nego javi.
 
-- **Modul 1&2** - skripta, disclaimer (po jedan za svakog polaznika) i
-  zdravstveni obrazac (pola toga, zaokruženo gore)
-- **ponavljanje** - skripta, praktičarski ispit i sve gotove potvrdnice tog
-  tečaja, na tvrđem papiru
+Uz skriptu idu i:
 
-Za ostale module nema što upisivati: bez zapisa `posalji_na_print.py` ionako
-šalje skriptu imenovanu po kodu tečaja, što je točno ono što treba.
+- **Modul 1&2** - disclaimer (po jedan za svakog polaznika) i zdravstveni
+  obrazac (pola toga, zaokruženo gore)
+- **ponavljanje** - praktičarski ispit i sve gotove potvrdnice tog tečaja, na
+  tvrđem papiru. Skripte tu nema i ne treba mu.
+
+Gledaju se i moduli koji još nemaju tablicu, ako su u `course_codes`: skripta
+im već stoji u mapi, pa ih je bolje podesiti sad nego da narudžba padne na
+dan kad tečaj krene.
 
 Postojeći zapisi se ne diraju. Usput se provjeri jesu li imenovane datoteke
 u mapi `Print` i javi koje nema. Prije izmjene nastane kopija

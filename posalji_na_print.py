@@ -143,8 +143,11 @@ def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
             mapa = mapa_certifikata(xlsx_path, info)
             pdfovi = sorted(mapa.glob("*.pdf")) if mapa and mapa.is_dir() else []
             if not pdfovi:
-                fali.append(f"potvrdnice tog tečaja (mapa {mapa}) - "
-                            f"napravi ih pa ponovi")
+                gdje = (f" (mapa {mapa})" if mapa is not None
+                        else " - ne mogu pročitati datum tečaja, pa ne znam "
+                             "ni kako se mapa zove")
+                fali.append(f"potvrdnice tog tečaja{gdje} - napravi ih pa "
+                            f"ponovi")
                 continue
             narudzba.append({
                 "naziv": "Potvrdnice",

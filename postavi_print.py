@@ -70,13 +70,58 @@ def kodovi_iz_tablica(output_dir: Path) -> list:
     return kodovi
 
 
-def stavke_za_kod(kod: str) -> list:
-    """Što uz skriptu ide na print za taj kod tečaja, ili [] ako samo skripta."""
+def kljuc_datoteke(naziv: str) -> str:
+    """Naziv sveden na slova i cifre: 'Modul1&2-2020' i 'Modul 1&2' postaju
+    'modul122020' i 'modul12'. Razmaci, crtice i & otpadaju, jer se u nazivu
+    datoteke pišu drukčije nego u ćeliji C4."""
+    return "".join(z for z in kljuc_tecaja(naziv) if z.isalnum())
+
+
+def nadji_skriptu(mapa: Path, kod: str):
+    """Datoteka skripte za taj modul, ili None.
+
+    Skripte se u mapi ne zovu točno kao kod tečaja ('Modul1&2-2020' za
+    'Modul 1&2'), pa točno poklapanje ne prolazi. Traži se datoteka čiji
+    naziv POČINJE kodom, i to samo ako je takva jedna jedina - inače se ne
+    pogađa. Točno poklapanje, ako postoji, ima prednost."""
+    if not mapa.is_dir():
+        return None
+    datoteke = [p for p in sorted(mapa.iterdir())
+                if p.is_file() and not p.name.startswith("~$")]
+    trazeni = kljuc_datoteke(kod)
+    for p in datoteke:
+        if kljuc_datoteke(p.stem) == trazeni:
+            return p
+    pocinju = [p for p in datoteke if kljuc_datoteke(p.stem).startswith(trazeni)]
+    return pocinju[0] if len(pocinju) == 1 else None
+
+
+def stavke_za_kod(kod: str, mapa_print: Path) -> list:
+    """Što ide na print za taj kod tečaja, s pravim nazivima datoteka.
+
+    U config se upisuje naziv datoteke kakav u mapi stvarno jest, a ne kod
+    tečaja - inače posalji_na_print.py tu datoteku ne nađe, jer uspoređuje
+    točno. Skripta se dodaje samo ako postoji: ponavljanje M6 je nema, a i
+    ne treba mu - njemu idu praktičarski ispit i potvrdnice."""
+    stavke = []
+    skripta = nadji_skriptu(mapa_print, kod)
+    if skripta is not None:
+        stavke.append({"datoteka": skripta.stem})
+
     kljuc = kljuc_tecaja(kod)
-    for dio, stavke in PRAVILA:
+    for dio, dodatne in PRAVILA:
         if kljuc_tecaja(dio) in kljuc:
-            return [{"datoteka": kod}] + [dict(s) for s in stavke]
-    return []
+            for zapis in dodatne:
+                zapis = dict(zapis)
+                naziv = zapis.get("datoteka")
+                if naziv:
+                    # i ovdje pravi naziv, da se 'PRAKTIČARSKI ISPIT' upiše
+                    # kako piše, a ne kako sam ga ja nazvao
+                    put = nadji_datoteku(mapa_print, naziv)
+                    zapis["datoteka"] = put.stem if put else naziv
+                stavke.append(zapis)
+            break
+    return stavke
 
 
 def main():
@@ -92,13 +137,24 @@ def main():
     if not output_dir.exists():
         sys.exit(f"Ne postoji folder s tablicama: {output_dir}")
 
-    print("Kodovi tečajeva iz tablica:")
-    kodovi = kodovi_iz_tablica(output_dir)
+    # Kodovi iz tablica, pa oni iz course_codes kojih ondje još nema.
+    # Modul koji još nije imao prijava nema tablicu, ali mu skripta za print
+    # već stoji u mapi - bolje ga podesiti sad nego da narudžba padne na dan
+    # kad tečaj krene.
+    print("Kodovi tečajeva")
+    iz_tablica = kodovi_iz_tablica(output_dir)
+    kodovi = list(iz_tablica)
+    vec = {kljuc_tecaja(k) for k in kodovi}
+    for kod in config.get("course_codes") or []:
+        kod = " ".join(str(kod).split())
+        if kod and kljuc_tecaja(kod) not in vec:
+            kodovi.append(kod)
+            vec.add(kljuc_tecaja(kod))
     for kod in kodovi:
-        print(f"  {kod}")
+        print(f"  {kod}" + ("" if kod in iz_tablica else "   (još nema tablicu)"))
     if not kodovi:
-        sys.exit("\nNijedna tablica nema kod tečaja u C4 - ne znam što bih "
-                 "upisao, pa ne diram config.")
+        sys.exit("\nNi tablice ni 'course_codes' nemaju nijedan kod tečaja - "
+                 "ne znam što bih upisao, pa ne diram config.")
 
     # --- adresa ---------------------------------------------------------
     stara_adresa = (config.get("print_email") or "").strip()
@@ -119,10 +175,11 @@ def main():
     imaju = {kljuc_tecaja(k) for k in postojece}
     novi = {}
     print("\nŠto ide na print (print_items)")
+    mapa_print = output_dir / config.get("print_folder", ZADANA_MAPA)
     for kod in kodovi:
-        stavke = stavke_za_kod(kod)
+        stavke = stavke_za_kod(kod, mapa_print)
         if not stavke:
-            print(f"  {kod}: samo skripta - nema što upisivati")
+            print(f"  {kod}: nema se što upisati")
             continue
         if kljuc_tecaja(kod) in imaju:
             print(f"  {kod}: već upisan, ne diram")
@@ -139,7 +196,6 @@ def main():
                 print(f"    - {s['datoteka']}: {koliko}")
 
     # --- jesu li datoteke u mapi Print ----------------------------------
-    mapa_print = output_dir / config.get("print_folder", ZADANA_MAPA)
     print(f"\nDatoteke u mapi {mapa_print.name}")
     trazene = []
     for stavke in list(novi.values()) + list(postojece.values()):
