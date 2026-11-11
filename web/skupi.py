@@ -34,7 +34,7 @@ from openpyxl import load_workbook
 import pozivi
 import predlosci
 import tablice
-from provjeri_logove import DEFAULT_LOGS, PROBLEM_UZORCI
+from provjeri_logove import DEFAULT_LOGS, PROBLEM_UZORCI, citljiv
 from send_reminders import (
     COL_EMAIL,
     COL_FIRST_NAME,
@@ -303,6 +303,23 @@ def citaj_logove(config: dict) -> dict:
     # svakih pola sata, pa bi inace 48 istih redaka dnevno zatrpalo sve
     # ostalo. Zanima te kad je posao zadnji put prosao, ne svaki put.
     prolazi = {}
+    svi_prolazi = {}     # (log, posao) -> svi sati pokretanja, redom
+    s_greskom = set()    # (log, posao, sat) - prolazi u kojima je nesto palo
+
+    def dodaj(golo_redak):
+        """Zapisi gresku i vrati njezino mjesto u popisu. Isti redak iz istog
+        prolaza se ne nabraja ponovno nego broji: jedna tuda HTML stranica u
+        logu zna dati tri identicna retka, a to je jedna nezgoda, ne tri."""
+        s_greskom.add((naziv, posao, kada))
+        tekst = citljiv(golo_redak)[:400]
+        if greske and (greske[-1]["log"], greske[-1]["posao"],
+                       greske[-1]["kada"], greske[-1]["redak"]) == \
+                (naziv, posao, kada, tekst):
+            greske[-1]["broj"] += 1
+            return None
+        greske.append({"log": naziv, "kada": kada, "posao": posao,
+                       "redak": tekst, "broj": 1})
+        return len(greske) - 1
 
     for naziv, put_tekst in config.get("watch_logs", DEFAULT_LOGS).items():
         put = Path(put_tekst).expanduser()
@@ -334,6 +351,7 @@ def citaj_logove(config: dict) -> dict:
                                            "kada": kada, "broj": 0})
                 unos["broj"] += 1
                 unos["kada"] = max(unos["kada"], kada)
+                svi_prolazi.setdefault((naziv, posao), []).append(kada)
                 u_tracebacku, lanac, zadnji_tb = False, False, None
                 continue
 
@@ -348,15 +366,15 @@ def citaj_logove(config: dict) -> dict:
                 if pocetak_tb < granica:
                     zadnji_tb = None
                     continue
-                unos = {"log": naziv, "kada": kada, "posao": posao,
-                        "redak": golo[:400]}
                 # Lanac ("During handling...") je ista nezgoda, samo sljedeća
                 # karika - zanima te zadnja, pa prethodnu zamjenjuje.
                 if lanac and zadnji_tb is not None:
-                    greske[zadnji_tb] = unos
+                    s_greskom.add((naziv, posao, kada))
+                    greske[zadnji_tb] = {"log": naziv, "kada": kada,
+                                         "posao": posao, "broj": 1,
+                                         "redak": citljiv(golo)[:400]}
                 else:
-                    greske.append(unos)
-                    zadnji_tb = len(greske) - 1
+                    zadnji_tb = dodaj(golo)
                 lanac = False
                 continue
 
@@ -371,14 +389,27 @@ def citaj_logove(config: dict) -> dict:
             if odakle < granica:
                 continue
             if golo and any(u.search(redak) for u in PROBLEM_UZORCI):
-                greske.append({"log": naziv, "kada": kada, "posao": posao,
-                               "redak": golo[:400]})
+                dodaj(golo)
                 zadnji_tb = None
+
+    # Greska koju je kasniji prolaz istog posla presao bez problema ne ceka
+    # nikoga: prijave se citaju svakih pola sata, pa Dropboxov 504 u 17:00
+    # sam nestane u 17:30. Takva se i dalje vidi - samo se ne broji kao
+    # nesto sto treba tebe. Trajan kvar nema cistog prolaza iza sebe, pa
+    # ostaje crven koliko god puta se ponovio.
+    for g in greske:
+        kasniji = [k for k in svi_prolazi.get((g["log"], g["posao"]), [])
+                   if k > g["kada"]]
+        cisti = [k for k in kasniji if (g["log"], g["posao"], k) not in s_greskom]
+        if cisti:
+            g["proslo"] = min(cisti)
 
     redom = sorted(prolazi.values(), key=lambda r: r["kada"], reverse=True)
     greske.sort(key=lambda r: r["kada"], reverse=True)
-    return {"greske": greske[:60], "prolazi": redom, "logovi": stanje_logova,
-            "greske_potvrdene": kada_potvrdeno}
+    greske = greske[:60]
+    return {"greske": greske, "prolazi": redom, "logovi": stanje_logova,
+            "greske_potvrdene": kada_potvrdeno,
+            "greske_otvorene": sum(1 for g in greske if not g.get("proslo"))}
 
 
 def main():
@@ -432,8 +463,12 @@ def main():
         json.dump(stanje, f, ensure_ascii=False, indent=1, sort_keys=True)
     privremeno.replace(SNIMKA)
 
-    print(f"Snimka: {len(tecajevi)} tečajeva, {len(stanje['greske'])} grešaka "
-          f"u logovima -> {SNIMKA}")
+    samo_prosle = len(stanje["greske"]) - stanje["greske_otvorene"]
+    koliko = predlosci.broj_rijecima(stanje["greske_otvorene"],
+                                     "greška", "greške", "grešaka")
+    print(f"Snimka: {len(tecajevi)} tečajeva, {koliko} u logovima"
+          + (f" (+{samo_prosle} koje je kasniji prolaz prešao)"
+             if samo_prosle else "") + f" -> {SNIMKA}")
     for poruka in upozorenja:
         print(f"  {poruka}")
 

@@ -6,10 +6,15 @@
 
 {# Jedno mjesto s kojeg se vidi je li sve u redu, bez citanja. Prije je
    najvazniji podatak na stranici bio obicna siva recenica. #}
-<div class="stanje-traka {{ 'lose' if podaci.greske else 'dobro' }}">
-  {% if podaci.greske %}
-  <strong>{{ podaci.greske|length|mnozina('greška', 'greške', 'grešaka') }}</strong>
-  u logovima — pogledaj niže.
+{% set otvorene = podaci.get('greske_otvorene', podaci.greske|length) %}
+<div class="stanje-traka {{ 'lose' if otvorene else 'dobro' }}">
+  {% if otvorene %}
+  <strong>{{ otvorene|mnozina('greška', 'greške', 'grešaka') }}</strong>
+  {%- if podaci.greske|length > otvorene %} bez rješenja{% endif %}
+  — pogledaj niže.
+  {% elif podaci.greske %}
+  <strong>Sve radi.</strong> Nijedna greška iz loga ne čeka tebe —
+  svaku je kasniji prolaz istog posla prešao bez greške.
   {% elif podaci.zastarjelo %}
   <strong>Podaci su stari {{ podaci.starost_min }} min.</strong>
   Osvježavanje stoji — provjeri cron.
@@ -20,6 +25,13 @@
 
 <section id="greske">
   <h2>Greške ({{ podaci.greske|length }})</h2>
+  {# Brojka u traci gore je manja od ove i to je namjerno: gore pise koliko
+     ih ceka tebe, ovdje koliko ih je uopce u logu. #}
+  {% set prosle = podaci.greske|length - otvorene %}
+  {% if prosle %}
+  <p class="tiho">Sive ne čekaju tebe: isti je posao poslije prošao bez
+    greške. Takvih je {{ prosle }}.</p>
+  {% endif %}
   {% if podaci.greske %}
   <div class="tipke">
     <form method="post" action="{{ url_for('potvrdi_greske') }}">
@@ -36,9 +48,16 @@
   {% endif %}
 
   {% for g in podaci.greske %}
-  <div class="redak duzan">
-    <div class="redak-detalj tiho">{{ g.kada|vrijeme }} · {{ g.posao or g.log }}</div>
+  <div class="redak {{ 'presao' if g.proslo else 'duzan' }}">
+    <div class="redak-detalj tiho">{{ g.kada|vrijeme }} · {{ g.posao or g.log }}{%
+      if g.broj and g.broj > 1 %} · {{ g.broj }}× zaredom{% endif %}</div>
     <pre class="greska">{{ g.redak }}</pre>
+    {# Isti posao je poslije prosao bez greske, pa se ovo samo od sebe
+       posložilo - to je ono sto covjek koji otvori stranicu zapravo pita. #}
+    {% if g.proslo %}
+    <div class="redak-detalj tiho">Poslije je prošlo bez greške
+      ({{ g.proslo|vrijeme }}).</div>
+    {% endif %}
   </div>
   {% endfor %}
 </section>

@@ -15,9 +15,12 @@
     <span class="broj">{{ duznika }}</span>
     <span class="natpis">nije platilo</span>
   </a>
-  <a class="plocica {% if podaci.greske %}lose{% endif %}"
+  {# Broje se samo greske koje jos cekaju covjeka. Onu koju je kasniji prolaz
+     istog posla presao bez problema nema smisla crveniti na naslovnici. #}
+  {% set otvorene = podaci.get('greske_otvorene', podaci.greske|length) %}
+  <a class="plocica {% if otvorene %}lose{% endif %}"
      href="{{ url_for('stanje') }}#greske">
-    <span class="broj">{{ podaci.greske|length }}</span>
+    <span class="broj">{{ otvorene }}</span>
     <span class="natpis">grešaka u logu</span>
   </a>
 </div>

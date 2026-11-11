@@ -85,6 +85,41 @@ def procitaj_novo(path: Path, zadnja_pozicija: int) -> tuple:
     return podaci.decode("utf-8", errors="replace"), velicina
 
 
+# Boje terminala (rclone ih pise i kad ne gleda covjek) i tudi HTML. rclone
+# ispise tijelo tudeg HTTP odgovora kakvo jest, pa kad Dropbox umjesto podatka
+# vrati stranicu s greskom, u log padne komad HTML-a. Na stranici se to 11.11.
+# vidjelo kao tri retka <img src="...target-miss.svg" alt="Error: 504"/>:
+# tocno, ali neupotrebljivo - ni sto je palo ni je li vazno.
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+HTML_OZNAKA = re.compile(
+    r"<\s*/?\s*(?:!doctype|html|head|body|title|img|div|span|p|a|br|meta"
+    r"|link|script|style)\b", re.IGNORECASE)
+# Broj se prihvaca samo uz rijec koja ga objasnjava ("Error: 504",
+# "<title>502", "504 Gateway Time-out"); goli trocifreni broj u HTML-u je
+# cesce sirina slike nego status.
+HTTP_KOD = [
+    re.compile(r"(?:error|http|status|code)\D{0,3}\b([45]\d\d)\b", re.I),
+    re.compile(r"<title>\s*([45]\d\d)\b", re.I),
+    re.compile(r"\b([45]\d\d)\s+[A-Z][a-z]"),
+]
+
+
+def citljiv(redak: str) -> str:
+    """Redak loga spreman za citanje: bez boja terminala i bez tude HTML
+    stranice. Uzorci za prepoznavanje greske gledaju sirovi redak, a ne ovaj,
+    pa ovo ne moze sakriti nijednu gresku - mijenja samo kako pise."""
+    redak = ANSI.sub("", redak).strip()
+    m = HTML_OZNAKA.search(redak)
+    if not m:
+        return redak
+    prije = redak[:m.start()].strip().rstrip(":").strip()
+    html = redak[m.start():]
+    kod = next((u.search(html).group(1) for u in HTTP_KOD if u.search(html)), "")
+    opis = (f"poslužitelj je vratio stranicu s greškom {kod}" if kod
+            else "poslužitelj je vratio HTML stranicu umjesto odgovora")
+    return f"{prije}: {opis}" if prije else opis[0].upper() + opis[1:]
+
+
 def nadji_probleme(tekst: str) -> list:
     """Vrati listu problematičnih dijelova loga. Kod tracebacka se hvata
     cijeli blok, jer je zadnji redak (sama greška) ono što je zanimljivo."""
@@ -109,7 +144,7 @@ def nadji_probleme(tekst: str) -> list:
             continue
 
         if any(u.search(redak) for u in PROBLEM_UZORCI):
-            problemi.append(redak.strip())
+            problemi.append(citljiv(redak))
 
         i += 1
 
