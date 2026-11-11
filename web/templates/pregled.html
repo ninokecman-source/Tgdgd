@@ -41,12 +41,15 @@
       {% if t.stanje == 'u toku' %}<span class="znacka sada">u toku</span>
       {% elif t.dana_do is not none %}<span class="znacka">za {{ t.dana_do }} d</span>{% endif %}
     </div>
-    <div class="kartica-red">{{ t.datumi }}</div>
-    <div class="kartica-red tiho">
-      {{ t.polaznika }} prijavljenih · {{ t.uplaceno|eur }}
-      {% if t.duznika %}· <span class="pazi-tekst">{{ t.duznika }} nije platilo</span>{% endif %}
+    <div class="kartica-red tiho">{{ t.datumi }}</div>
+    <div class="kartica-brojke">
+      <span><strong>{{ t.polaznika }}</strong> prijavljenih</span>
+      <span><strong>{{ t.uplaceno|eur }}</strong> uplaćeno</span>
     </div>
-    <div class="kartica-dalje">Polaznici i slanje →</div>
+    {% if t.duznika %}
+    <div class="kartica-dug">{{ t.duznika|mnozina('osoba nije platila',
+       'osobe nisu platile', 'osoba nije platilo') }}</div>
+    {% endif %}
   </a>
   {% endfor %}
 </section>
@@ -57,9 +60,11 @@
   {% for t in prosli %}
   <a class="kartica" href="{{ url_for('tecaj', oznaka=t.oznaka) }}">
     <div class="kartica-vrh"><strong>{{ t.kod }} · {{ t.mjesto }}</strong></div>
-    <div class="kartica-red">{{ t.datumi }}</div>
-    <div class="kartica-red tiho">{{ t.polaznika }} polaznika · {{ t.uplaceno|eur }}</div>
-    <div class="kartica-dalje">Polaznici i slanje →</div>
+    <div class="kartica-red tiho">{{ t.datumi }}</div>
+    <div class="kartica-brojke">
+      <span><strong>{{ t.polaznika }}</strong> polaznika</span>
+      <span><strong>{{ t.uplaceno|eur }}</strong> uplaćeno</span>
+    </div>
   </a>
   {% endfor %}
 </section>

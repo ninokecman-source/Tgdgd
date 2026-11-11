@@ -25,7 +25,7 @@ import re
 import secrets
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
@@ -298,6 +298,16 @@ def sigurnosna_zaglavlja(odgovor):
 def ugradi_token():
     return {"token": token() if session.get("prijavljen") else "",
             "ima_wordmark": (mapa_marke() / "wordmark-navy.svg").is_file()}
+
+
+@app.template_filter("mnozina")
+def filtar_mnozina(koliko, jedan, dva, pet):
+    """{{ 3|mnozina('osoba', 'osobe', 'osoba') }} -> '3 osobe'.
+
+    Hrvatski broji na tri načina, pa '2 osoba duguje' u popisu bode oči.
+    Pravilo je isto ono iz predlosci.broj_rijecima, da se ne razilaze."""
+    import predlosci
+    return predlosci.broj_rijecima(koliko, jedan, dva, pet)
 
 
 @app.template_filter("vrijeme")
@@ -807,10 +817,30 @@ def otkazi(oznaka, broj):
 @app.route("/uplate")
 @treba_prijava
 def uplate():
+    """Tko nije platio, složeno po tečaju.
+
+    Prije je ovdje bio ravan popis svih dužnika, svaki na jantarnoj plohi.
+    Na dvadesetak ljudi to je bio zid jedne boje - kad je sve označeno,
+    ništa nije - a tečaj i datum su se ponavljali uz svako ime. Sada je
+    tečaj naslov, a bojom se izdvaja samo ono što stvarno kasni: tečaj
+    kojem je rok uplate prošao."""
     podaci = snimka()
-    duznici = [(t, p) for t in podaci["tecajevi"] if t["stanje"] != "prosao"
-               for p in t["polaznici"] if p["manjka"] > 0]
-    return render_template("uplate.html", podaci=podaci, duznici=duznici,
+    danas = date.today().isoformat()
+    skupine = []
+    for t in podaci["tecajevi"]:
+        if t["stanje"] == "prosao":
+            continue
+        duzni = [(i, p) for i, p in enumerate(t["polaznici"]) if p["manjka"] > 0]
+        if not duzni:
+            continue
+        skupine.append({
+            "tecaj": t,
+            "ljudi": duzni,
+            "manjka": round(sum(p["manjka"] for _, p in duzni), 2),
+            "kasni": bool(t.get("rok") and t["rok"] < danas),
+        })
+    return render_template("uplate.html", podaci=podaci, skupine=skupine,
+                           duznika=sum(len(s["ljudi"]) for s in skupine),
                            ishodi=ucitaj_ishode()[-5:][::-1])
 
 

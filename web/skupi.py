@@ -139,6 +139,9 @@ def citaj_tecaj(put: Path, config: dict, danas: date) -> dict:
         "instruktor": info["instructor_name"],
         "prvi_dan": datum_rijecima(pocetak) if pocetak else "",
         "rok_uplate": rok.strftime("%d.%m.%Y.") if rok else "",
+        # isti datum, ali u obliku koji se da usporediti - stranica Uplate po
+        # njemu zna kome je rok već prošao
+        "rok": rok.isoformat() if rok else None,
         "pocetak": pocetak.isoformat() if pocetak else None,
         "kraj": kraj.isoformat() if kraj else None,
         "stanje": stanje,

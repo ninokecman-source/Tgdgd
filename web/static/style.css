@@ -46,6 +46,12 @@
   /* Jantar i crvena iz marke zadane su kao boje plohe, ne teksta: #c98a10 na
      #fbf0d6 daje 2,6:1. Za tekst se koriste potamnjene inačice (5,1:1 i
      5,1:1), pa i upozorenje ostaje čitljivo. */
+  /* Zelena za "sve radi" - marka ima --success, ali ga nema u tamnijoj
+     varijanti za tekst, ni plohu uz njega. Izvedeni su po istom receptu kao
+     warning i danger, pa su i kontrasti isti red veličine: #176b4a na
+     #e4f4ec daje 5,70, a postojeći parovi 5,08 i 5,12. */
+  --success-text: #176b4a;
+  --success-soft: #e4f4ec;
   --warning-text: #8a5d00;
   --danger-text: #b32f28;
 
@@ -65,6 +71,8 @@
   --crta: var(--neutral-200);
   --veza: var(--navy);
   --naglasak: var(--azure);
+  --dobro: var(--success-text);
+  --dobro-ploha: var(--success-soft);
   --pazi: var(--warning-text);
   --pazi-ploha: var(--warning-soft);
   --lose: var(--danger-text);
@@ -102,6 +110,9 @@
     --pazi-ploha: #304075;
     --lose: #f0948c;
     --lose-ploha: #3a1d1b;
+    /* 6,43 - u rangu s --pazi (5,29) i --lose (6,80) u istoj temi */
+    --dobro: #7fd4aa;
+    --dobro-ploha: #1b4133;
     --na-tamnom: var(--neutral-0);
     --sjena-1: 0 1px 2px rgb(0 0 0 / .3), 0 2px 8px rgb(0 0 0 / .2);
     --sjena-2: 0 4px 12px rgb(0 0 0 / .35), 0 12px 32px rgb(0 0 0 / .3);
@@ -164,15 +175,84 @@ main { padding: 16px; max-width: 760px; margin: 0 auto; width: 100%; flex: 1; }
   :root:not([data-tema="light"]) .vrh nav button { color: var(--sky); }
 }
 
+/* --- Traka stanja (stranica Stanje) ---
+   Je li sve u redu je najvazniji podatak na toj stranici, a stajao je kao
+   obicna siva recenica. Sad se vidi s vrha, bez citanja. */
+
+.stanje-traka {
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+  margin: 12px 0 4px;
+  font-size: 15px;
+}
+.stanje-traka strong { font-weight: 700; }
+.stanje-traka.dobro { background: var(--dobro-ploha); color: var(--dobro); }
+.stanje-traka.lose { background: var(--lose-ploha); color: var(--lose); }
+
+.putevi { margin-top: 14px; }
+.putevi summary {
+  font-size: 13px;
+  color: var(--veza);
+  cursor: pointer;
+  font-weight: 700;
+}
+.putevi code { font-size: 12px; word-break: break-all; }
+
+/* --- Dugovi po tecaju (stranica Uplate) ---
+   Prije je svaki duznik bio na jantarnoj plohi. Na dvadesetak ljudi to je
+   zid jedne boje, a jantarna prestane znaciti upozorenje. Sada je ploha
+   bijela, a boju nosi samo tecaj kojem je rok uplate prosao. */
+
+.skupina {
+  background: var(--ploha);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sjena-1);
+  padding: 12px 14px 4px;
+  margin-bottom: 10px;
+}
+.skupina.kasni { background: var(--pazi-ploha); box-shadow: none; }
+.skupina-vrh { display: flex; align-items: baseline; gap: 10px; }
+.skupina-ime { font-weight: 700; color: var(--naslov); text-decoration: none; }
+.skupina-zbroj {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--naslov);
+  font-variant-numeric: tabular-nums;
+}
+/* Jantarno je rezervirano za ono sto stvarno kasni - dug sam po sebi nije
+   upozorenje, nego podatak. */
+.skupina-zbroj.kasni { color: var(--pazi); }
+.skupina-detalj { font-size: 13px; margin-top: 2px; }
+
+.duznik {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--crta);
+  margin-top: 8px;
+}
+.duznik:first-of-type { margin-top: 10px; }
+.duznik-podaci { flex: 1; min-width: 0; }
+.duznik-ime { font-weight: 700; color: var(--naslov); font-size: 15px; }
+.duznik-novac {
+  text-align: right;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.duznik-novac span { display: block; }
+
 /* --- Podnožje: uski gradijentni pojas, bijeli tekst u sredini --- */
 
+/* Podnozje nosi jednu sitnicu - vrijeme zadnje snimke. Prije je to bio
+   tamnoplavi pojas preko cijele sirine, tezina koja ne odgovara vaznosti. */
 footer {
-  margin-top: 32px;
-  padding: 14px 16px;
+  margin: 28px 0 20px;
+  padding: 0 16px;
   text-align: center;
-  background: var(--gradient-pojas);
-  color: var(--na-tamnom);
-  font-size: 13px;
+  color: var(--tiho);
+  font-size: 12px;
 }
 
 h1 { font: 700 24px/1.12 var(--font); color: var(--naslov); margin: 4px 0 2px; }
@@ -256,9 +336,22 @@ code {
 .kartica-vrh { display: flex; align-items: center; gap: 8px; }
 .kartica-vrh strong { color: var(--naslov); }
 .kartica-red { font-size: 14px; margin-top: 2px; }
-/* Azure bi ovdje dao 2,4:1 - poveznice idu u navy, kako marka i zadaje
-   svojim tokenom --text-link. */
-.kartica-dalje { margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--veza); }
+/* Brojke u svom retku, ne natrpane uz datum: prijavljeni i uplaceno su
+   dvije razlicite stvari, a dug je treca i nosi boju. Cijela kartica je
+   poveznica, pa redak "Polaznici i slanje" vise ne treba. */
+.kartica-brojke {
+  display: flex;
+  gap: 16px;
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--tiho);
+  flex-wrap: wrap;
+}
+.kartica-brojke strong {
+  color: var(--naslov);
+  font-variant-numeric: tabular-nums;
+}
+.kartica-dug { margin-top: 4px; font-size: 14px; color: var(--pazi); font-weight: 500; }
 
 .znacka {
   margin-left: auto;

@@ -5,20 +5,42 @@
 <h1>Uplate</h1>
 
 <section>
-  <h2>Nije platilo ({{ duznici|length }})</h2>
+  <h2>Nije platilo ({{ duznika }})</h2>
   <p class="tiho">Samo tečajevi koji još nisu prošli.</p>
-  {% if not duznici %}<p class="tiho">Svi su podmirili kotizaciju.</p>{% endif %}
-  {% for t, p in duznici %}
-  <div class="redak duzan">
-    <div class="redak-ime">{{ p.ime }}</div>
-    <div class="redak-detalj tiho">
-      <a href="{{ url_for('tecaj', oznaka=t.oznaka) }}">{{ t.kod }} · {{ t.mjesto }}</a>
-      · {{ t.datumi }}
-      {% if p.email %}<br><a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}
+  {% if not skupine %}<p class="tiho">Svi su podmirili kotizaciju.</p>{% endif %}
+
+  {% for s in skupine %}
+  <div class="skupina {% if s.kasni %}kasni{% endif %}">
+    <div class="skupina-vrh">
+      <a class="skupina-ime" href="{{ url_for('tecaj', oznaka=s.tecaj.oznaka) }}">
+        {{ s.tecaj.kod }} · {{ s.tecaj.mjesto }}</a>
+      <span class="skupina-zbroj {% if s.kasni %}kasni{% endif %}">{{ s.manjka|eur }}</span>
     </div>
-    <div class="redak-novac">
-      {{ p.uplaceno|eur }} <span class="pazi-tekst">manjka {{ p.manjka|eur }}</span>
+    <div class="skupina-detalj tiho">
+      {{ s.tecaj.datumi }} ·
+      {{ s.ljudi|length|mnozina('osoba duguje', 'osobe duguju', 'osoba duguje') }}
+      {% if s.tecaj.rok_uplate %}· rok {{ s.tecaj.rok_uplate }}{% endif %}
+      {% if s.kasni %}<strong class="pazi-tekst">— rok je prošao</strong>{% endif %}
     </div>
+
+    {% for broj, p in s.ljudi %}
+    <div class="duznik">
+      <div class="duznik-podaci">
+        <div class="duznik-ime">{{ p.ime }}</div>
+        {% if p.email %}
+        <div class="redak-detalj tiho"><a href="mailto:{{ p.email }}">{{ p.email }}</a></div>
+        {% endif %}
+      </div>
+      <div class="duznik-novac">
+        <span class="pazi-tekst">{{ p.manjka|eur }}</span>
+        <span class="tiho">od {{ (p.uplaceno + p.manjka)|eur }}</span>
+      </div>
+      {% if p.email %}
+      <a class="tipka mala" href="{{ url_for('podsjetnik', oznaka=s.tecaj.oznaka,
+         broj=broj) }}">Podsjetnik</a>
+      {% endif %}
+    </div>
+    {% endfor %}
   </div>
   {% endfor %}
 </section>
