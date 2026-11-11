@@ -66,6 +66,10 @@ import prava
 STANJE = Path(__file__).with_name("poslani_printovi.json")
 ZADANA_MAPA = "Print"
 ZADANI_PAPIR = "običan papir"
+# Uz svaku stavku stoji kako se printa. Prije je na dnu poruke stajala jedna
+# rečenica za sve, ali korice idu na deblji papir pa to više nije bila
+# istina za cijelu narudžbu. Stavka koja ima svoju napomenu nosi nju.
+ZADANA_NAPOMENA = "jednostrano, u koloru"
 # Zoho odbija poruke iznad 25 MB; ispod te granice se staje s porukom koja
 # se da pročitati, umjesto da slanje padne na pola.
 NAJVECI_PRILOG = 20 * 1024 * 1024
@@ -77,8 +81,6 @@ u privitku je materijal za tečaj Emmett tehnike - {course_code}, {location}
 ({dates}).
 
 {stavke}
-Sve ide jednostrano, u boji.
-
 Lijep pozdrav,
 {instructor_name}
 """
@@ -188,6 +190,7 @@ def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
     {naziv, datoteke, kolicina, papir, po_datoteci}."""
     mapa_print = Path(config["output_dir"]) / config.get("print_folder", ZADANA_MAPA)
     zadani_papir = config.get("print_paper", ZADANI_PAPIR)
+    zadana_napomena = config.get("print_note", ZADANA_NAPOMENA)
     narudzba, fali = [], []
 
     for zapis in stavke_za(config, info["course_code"]):
@@ -208,7 +211,7 @@ def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
                 "datoteke": pdfovi,
                 "kolicina": 1,
                 "papir": papir,
-                "napomena": (zapis.get("napomena") or "").strip(),
+                "napomena": (zapis.get("napomena") or zadana_napomena).strip(),
                 "po_datoteci": True,
             })
             continue
@@ -228,7 +231,7 @@ def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
             "datoteke": [put],
             "kolicina": koliko,
             "papir": papir,
-            "napomena": (zapis.get("napomena") or "").strip(),
+            "napomena": (zapis.get("napomena") or zadana_napomena).strip(),
             "po_datoteci": False,
         })
 

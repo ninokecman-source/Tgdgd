@@ -523,8 +523,8 @@ pogađa nego javi.
 
 Uz skriptu idu i:
 
-- **svaki modul u nizu** - korice tečaja, `CourseCover` (na dvije stranice) i
-  `CourseCover- spine`
+- **svaki modul u nizu** - korice tečaja, `CourseCover` i
+  `CourseCover- spine`, oboje na debljem papiru
 - **Modul 1&2** - disclaimer (po jedan za svakog polaznika) i zdravstveni
   obrazac (pola toga, zaokruženo gore)
 - **ponavljanje** - praktičarski ispit i sve gotove potvrdnice tog tečaja, na
@@ -547,13 +547,25 @@ Gledaju se i moduli koji još nemaju tablicu, ako su u `course_codes`: skripta
 im već stoji u mapi, pa ih je bolje podesiti sad nego da narudžba padne na
 dan kad tečaj krene.
 
+Uz svaku stavku u narudžbi piše kako se printa: papir, pa upute. Stavka bez
+svoje upute nosi zadanu, `"jednostrano, u koloru"` (`print_note` u configu).
+Korice imaju svoju, jer idu na deblji papir. Prije je na dnu poruke stajala
+jedna rečenica za cijelu narudžbu, ali to je prestalo biti istina čim su
+korice dobile drugi papir.
+
 Postojeći zapis se ne prepisuje, uz dvije uske iznimke: ako imenuje datoteku
 koje u mapi nema a jedna se očito odnosi na nju, popravi se **samo naziv**;
 i ako mu nedostaje stavka koju pravilo traži, ona se **dopiše na kraj**.
-Količine, papir i redoslijed postojećih stavki ostaju kakvi jesu - to je
-tvoja odluka. Bez prvog bi zapis s kodom tečaja umjesto naziva datoteke
-zauvijek rušio narudžbu; bez drugog zapis upisan prije nego su korice
-postojale nikad ne bi dobio korice.
+Količine i redoslijed postojećih stavki ostaju kakvi jesu - to je tvoja
+odluka. Bez prvog bi zapis s kodom tečaja umjesto naziva datoteke zauvijek
+rušio narudžbu; bez drugog zapis upisan prije nego su korice postojale nikad
+ne bi dobio korice.
+
+Prazno polje za papir ili uputu se popuni iz pravila, jer prazno znači da
+ništa nije birano. Ispisana uputa se mijenja samo ako je jedna od onih koje
+je skripta sama nekad upisala - popis stoji u `ZASTARJELE_NAPOMENE`. Tako
+ispravak upute stigne i do zapisa koji već postoji, a da se ne pregazi ono
+što si sam podesio.
 
 Usput se provjeri jesu li imenovane datoteke u mapi `Print` i javi koje
 nema. Prije izmjene nastane kopija `config.json.prije-printa`.

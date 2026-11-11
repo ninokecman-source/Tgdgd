@@ -51,10 +51,18 @@ CONFIG = Path(__file__).resolve().parent / "config.json"
 # vrijedi za cijeli niz, bez posebnog slučaja. Ponavljanje nije u nizu i
 # korice ne dobiva: ti polaznici ih imaju od prije.
 KORICE = [
-    {"datoteka": "CourseCover", "koliko": "novi",
-     "napomena": "na dvije stranice"},
-    {"datoteka": "CourseCover- spine", "koliko": "novi"},
+    {"datoteka": "CourseCover", "koliko": "novi", "papir": "deblji papir",
+     # "papir" se ne ponavlja u napomeni - polje iznad već kaže koji je.
+     "napomena": "jednostrano na jedan list, u koloru"},
+    {"datoteka": "CourseCover- spine", "koliko": "novi",
+     "papir": "deblji papir", "napomena": "u koloru"},
 ]
+
+# Napomene koje su u configu ostale od ranije, a više ne odgovaraju uputi.
+# Samo one se smiju prepisati - tako ispravak stigne do zapisa koji već
+# postoji, a da se ne pregazi ništa što si sam podesio.
+ZASTARJELE_NAPOMENE = {"na dvije stranice",
+                       "na jedan papir, jednostrano, u koloru"}
 
 PRAVILA = [
     ("modul 1&2", [
@@ -156,6 +164,26 @@ def popravi_nazive(stavke, mapa_print: Path, predlozene: list) -> tuple:
                 promjene.append(f"{naziv!r} -> {uredan_naziv(put)!r}")
                 zapis["datoteka"] = uredan_naziv(put)
         nove.append(zapis)
+
+    # Ispravak upute za stavku koja je upisana po starom pravilu.
+    po_pravilu = {oznaka_stavke(z): z for z in predlozene}
+    for zapis in nove:
+        pravilo = po_pravilu.get(oznaka_stavke(zapis))
+        if not isinstance(zapis, dict) or pravilo is None:
+            continue
+        # Prazno polje se smije popuniti - prazno znači da ništa nije
+        # birano. Ispisana napomena se mijenja samo ako je jedna od onih
+        # koje je skripta sama upisala po starom pravilu.
+        stara = (zapis.get("napomena") or "").strip()
+        if pravilo.get("napomena") and (not stara or stara in ZASTARJELE_NAPOMENE):
+            zapis["napomena"] = pravilo["napomena"]
+            promjene.append(f"{zapis.get('datoteka', '?')}: uputa "
+                            + (f"{stara!r} -> " if stara else "")
+                            + repr(pravilo["napomena"]))
+        if pravilo.get("papir") and not zapis.get("papir"):
+            zapis["papir"] = pravilo["papir"]
+            promjene.append(f"{zapis.get('datoteka', '?')}: papir "
+                            f"{pravilo['papir']!r}")
 
     ima = {oznaka_stavke(z) for z in nove}
     for zapis in predlozene:
@@ -290,8 +318,9 @@ def main():
                           "novi": "koliko ih je prvi put u programu",
                           None: "koliko i polaznika"}.get(s.get("koliko"),
                                                           s.get("koliko"))
-                napomena = f", {s['napomena']}" if s.get("napomena") else ""
-                print(f"    - {s['datoteka']}: {koliko}{napomena}")
+                dodatno = [s[k] for k in ("papir", "napomena") if s.get(k)]
+                print(f"    - {s['datoteka']}: {koliko}"
+                      + ("".join(f", {x}" for x in dodatno)))
 
     # --- jesu li datoteke u mapi Print ----------------------------------
     print(f"\nDatoteke u mapi {mapa_print.name}")
