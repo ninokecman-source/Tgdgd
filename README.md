@@ -290,8 +290,7 @@ Oba slučaja idu u log kao `[!]`, pa ih pokupi i provjera logova.
 
 ## Potvrdnice nakon tečaja (`napravi_certifikate.py`)
 
-Dan nakon tečaja za svakog polaznika nastane EMMETT Statement of Attainment
-u PDF-u. Ništa se ne šalje — datoteke samo nastanu i čekaju te:
+Za svakog polaznika nastane EMMETT Statement of Attainment u PDF-u:
 
 ```
 <output_dir>/Certifikati/Split Modul 1&2 2026/Ana Anić.pdf
@@ -325,12 +324,24 @@ python3 napravi_certifikate.py              # napravi PDF-ove
 python3 napravi_certifikate.py --ponovno    # i za tečaj koji je već obrađen
 ```
 
-Napravljeno se pamti u `napravljeni_certifikati.json`, pa se isti tečaj ne
-obrađuje dvaput. U cron ide jednom dnevno, uz `posalji_tablicu.py`:
+### Kad nastaju
 
-```
-30 8 * * * cd /putanja/do/ovog/foldera && /usr/bin/python3 napravi_certifikate.py >> log.txt 2>&1
-```
+**Nemaju svoj cron.** Nastaju kad na stranici tečaja pritisneš *Pošalji
+potvrdnice* — tko naruči slanje, time ih i naruči. Prave se samo one kojih
+nema, pa drugo pritiskanje ne radi ništa.
+
+Zbog toga se **ispravak imena u tablici sam vidi**. Naziv PDF-a nastaje iz
+imena, pa za ispravljeno ime potvrdnice nema: nastane nova, a stara se makne
+u podmapu `Stare` i ta osoba potvrdnicu dobije ponovno, iako joj je prva već
+bila poslana. Stara se ne briše, samo skloni - da ne ode u tiskaru, jer
+narudžba potvrdnica uzima sve PDF-ove iz mape.
+
+Dok su se radile same u 10:00, ispravak imena nije mijenjao ništa: skripta
+je pamtila da je tečaj odrađen, pa je potvrdnica s krivim imenom ostajala i
+nitko to nije imao gdje primijetiti.
+
+Rade se tek **nakon zadnjeg dana tečaja** (`certificate_days_after`, zadano
+1 dan). Prije toga stranica to i kaže, umjesto da ponudi tipku.
 
 ### Novi tečaj, nova potvrdnica
 

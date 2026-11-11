@@ -73,12 +73,14 @@
   {% if radi %}
   <p class="traka radi">Posao je u tijeku. Stranica se osvježava sama.</p>
 
-  {% elif not napravljeni %}
-  <p class="tiho">Potvrdnice još nisu napravljene — nastaju same dan nakon
-    tečaja, pa ih tek onda ima što slati.</p>
+  {% elif tecaj.stanje != 'prosao' %}
+  <p class="tiho">Potvrdnice nastaju kad ih pošalješ, a tek nakon zadnjeg
+    dana tečaja. Dotad ovdje nema što raditi.</p>
 
   {% elif not cekaju %}
-  <p class="tiho">Svi polaznici s adresom su dobili svoju potvrdnicu.</p>
+  <p class="tiho">Svi polaznici s adresom su dobili svoju potvrdnicu.
+    Pritisni ispod ako si u međuvremenu ispravio ime u tablici — za novo ime
+    potvrdnice nema, pa nastane nova i ta osoba je dobije ponovno.</p>
   <form method="post" action="{{ url_for('pregled_slanja', oznaka=tecaj.oznaka) }}">
     <input type="hidden" name="token" value="{{ token }}">
     <button class="tipka tiha" type="submit">Provjeri ponovno</button>
@@ -87,6 +89,8 @@
   {% else %}
   <p>Potvrdnicu još nije dobilo <strong>{{ cekaju|length }}</strong>
     {{ 'polaznik' if cekaju|length == 1 else 'polaznika' }}.</p>
+  <p class="tiho">Potvrdnice se izrađuju pri slanju — pregled pokazuje koje
+    će nastati, bez pisanja.</p>
   <div class="tipke">
     <form method="post" action="{{ url_for('pregled_slanja', oznaka=tecaj.oznaka) }}">
       <input type="hidden" name="token" value="{{ token }}">

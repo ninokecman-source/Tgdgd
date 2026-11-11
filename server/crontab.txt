@@ -20,8 +20,11 @@ SHELL=/bin/bash
 # Tablica centrali, dan nakon tecaja
 30 9 * * * $HOME/Tgdgd/server/pokreni.sh posalji_tablicu.py >> $HOME/Tgdgd/log.txt 2>&1
 
-# Potvrdnice, dan nakon tecaja
-0 10 * * * $HOME/Tgdgd/server/pokreni.sh napravi_certifikate.py >> $HOME/Tgdgd/log.txt 2>&1
+# Potvrdnice NEMAJU svoj cron. Nastaju kad na stranici tecaja pritisnes
+# "Posalji potvrdnice" - tko naruci slanje, time ih i naruci. Tako se
+# ispravak imena u tablici odmah vidi: za novo ime potvrdnice nema, pa
+# nastane nova. Dok su se radile same u 10:00, ostajala je stara s krivim
+# imenom i nitko to nije imao gdje primijetiti.
 
 # Provjera logova - svaka 3 dana
 0 9 */3 * * $HOME/Tgdgd/server/pokreni.sh provjeri_logove.py >> $HOME/Tgdgd/log.txt 2>&1

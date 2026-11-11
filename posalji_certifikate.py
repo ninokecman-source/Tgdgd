@@ -25,6 +25,7 @@ import argparse
 import json
 import mimetypes
 import sys
+from datetime import date
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -34,7 +35,11 @@ import posta
 import predlosci
 from predlosci import broj_rijecima
 import tablice
-from napravi_certifikate import ime_datoteke, nadji_mapu
+from napravi_certifikate import (
+    ime_datoteke,
+    nadji_chrome,
+    osiguraj,
+)
 from send_reminders import (
     FIRST_PARTICIPANT_ROW,
     course_info,
@@ -152,12 +157,23 @@ def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool,
     if kraj is None:
         return 0
 
-    mapa = nadji_mapu(xlsx_path, info, kraj)
-    if mapa is None:
-        return 0   # za ovaj tečaj potvrdnice još nisu napravljene
-
     polaznici = citaj_polaznike(ws, find_totals_row(ws))
     vec_poslano = {a.lower() for a in state.get(xlsx_path.name, {}).get("poslano", [])}
+
+    # Potvrdnice nastaju ovdje, a ne same od sebe u cronu: tko klikne
+    # slanje, time ih i naruči. Prave se samo one kojih nema - ispravi li se
+    # ime u tablici, za novo ime potvrdnice nema, pa nastane nova i polaznik
+    # je ponovno dobije, iako mu je stara već bila poslana.
+    print(f"\n{info['course_code']} / {info['location']} ({info['dates']})")
+    mapa, nastali = osiguraj(xlsx_path, config, date.today(),
+                             "" if not posalji else nadji_chrome(config),
+                             pregled=not posalji)
+    if mapa is None:
+        return 0
+    if nastali and not posalji:
+        print(f"  napravit će se: {', '.join(nastali)}")
+    obnovljeni = {p["email"].strip().lower() for p in polaznici
+                  if p["ime"] in nastali and p["email"]}
 
     if zadani_tekst:
         naslov_pred, tijelo_pred, izvor = zadani_tekst
@@ -167,19 +183,20 @@ def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool,
             kljuc_naslov="certificate_mail_subject", kljuc_tijela="certificate_mail_body",
             zadani_naslov=ZADANI_NASLOV, zadano_tijelo=ZADANI_TEKST)
 
-    print(f"\n{info['course_code']} / {info['location']} ({info['dates']})")
     print(f"  mapa:  {mapa}")
     print(f"  tekst: {izvor}")
 
     cekaju, problemi = [], []
     for p in polaznici:
         pdf = mapa / f"{ime_datoteke(p['ime'])}.pdf"
-        if not pdf.exists():
+        # U pregledu potvrdnice još nisu napisane, ali znamo koje će nastati
+        # pri slanju - takva nije problem nego redovan slučaj.
+        if not pdf.exists() and p["ime"] not in nastali:
             problemi.append(f"{p['ime']}: nema potvrdnice ({pdf.name})")
         elif "@" not in p["email"]:
             problemi.append(f"{p['ime']}: nema email adrese u tablici")
-        elif p["email"].lower() in vec_poslano:
-            pass   # već dobio
+        elif p["email"].lower() in vec_poslano and p["email"].lower() not in obnovljeni:
+            pass   # već dobio, a potvrdnica mu se u međuvremenu nije mijenjala
         else:
             cekaju.append((p, pdf))
 

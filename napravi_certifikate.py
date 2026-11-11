@@ -242,6 +242,113 @@ def save_state(state: dict) -> None:
         json.dump(state, f, ensure_ascii=False, indent=2, sort_keys=True)
 
 
+def osiguraj(xlsx_path: Path, config: dict, danas: date, chrome: str,
+             pregled: bool = False, ponovno: bool = False) -> tuple:
+    """Pobrini se da svaki polaznik iz tablice ima potvrdnicu.
+
+    Vraća (mapa, [imena koja su nastala]) ili (None, []) kad se ne može -
+    tečaj još traje, nema predloška, nema polaznika. Razlog se ispiše.
+
+    Nedostaje ona čijeg PDF-a nema. Naziv PDF-a nastaje iz imena, pa se
+    ispravak imena u tablici ovdje sam vidi: stare potvrdnice za novo ime
+    nema, nova nastane, a stara se makne u podmapu 'Stare'. Da ostane gdje
+    je bila, otišla bi u tiskaru uz ostale - narudžba potvrdnice uzima sve
+    PDF-ove iz mape.
+
+    S `pregled=True` se ništa ne piše, samo se vrati što bi nastalo.
+    S `ponovno=True` se prave sve, i one koje postoje."""
+    wb = with_retry(lambda: load_workbook(xlsx_path), retry_on=(PermissionError, OSError))
+    if "podaci" not in wb.sheetnames:
+        return None, []
+    ws = wb["podaci"]
+
+    info = course_info(ws, config)
+    _, kraj = parse_course_dates(info["dates"])
+    if kraj is None:
+        print(f"  [!] ne mogu pročitati datum tečaja ({info['dates']!r})")
+        return None, []
+
+    proslo = (danas - kraj).days
+    treba = config.get("certificate_days_after", 1)
+    if proslo < treba:
+        print(f"  [!] tečaj još nije završio (ili je prerano) - potvrdnice "
+              f"se rade {treba} dan nakon zadnjeg dana.")
+        return None, []
+
+    odabir, razlog = predlozak_za(info["course_code"], info_mapa(xlsx_path), config)
+    if odabir is None:
+        if razlog:
+            print(f"  [!] {razlog}")
+        return None, []
+    predlozak_put, modul = odabir
+
+    polaznici = citaj_polaznike(ws, find_totals_row(ws))
+    if not polaznici:
+        print("  [!] u tablici nema nijednog polaznika")
+        return None, []
+
+    cilj = xlsx_path.parent / "Certifikati" / ime_mape(info, kraj)
+    trebaju = {ime: cilj / f"{ime_datoteke(ime)}.pdf" for ime in polaznici}
+    nedostaju = [ime for ime, put in trebaju.items()
+                 if ponovno or not put.exists()]
+
+    if pregled:
+        return cilj, nedostaju
+
+    if nedostaju:
+        prava.mapa(cilj)
+        predlozak = predlozak_put.read_text(encoding="utf-8")
+        datum = {"@@DAN@@": nastavak_dana(kraj.day),
+                 "@@MJESEC@@": MJESECI[kraj.month - 1],
+                 "@@GODINA@@": str(kraj.year)}
+        dodatno = config.get("chrome_args", [])
+        nastali = []
+        for ime in nedostaju:
+            html = predlozak.replace("@@IME@@", ime)
+            for kljuc, vrijednost in datum.items():
+                html = html.replace(kljuc, vrijednost)
+            if modul:
+                html = html.replace("@@MODUL@@", modul)
+            try:
+                iscrtaj(chrome, html, trebaju[ime], dodatno)
+            except Exception as e:
+                print(f"    [!] {ime}: {e}")
+                continue
+            nastali.append(ime)
+            print(f"    napravljena: {trebaju[ime].name}")
+    else:
+        nastali = []
+
+    skloni_stare(cilj, set(trebaju.values()))
+    return cilj, nastali
+
+
+def skloni_stare(cilj: Path, trebaju: set) -> None:
+    """PDF koji ne pripada nijednom polazniku makni u podmapu 'Stare'.
+
+    Nastaje kad se ime u tablici ispravi: potvrdnica pod starim imenom
+    ostane ležati, a narudžba za tiskaru uzima sve PDF-ove iz mape, pa bi
+    se printala i ona. Ne briše se - samo se skloni, da se može vratiti."""
+    if not cilj.is_dir():
+        return
+    visak = [p for p in cilj.glob("*.pdf") if p not in trebaju]
+    if not visak:
+        return
+    stare = prava.mapa(cilj / "Stare")
+    for put in visak:
+        meta = stare / put.name
+        if meta.exists():
+            meta.unlink()
+        put.replace(meta)
+        print(f"    sklonjena u Stare: {put.name} (ne odgovara nijednom "
+              f"polazniku - ime je vjerojatno ispravljeno)")
+
+
+def info_mapa(xlsx_path: Path) -> Path:
+    """Mapa u kojoj stoje tablice i predlošci potvrdnica."""
+    return xlsx_path.parent
+
+
 def obradi(xlsx_path: Path, config: dict, state: dict, danas: date,
            chrome: str, dry_run: bool, ponovno: bool) -> int:
     """Vrati broj napravljenih (ili, u pregledu, predviđenih) potvrdnica."""
