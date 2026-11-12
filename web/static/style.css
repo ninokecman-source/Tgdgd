@@ -444,6 +444,18 @@ code {
 .tipka.opasna { background: var(--danger); border-color: var(--danger); color: var(--neutral-0); }
 .tipka.mala { font-size: 13px; padding: 8px 14px; }
 
+/* Red na vrhu tecaja: koliko su podaci stari i tipka koja ih osvjezi.
+   Na mobitelu se lomi u dva reda, pa tipka ne stisce datum. */
+.osvjezi {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.osvjezi form { margin: 0; }
+
 .tipke.uz-ime {
   flex-direction: column;
   flex-shrink: 0;
