@@ -1,13 +1,13 @@
 {% extends "osnova.html" %}
-{% block naslov %}Slanje potvrdnica{% endblock %}
+{% block naslov %}{{ 'Potvrdnica' if samo else 'Slanje potvrdnica' }}{% endblock %}
 {% block sadrzaj %}
 
-<h1>Pošalji potvrdnice</h1>
+<h1>{% if samo %}Pošalji potvrdnicu{% else %}Pošalji potvrdnice{% endif %}</h1>
 <p class="tiho">{{ tecaj.kod }} · {{ tecaj.mjesto }} · {{ tecaj.datumi }}</p>
 
-{% if not napravljeni %}
-<p class="traka lose">Potvrdnice za ovaj tečaj još nisu napravljene, pa nema
-  što poslati.</p>
+{% if samo and not samo.email %}
+<p class="traka lose">{{ samo.ime }} nema adresu u tablici, pa nema kamo
+  poslati.</p>
 <p><a href="{{ url_for('tecaj', oznaka=tecaj.oznaka) }}">← natrag</a></p>
 
 {% elif not cekaju %}
@@ -15,17 +15,23 @@
 <p><a href="{{ url_for('tecaj', oznaka=tecaj.oznaka) }}">← natrag</a></p>
 
 {% else %}
+{% if samo %}
+<p><strong>{{ samo.ime }}</strong> dobiva mail sa svojom potvrdnicom u
+  prilogu. Ako potvrdnice još nema, nastaje pri slanju; ako je već jednom
+  poslana, poslat će se opet — ova tipka ne preskače nikoga.</p>
+{% else %}
 <p>Svatko s popisa dobiva mail sa <strong>svojom</strong> potvrdnicom u
   prilogu. Tebi na kraju stiže jedan izvještaj o tome kako je prošlo.</p>
+{% endif %}
 
 {% for p in cekaju %}
 <div class="redak">
-  <div class="redak-ime">{{ loop.index }}. {{ p.ime }}</div>
+  <div class="redak-ime">{% if not samo %}{{ loop.index }}. {% endif %}{{ p.ime }}</div>
   <div class="redak-detalj tiho">{{ p.email }}</div>
 </div>
 {% endfor %}
 
-{% set bez_adrese = tecaj.polaznici | rejectattr('email') | list %}
+{% set bez_adrese = [] if samo else tecaj.polaznici | rejectattr('email') | list %}
 {% if bez_adrese %}
 <p class="traka pazi">{{ bez_adrese|length }}
   {{ 'polaznik nema' if bez_adrese|length == 1 else 'polaznika nema' }}
@@ -55,7 +61,7 @@
     <code>{instructor_name}</code> <code>{link_termini}</code>.</p>
 
   <details class="pregled" open>
-    <summary>Ovako će izgledati prvom polazniku
+    <summary>Ovako će izgledati{% if not samo %} prvom polazniku{% endif %}
       ({{ cekaju[0].ime }})</summary>
     <div class="pregled-naslov" id="pregled-naslov"></div>
     <pre id="pregled-tijelo"></pre>
@@ -67,14 +73,18 @@
 
   <div class="tipke">
     <button class="tipka glavna" type="submit">
-      Pošalji {{ cekaju|length }}
-      {{ 'potvrdnicu' if cekaju|length == 1 else 'potvrdnica' }}</button>
+      {%- if samo %}Pošalji {{ samo.ime }}
+      {%- else %}Pošalji {{ cekaju|length|mnozina('potvrdnicu', 'potvrdnice', 'potvrdnica') }}
+      {%- endif %}</button>
     <a class="tipka tiha" href="{{ url_for('tecaj', oznaka=tecaj.oznaka) }}">Odustani</a>
   </div>
 </form>
 
+{% if not samo %}
 <p class="tiho">Tko je jednom dobio potvrdnicu, neće je dobiti dvaput — i da
-  ovo pokreneš ponovno.</p>
+  ovo pokreneš ponovno. Jednom čovjeku se šalje ponovno tipkom uz njegovo
+  ime, na stranici tečaja.</p>
+{% endif %}
 
 <script>
 // Pregled poruke s popunjenim oznakama. Čista pomoć pri čitanju - slanje

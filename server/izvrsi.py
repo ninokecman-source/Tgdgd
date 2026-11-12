@@ -109,6 +109,23 @@ def _certifikati(posalji: bool):
     return sastavi
 
 
+def _napravi_certifikate(zahtjev, tablica, mapa):
+    """Izradi potvrdnice koje nedostaju, bez slanja ijednog maila."""
+    return ["posalji_certifikate.py", "--tecaj", tablica, "--napravi"]
+
+
+def _certifikat_jednom(zahtjev, tablica, mapa):
+    """Potvrdnica jednom polazniku, i ako ju je već dobio - tipka uz njegovo
+    ime je izričit nalog, nije dio slanja cijelom tečaju."""
+    naredba = ["posalji_certifikate.py", "--tecaj", tablica, "--posalji",
+               "--samo", provjeri_adresu(zahtjev)]
+    if zahtjev.get("naslov") or zahtjev.get("tijelo"):
+        naslov_put, tijelo_put = zapisi_tekst(mapa, zahtjev)
+        naredba += ["--naslov-datoteka", naslov_put,
+                    "--tijelo-datoteka", tijelo_put]
+    return naredba
+
+
 def _podsjetnik(zahtjev, tablica, mapa):
     adresa = provjeri_adresu(zahtjev)
     naslov_put, tijelo_put = zapisi_tekst(mapa, zahtjev)
@@ -209,6 +226,8 @@ def _otkazi(zahtjev, tablica, mapa):
 POSLOVI = {
     "pregled_certifikata": _certifikati(posalji=False),
     "posalji_certifikate": _certifikati(posalji=True),
+    "napravi_certifikate": _napravi_certifikate,
+    "posalji_certifikat": _certifikat_jednom,
     "podsjetnik_uplata": _podsjetnik,
     "otkazi_polaznika": _otkazi,
     "rijesi_uplatu": _rijesi_uplatu,

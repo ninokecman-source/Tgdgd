@@ -320,6 +320,28 @@ def osiguraj(xlsx_path: Path, config: dict, danas: date, chrome: str,
         nastali = []
 
     skloni_stare(cilj, set(trebaju.values()))
+
+    # Zapiši što u mapi stoji. Po tome stranica zna da potvrdnice postoje i
+    # da ih se smije slati, a nadji_mapu po zapisanom putu nađe mapu kad se
+    # kod tečaja u C4 ispravi. Dok su potvrdnice nastajale u cronu, ovo je
+    # pisao obradi() niže; otkad nastaju pri slanju, taj posao više ne
+    # prolazi, pa bi zapis zauvijek ostao prazan i prvo slanje bi se odbilo
+    # riječima da potvrdnice nisu napravljene.
+    imaju = sorted(ime for ime, put in trebaju.items() if put.exists())
+    if imaju:
+        state = load_state()
+        prije = state.get(xlsx_path.name) or {}
+        state[xlsx_path.name] = {
+            # datum ostaje onaj kad je zadnja potvrdnica stvarno nastala
+            "napravljeno": (danas.isoformat() if nastali or not prije.get("napravljeno")
+                            else prije["napravljeno"]),
+            "tecaj": f"{info['course_code']} / {info['location']}",
+            "datumi": info["dates"],
+            "mapa": str(cilj),
+            "polaznici": imaju,
+        }
+        save_state(state)
+
     return cilj, nastali
 
 

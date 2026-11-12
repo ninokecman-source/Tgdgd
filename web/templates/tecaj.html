@@ -79,22 +79,36 @@
 
   {% elif not cekaju %}
   <p class="tiho">Svi polaznici s adresom su dobili svoju potvrdnicu.
-    Pritisni ispod ako si u međuvremenu ispravio ime u tablici — za novo ime
-    potvrdnice nema, pa nastane nova i ta osoba je dobije ponovno.</p>
-  <form method="post" action="{{ url_for('pregled_slanja', oznaka=tecaj.oznaka) }}">
-    <input type="hidden" name="token" value="{{ token }}">
-    <button class="tipka tiha" type="submit">Provjeri ponovno</button>
-  </form>
+    Jesi li u međuvremenu ispravio ime u tablici, pritisni
+    <strong>Napravi potvrdnice</strong> — za novo ime potvrdnice nema, pa
+    nastane nova, a stara ode u podmapu <code>Stare</code>. Poslati je
+    možeš tipkom uz ime polaznika.</p>
+  <div class="tipke">
+    <form method="post" action="{{ url_for('napravi_potvrdnice', oznaka=tecaj.oznaka) }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="tipka tiha" type="submit">Napravi potvrdnice</button>
+    </form>
+    <form method="post" action="{{ url_for('pregled_slanja', oznaka=tecaj.oznaka) }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="tipka tiha" type="submit">Provjeri ponovno</button>
+    </form>
+  </div>
 
   {% else %}
   <p>Potvrdnicu još nije dobilo <strong>{{ cekaju|length }}</strong>
     {{ 'polaznik' if cekaju|length == 1 else 'polaznika' }}.</p>
-  <p class="tiho">Potvrdnice se izrađuju pri slanju — pregled pokazuje koje
-    će nastati, bez pisanja.</p>
+  <p class="tiho"><strong>Napravi potvrdnice</strong> ih samo izradi i stavi
+    u Dropbox, bez ijednog maila. <strong>Pošalji potvrdnice</strong> izradi
+    one kojih nema pa ih i pošalje. Pregled ne piše ništa, samo kaže što bi
+    nastalo.</p>
   <div class="tipke">
     <form method="post" action="{{ url_for('pregled_slanja', oznaka=tecaj.oznaka) }}">
       <input type="hidden" name="token" value="{{ token }}">
       <button class="tipka tiha" type="submit">Pregled, bez slanja</button>
+    </form>
+    <form method="post" action="{{ url_for('napravi_potvrdnice', oznaka=tecaj.oznaka) }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="tipka tiha" type="submit">Napravi potvrdnice</button>
     </form>
     <a class="tipka glavna" href="{{ url_for('posalji', oznaka=tecaj.oznaka) }}">
       Pošalji potvrdnice</a>
@@ -126,6 +140,8 @@
     <div class="tiho">
       {{ {'pregled_certifikata': 'Pregled potvrdnica',
           'posalji_certifikate': 'Slanje potvrdnica',
+          'napravi_certifikate': 'Izrada potvrdnica',
+          'posalji_certifikat': 'Potvrdnica jednom polazniku',
           'posalji_poziv': 'Poziv na tečaj',
           'podsjetnik_uplata': 'Podsjetnik',
           'popis_polaznika': 'Popis polaznika',
@@ -176,6 +192,12 @@
         {% if p.manjka > 0 and p.email %}
         <a class="tipka mala" href="{{ url_for('podsjetnik', oznaka=tecaj.oznaka,
            broj=loop.index0) }}">Podsjetnik</a>
+        {% endif %}
+        {# Jednom covjeku, i ako je vec dobio - za slucaj da javi da mu mail
+           nije stigao, ili da mu je ime bilo krivo pa ima novu potvrdnicu. #}
+        {% if tecaj.stanje == 'prosao' and p.email %}
+        <a class="tipka mala" href="{{ url_for('potvrdnica', oznaka=tecaj.oznaka,
+           broj=loop.index0) }}">Potvrdnica</a>
         {% endif %}
         {# tipka samo onome tko jos nije ondje - klik na ostale bi se ionako
            vratio s 'vec je na popisu tog tecaja' #}

@@ -141,9 +141,29 @@ def tekst_iz_datoteka(naslov_put: str, tijelo_put: str):
             "tekst zadan sa stranice")
 
 
+def ima_adresu(xlsx_path: Path, adresa: str) -> bool:
+    """Je li ta adresa među polaznicima te tablice."""
+    try:
+        wb = with_retry(lambda: load_workbook(xlsx_path),
+                        retry_on=(PermissionError, OSError))
+    except Exception:
+        return False
+    if "podaci" not in wb.sheetnames:
+        return False
+    ws = wb["podaci"]
+    return any(p["email"].strip().lower() == adresa
+               for p in citaj_polaznike(ws, find_totals_row(ws)))
+
+
 def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool,
-           zadani_tekst=None) -> int:
+           zadani_tekst=None, napravi: bool = False, samo: str = "") -> int:
     """Vrati broj poslanih (ili, u pregledu, spremnih) potvrdnica.
+
+    `napravi` samo izradi potvrdnice i stane - ni mail ni popis primatelja.
+    `samo` je adresa jednog polaznika: tada se šalje njemu i samo njemu, i to
+    i ako je potvrdnicu već dobio. Tipka uz njegovo ime je izričit nalog -
+    netko javi da mu mail nije stigao - pa se ne preskače kao kod slanja
+    cijelom tečaju.
 
     Na kraju stvarnog slanja javi tebi jednom porukom kako je prošlo -
     prije je u Bcc išla kopija svake potvrdnice posebno."""
@@ -160,16 +180,37 @@ def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool,
     polaznici = citaj_polaznike(ws, find_totals_row(ws))
     vec_poslano = {a.lower() for a in state.get(xlsx_path.name, {}).get("poslano", [])}
 
-    # Potvrdnice nastaju ovdje, a ne same od sebe u cronu: tko klikne
-    # slanje, time ih i naruči. Prave se samo one kojih nema - ispravi li se
-    # ime u tablici, za novo ime potvrdnice nema, pa nastane nova i polaznik
-    # je ponovno dobije, iako mu je stara već bila poslana.
+    if samo:
+        trazena = samo.strip().lower()
+        polaznici = [p for p in polaznici if p["email"].strip().lower() == trazena]
+        if not polaznici:
+            return 0   # nije ovaj tečaj; tablica se bira po dijelu naziva
+
+    # Potvrdnice nastaju ovdje, a ne same od sebe u cronu: traže se tipkom,
+    # bilo "Napravi potvrdnice" bilo "Pošalji potvrdnice". Prave se samo one
+    # kojih nema - ispravi li se ime u tablici, za novo ime potvrdnice nema,
+    # pa nastane nova i polaznik je pri slanju dobije ponovno, iako mu je
+    # stara već bila poslana.
     print(f"\n{info['course_code']} / {info['location']} ({info['dates']})")
+    pise = posalji or napravi
     mapa, nastali = osiguraj(xlsx_path, config, date.today(),
-                             "" if not posalji else nadji_chrome(config),
-                             pregled=not posalji)
+                             nadji_chrome(config) if pise else "",
+                             pregled=not pise)
     if mapa is None:
         return 0
+
+    # "Napravi potvrdnice" staje ovdje: PDF-ovi su na disku, stare pod
+    # ispravljenim imenom sklonjene, a nikome ništa nije otišlo. Prije teksta
+    # maila namjerno - za izradu potvrdnica predložak poruke ne treba, pa
+    # njegova greška ne smije zaustaviti izradu.
+    if napravi:
+        print(f"  mapa:  {mapa}")
+        if nastali:
+            print(f"  napravljeno ({len(nastali)}): {', '.join(nastali)}")
+        else:
+            print("  sve potvrdnice već postoje - nije trebalo ništa raditi")
+        return len(nastali)
+
     if nastali and not posalji:
         print(f"  napravit će se: {', '.join(nastali)}")
     obnovljeni = {p["email"].strip().lower() for p in polaznici
@@ -195,7 +236,8 @@ def obradi(xlsx_path: Path, config: dict, state: dict, posalji: bool,
             problemi.append(f"{p['ime']}: nema potvrdnice ({pdf.name})")
         elif "@" not in p["email"]:
             problemi.append(f"{p['ime']}: nema email adrese u tablici")
-        elif p["email"].lower() in vec_poslano and p["email"].lower() not in obnovljeni:
+        elif (not samo and p["email"].lower() in vec_poslano
+                and p["email"].lower() not in obnovljeni):
             pass   # već dobio, a potvrdnica mu se u međuvremenu nije mijenjala
         else:
             cekaju.append((p, pdf))
@@ -265,6 +307,10 @@ def main():
         description="Pošalje polaznicima njihove potvrdnice (na tvoju naredbu).")
     parser.add_argument("--posalji", action="store_true",
                         help="Stvarno pošalji; bez ovoga se samo prikaže popis")
+    parser.add_argument("--napravi", action="store_true",
+                        help="Samo izradi potvrdnice koje nedostaju, ne šalji ništa")
+    parser.add_argument("--samo", metavar="ADRESA",
+                        help="Pošalji samo ovom polazniku, i ako je već dobio")
     parser.add_argument("--tecaj", metavar="DIO NAZIVA",
                         help="Samo tečajevi čiji naziv tablice sadrži ovaj tekst")
     parser.add_argument("--naslov-datoteka", dest="naslov_datoteka",
@@ -275,6 +321,12 @@ def main():
 
     if bool(args.naslov_datoteka) != bool(args.tijelo_datoteka):
         sys.exit("--naslov-datoteka i --tijelo-datoteka idu zajedno.")
+    if args.napravi and args.posalji:
+        sys.exit("--napravi i --posalji se isključuju: slanje ionako izradi "
+                 "potvrdnice koje nedostaju.")
+    if args.napravi and args.samo:
+        sys.exit("--samo je za slanje jednom polazniku; potvrdnice se izrađuju "
+                 "za cijeli tečaj odjednom.")
     zadani_tekst = (tekst_iz_datoteka(args.naslov_datoteka, args.tijelo_datoteka)
                     if args.naslov_datoteka else None)
 
@@ -290,16 +342,34 @@ def main():
         if not datoteke:
             sys.exit(f"Nijedna tablica u nazivu nema {args.tecaj!r}.")
 
+    # Tablice koje tu adresu uopće sadrže. Bez ovoga bi slanje jednom
+    # polazniku, kad adrese nema u tablici, tiho završilo bez ijednog retka -
+    # a tipka je pritisnuta i čovjek čeka da nešto piše.
+    if args.samo:
+        trazena = args.samo.strip().lower()
+        imaju = [put for put in datoteke if ima_adresu(put, trazena)]
+        if not imaju:
+            sys.exit(f"Adrese {args.samo} nema među polaznicima "
+                     + (f"tablice {datoteke[0].name}." if len(datoteke) == 1
+                        else f"nijedne od {len(datoteke)} tablica."))
+        datoteke = imaju
+
     state = load_state()
     ukupno = 0
     for put in datoteke:
         try:
-            ukupno += obradi(put, config, state, args.posalji, zadani_tekst)
+            ukupno += obradi(put, config, state, args.posalji, zadani_tekst,
+                             napravi=args.napravi, samo=args.samo or "")
         except predlosci.GreskaPredloska as e:
             print(f"[!] {put.name}: {e}")
 
     print()
-    if args.posalji:
+    if args.napravi and ukupno:
+        print("Gotovo. Napravljeno "
+              + broj_rijecima(ukupno, "potvrdnica", "potvrdnice", "potvrdnica") + ".")
+    elif args.napravi:
+        print("Sve potvrdnice već postoje - ništa nije trebalo napraviti.")
+    elif args.posalji:
         print("Gotovo. Poslano "
               + broj_rijecima(ukupno, "potvrdnica", "potvrdnice", "potvrdnica") + ".")
     elif ukupno:

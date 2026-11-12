@@ -597,12 +597,67 @@ def posalji(oznaka):
         greska = str(e)
 
     return render_template("posalji.html", podaci=podaci, tecaj=tecaj,
-                           cekaju=cekaju, naslov=naslov, tijelo=tijelo,
+                           cekaju=cekaju, samo=None,
+                           naslov=naslov, tijelo=tijelo,
                            izvor=izvor, greska=greska,
-                           primjer=primjer_varijabli(tecaj, cekaju),
-                           napravljeni=podaci.get("slanja", {})
-                           .get("certifikati_napravljeni", {})
-                           .get(tecaj["datoteka"]))
+                           primjer=primjer_varijabli(tecaj, cekaju))
+
+
+@app.route("/tecaj/<oznaka>/napravi", methods=["POST"])
+@treba_prijava
+def napravi_potvrdnice(oznaka):
+    """Izradi potvrdnice, bez slanja. Nikome ništa ne odlazi, pa tipka ne
+    treba zasebnu potvrdu kao slanje.
+
+    Napravi se ona koje nema. Naziv PDF-a nastaje iz imena, pa ispravak
+    imena u tablici ovuda dođe do potvrdnice: za novo ime potvrdnice nema,
+    nova nastane, a stara se makne u podmapu 'Stare'."""
+    _, tecaj = nadji_tecaj(oznaka)
+    if not token_valja():
+        abort(400)
+    if not ceka_zahtjev(tecaj["datoteka"]):
+        zatrazi("napravi_certifikate", tecaj["datoteka"])
+    return redirect(url_for("tecaj", oznaka=oznaka))
+
+
+@app.route("/tecaj/<oznaka>/polaznik/<int:broj>/potvrdnica",
+           methods=["GET", "POST"])
+@treba_prijava
+def potvrdnica(oznaka, broj):
+    """Potvrdnica jednom polazniku. Ide preko iste potvrde kao slanje cijelom
+    tečaju - i ovo je mail koji odlazi van, pa se prije toga vidi kome i s
+    kojim tekstom.
+
+    Za razliku od slanja cijelom tečaju, ovo šalje i onome tko je potvrdnicu
+    već dobio: tipka uz ime se pritišće kad netko javi da mu mail nije
+    stigao."""
+    podaci, tecaj = nadji_tecaj(oznaka)
+    polaznik = nadji_polaznika(tecaj, broj)
+
+    if request.method == "POST":
+        if not token_valja():
+            abort(400)
+        naslov = request.form.get("naslov", "").strip()
+        tijelo = request.form.get("tijelo", "").strip()
+        if (polaznik["email"] and naslov and tijelo
+                and not ceka_zahtjev(tecaj["datoteka"])):
+            zatrazi("posalji_certifikat", tecaj["datoteka"],
+                    email=polaznik["email"], ime=polaznik["ime"],
+                    naslov=naslov, tijelo=tijelo)
+        return redirect(url_for("tecaj", oznaka=oznaka))
+
+    naslov = tijelo = izvor = ""
+    greska = ""
+    try:
+        naslov, tijelo, izvor = zadani_certifikat()
+    except Exception as e:
+        greska = str(e)
+
+    return render_template("posalji.html", podaci=podaci, tecaj=tecaj,
+                           cekaju=[polaznik], samo=polaznik,
+                           naslov=naslov, tijelo=tijelo,
+                           izvor=izvor, greska=greska,
+                           primjer=primjer_varijabli(tecaj, [polaznik]))
 
 
 @app.route("/tecaj/<oznaka>/pregled", methods=["POST"])
