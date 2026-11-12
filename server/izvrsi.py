@@ -192,15 +192,6 @@ def _potvrdi_greske(zahtjev, tablica, mapa):
     return ["potvrdi_greske.py"]
 
 
-def _osvjezi(zahtjev, tablica, mapa):
-    """Povuci svjeze tablice iz Dropboxa i napravi novu snimku za web.
-
-    Tablica se ne koristi u naredbi - snimka je jedna za sve tecajeve - ali
-    se i dalje trazi, da se posao vidi uz tecaj s kojeg je zatrazen i da
-    stranica zna da nesto radi."""
-    return ["web/skupi.py"]
-
-
 def _otkazi(zahtjev, tablica, mapa):
     naredba = ["otkazi_polaznika.py", "--tablica", tablica]
     if zahtjev.get("email"):
@@ -228,7 +219,6 @@ POSLOVI = {
     "nastavlja_dalje": _nastavlja,
     "posalji_na_print": _na_print,
     "potvrdi_greske": _potvrdi_greske,
-    "osvjezi": _osvjezi,
 }
 
 # Poslovi koji se ne tiču nijedne tablice. Svi ostali moraju imenovati
@@ -346,11 +336,9 @@ def odradi(put: Path) -> None:
                    ispis=ispis[-ISPIS_ZNAKOVA:].strip()))
 
     # nakon slanja je snimka zastarjela - osvježi je da stranica odmah
-    # pokaže novo stanje. Osim kad je posao upravo to bio: drugi prolaz
-    # ne bi donio ništa, a svaki za sobom vuče i sinkronizaciju.
-    if posao != "osvjezi":
-        subprocess.run([str(POKRENI), "web/skupi.py"],
-                       capture_output=True, text=True, timeout=1800)
+    # pokaže novo stanje
+    subprocess.run([str(POKRENI), "web/skupi.py"],
+                   capture_output=True, text=True, timeout=1800)
 
 
 def main():

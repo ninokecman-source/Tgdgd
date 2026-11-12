@@ -655,25 +655,6 @@ def na_print(oznaka):
     return redirect(url_for("tecaj", oznaka=oznaka))
 
 
-@app.route("/tecaj/<oznaka>/osvjezi", methods=["POST"])
-@treba_prijava
-def osvjezi(oznaka):
-    """Povuci svježe tablice iz Dropboxa i napravi novu snimku.
-
-    Stranica inače čita snimku koja nastaje svakih 20 minuta, pa ispravak u
-    tablici - tuđe ime, nova uplata - do nje dođe tek s tim otkucajem. Ovo je
-    isti posao, samo kad ti zatreba.
-
-    Snimka je jedna za sve tečajeve, pa ovo osvježi sve; tablica ide u
-    zahtjev samo da se posao vidi na stranici s koje je zatražen."""
-    _, tecaj = nadji_tecaj(oznaka)
-    if not token_valja():
-        abort(400)
-    if not ceka_zahtjev(tecaj["datoteka"]):
-        zatrazi("osvjezi", tecaj["datoteka"])
-    return redirect(url_for("tecaj", oznaka=oznaka))
-
-
 @app.route("/tecaj/<oznaka>/popis", methods=["POST"])
 @treba_prijava
 def popis_polaznika(oznaka):

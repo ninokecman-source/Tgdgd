@@ -6,22 +6,6 @@
 <h1>{{ tecaj.kod }} · {{ tecaj.mjesto }}</h1>
 <p class="tiho">{{ tecaj.datumi }} · {{ tecaj.instruktor }} · {{ tecaj.datoteka }}</p>
 
-{# Stranica cita snimku koja nastaje svakih 20 minuta, pa ispravak u tablici
-   do nje dode tek s tim otkucajem. Tipka je tu na vrhu jer se pita prije
-   nego se sto radi: je li ovo sto gledam ono sto u tablici pise. #}
-<div class="osvjezi">
-  <span class="tiho">Podaci iz tablice: {{ podaci.snimljeno|vrijeme }}{%
-    if podaci.starost_min is not none %} ({{ podaci.starost_min }} min){% endif %}</span>
-  {% if radi %}
-  <span class="tiho">Osvježavam…</span>
-  {% else %}
-  <form method="post" action="{{ url_for('osvjezi', oznaka=tecaj.oznaka) }}">
-    <input type="hidden" name="token" value="{{ token }}">
-    <button class="tipka tiha mala" type="submit">Ažuriraj podatke</button>
-  </form>
-  {% endif %}
-</div>
-
 <div class="plocice">
   <div class="plocica"><span class="broj">{{ tecaj.polaznika }}</span><span class="natpis">polaznika</span></div>
   <div class="plocica"><span class="broj">{{ tecaj.uplaceno|eur }}</span><span class="natpis">uplaćeno</span></div>
@@ -148,7 +132,6 @@
           'nastavlja_dalje': 'Nastavlja dalje',
           'posalji_na_print': 'Skripte u tiskaru',
           'izvjesce_fakultetu': 'Izvješće fakultetu',
-          'osvjezi': 'Ažuriranje podataka',
           'otkazi_polaznika': 'Otkazivanje'}
          .get(ishod.posao, ishod.posao) }} ·
       {{ ishod.status }} · {{ (ishod.gotovo or ishod.trazeno)|vrijeme }}
