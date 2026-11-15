@@ -158,29 +158,64 @@ def ime_mape(info: dict, kraj: date) -> str:
     return re.sub(r'[\\/:*?"<>|]', "", naziv).strip()
 
 
-def nadji_mapu(xlsx_path: Path, info: dict, kraj):
-    """Mapa s potvrdnicama tog tečaja, ili None ako je nema.
+def zapisi_mapu(naziv_tablice: str, mapa: Path) -> None:
+    """Upamti gdje potvrdnice tog tečaja stoje sada."""
+    state = load_state()
+    if naziv_tablice in state:
+        state[naziv_tablice]["mapa"] = str(mapa)
+        save_state(state)
 
-    Ime mape nastaje iz koda tečaja, pa se ispravi li se kod u ćeliji C4
+
+def uskladi_mapu(xlsx_path: Path, cilj: Path):
+    """Mapa s potvrdnicama tog tečaja, pod imenom koje odgovara današnjem
+    kodu. Vraća ju, ili None ako potvrdnica nema.
+
+    Ime mape nastaje iz koda tečaja, pa kad se kod u ćeliji C4 ispravi
     (tipfeler, 'modula 6' u 'M6'), izračunato ime više ne pokazuje na mapu u
     kojoj potvrdnice stvarno stoje. Slanje bi tiho vratilo nulu, a narudžba
-    tiskari rekla da potvrdnica nema - kao da nisu napravljene. Zato se, kad
-    izračunate mape nema, gleda put koji je zapisan pri izradi.
+    tiskari rekla da potvrdnica nema - kao da nisu napravljene.
 
-    Koriste ju posalji_certifikate.py i posalji_na_print.py."""
-    mapa = xlsx_path.parent / "Certifikati" / ime_mape(info, kraj)
-    if mapa.is_dir():
-        return mapa
+    Zato se mapa preimenuje, jednom, i time je gotovo. Prije se umjesto toga
+    samo javljalo gdje potvrdnice jesu, pa je svaka iduća narudžba za taj
+    tečaj ponavljala isto upozorenje do kraja vremena - a izrada novih
+    potvrdnica, koja gleda izračunato ime, napravila bi drugu mapu i sve
+    iscrtala po drugi put.
+
+    Koriste ju osiguraj(), posalji_certifikate.py i posalji_na_print.py."""
+    if cilj.is_dir():
+        return cilj
     zapisano = load_state().get(xlsx_path.name, {}).get("mapa", "")
     if not zapisano:
         return None
     stara = Path(zapisano)
     if not stara.is_dir():
         return None
-    print(f"  [!] Mapa {mapa.name!r} ne postoji - potvrdnice su u "
-          f"{stara.name!r}, kako su i napravljene. (Kod tečaja se u "
-          f"međuvremenu promijenio.)")
-    return stara
+
+    if stara.parent != cilj.parent:
+        # Zapisani put vodi izvan mape s potvrdnicama ovog tečaja - mapa je
+        # ručno premještena, ili je zapis nastao na drugom računalu. Tu ne
+        # premještam ništa nego samo kažem gdje potvrdnice jesu.
+        print(f"  [!] Mapa {cilj.name!r} ne postoji - potvrdnice su u "
+              f"{stara}, kako su i napravljene.")
+        return stara
+
+    try:
+        stara.rename(cilj)
+    except OSError as e:
+        print(f"  [!] Mapa {cilj.name!r} ne postoji, a {stara.name!r} ne mogu "
+              f"preimenovati ({e}) - nastavljam s njom.")
+        return stara
+
+    zapisi_mapu(xlsx_path.name, cilj)
+    print(f"  Mapa {stara.name!r} preimenovana u {cilj.name!r} - kod tečaja "
+          f"se u međuvremenu promijenio.")
+    return cilj
+
+
+def nadji_mapu(xlsx_path: Path, info: dict, kraj):
+    """Kao uskladi_mapu, samo što ime mape izračuna sama."""
+    return uskladi_mapu(xlsx_path,
+                        xlsx_path.parent / "Certifikati" / ime_mape(info, kraj))
 
 
 def citaj_polaznike(ws, totals_row: int) -> list:
@@ -288,6 +323,11 @@ def osiguraj(xlsx_path: Path, config: dict, danas: date, chrome: str,
         return None, []
 
     cilj = xlsx_path.parent / "Certifikati" / ime_mape(info, kraj)
+    # Ako potvrdnice stoje pod starim imenom mape, preuzmi tu mapu umjesto da
+    # se sve iscrta po drugi put u novu.
+    postojeca = uskladi_mapu(xlsx_path, cilj)
+    if postojeca is not None:
+        cilj = postojeca
     trebaju = {ime: cilj / f"{ime_datoteke(ime)}.pdf" for ime in polaznici}
     nedostaju = [ime for ime, put in trebaju.items()
                  if ponovno or not put.exists()]

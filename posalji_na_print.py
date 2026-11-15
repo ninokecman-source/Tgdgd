@@ -396,8 +396,13 @@ def main():
         tijelo += (f"\nNapomena: ovo je ponovljena narudžba za isti tečaj "
                    f"(prvi put poslano {prije.get('poslano', '?')}, tada za "
                    f"{prije.get('polaznika', '?')} polaznika).\n")
-        print(f"  [!] već poslano {prije.get('poslano')} - "
-              f"ovo je ponovljena narudžba")
+        # Namjerno bez [!]: ovo nije greška nego podatak. Narudžba odlazi, a
+        # tiskara u mailu piše da je ponovljena. Dok je pisalo [!], svaka
+        # ponovljena narudžba je danima stajala na stranici Stanje među
+        # greškama, kao da nešto ne radi.
+        print(f"  Napomena: tiskari je za ovaj tečaj već poslano "
+              f"{prije.get('poslano')} - u mailu piše da je ovo ponovljena "
+              f"narudžba.")
 
     print(f"  tekst:     {izvor}")
     print("  --- poruka ---")
