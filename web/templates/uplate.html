@@ -35,10 +35,19 @@
         <span class="pazi-tekst">{{ p.manjka|eur }}</span>
         <span class="tiho">od {{ (p.uplaceno + p.manjka)|eur }}</span>
       </div>
-      {% if p.email %}
-      <a class="tipka mala" href="{{ url_for('podsjetnik', oznaka=s.tecaj.oznaka,
-         broj=broj) }}">Podsjetnik</a>
-      {% endif %}
+      <div class="duznik-tipke">
+        {% if p.email %}
+        <a class="tipka mala" href="{{ url_for('podsjetnik', oznaka=s.tecaj.oznaka,
+           broj=broj) }}">Podsjetnik</a>
+        {% endif %}
+        {# Natrag se vraca ovamo, ne na tecaj: dugovi se obilaze s ovog popisa. #}
+        <form method="post" action="{{ url_for('uplatio', oznaka=s.tecaj.oznaka,
+              broj=broj) }}">
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="dalje" value="{{ url_for('uplate') }}">
+          <button class="tipka mala tiha" type="submit">Uplatio</button>
+        </form>
+      </div>
     </div>
     {% endfor %}
   </div>

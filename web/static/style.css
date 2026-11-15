@@ -224,8 +224,11 @@ main { padding: 16px; max-width: 760px; margin: 0 auto; width: 100%; flex: 1; }
 .skupina-zbroj.kasni { color: var(--pazi); }
 .skupina-detalj { font-size: 13px; margin-top: 2px; }
 
+/* Ime i iznos u prvom retku, tipke u drugom. S dvije tipke u istom retku
+   ime i adresa su se na mobitelu lomili nasred rijeci. */
 .duznik {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 10px 0;
@@ -233,7 +236,15 @@ main { padding: 16px; max-width: 760px; margin: 0 auto; width: 100%; flex: 1; }
   margin-top: 8px;
 }
 .duznik:first-of-type { margin-top: 10px; }
-.duznik-podaci { flex: 1; min-width: 0; }
+.duznik-podaci { flex: 1 1 60%; min-width: 0; }
+.duznik form { margin: 0; }
+/* Tipke pocinju novi redak i drze se desne strane, pod iznosom. */
+.duznik-tipke {
+  flex: 1 0 100%;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .duznik-ime { font-weight: 700; color: var(--naslov); font-size: 15px; }
 .duznik-novac {
   text-align: right;

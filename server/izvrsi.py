@@ -183,6 +183,24 @@ def _zanemari_uplatu(zahtjev, tablica, mapa):
             "--zanemari", "--stvarno"]
 
 
+def _uplatio(zahtjev, tablica, mapa):
+    """Uplata koja nije prošla kroz banku - gotovina, kompenzacija.
+
+    Iznos ne dolazi sa stranice nego ga skripta izračuna iz tablice: upiše
+    se točno koliko polazniku nedostaje do cijene. Tako iz weba ne stiže
+    nijedan broj, a ne može se dogoditi ni da stranica pokazuje staro stanje
+    pa se upiše previše."""
+    naredba = ["upisi_uplatu.py", "--tablica", tablica, "--podmiri"]
+    if zahtjev.get("email"):
+        naredba += ["--email", provjeri_adresu(zahtjev)]
+    else:
+        ime = str(zahtjev.get("ime", "")).strip()
+        if not ime or len(ime) > NAJDULJE_IME:
+            raise Odbijeno("upis uplate treba adresu ili ime polaznika")
+        naredba += ["--ime", nije_opcija(ime, "ime")]
+    return naredba + ["--stvarno"]
+
+
 def _popis_polaznika(zahtjev, tablica, mapa):
     return ["popis_polaznika.py", "--tecaj", tablica]
 
@@ -232,6 +250,7 @@ POSLOVI = {
     "otkazi_polaznika": _otkazi,
     "rijesi_uplatu": _rijesi_uplatu,
     "zanemari_uplatu": _zanemari_uplatu,
+    "uplatio": _uplatio,
     "posalji_poziv": _poziv,
     "popis_polaznika": _popis_polaznika,
     "izvjesce_fakultetu": _izvjesce,

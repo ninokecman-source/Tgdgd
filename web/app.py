@@ -831,6 +831,30 @@ def sljedeci_tecaj(podaci: dict, tecaj: dict):
     return moguci[0] if moguci else None
 
 
+@app.route("/tecaj/<oznaka>/polaznik/<int:broj>/uplatio", methods=["POST"])
+@treba_prijava
+def uplatio(oznaka, broj):
+    """Uplata koja nije prošla kroz banku - gotovina ili kompenzacija (netko
+    ustupi prostor umjesto da plati).
+
+    Bez ovoga takav polaznik zauvijek stoji kao dužnik: izvod ga nikad neće
+    pokriti, podsjetnik mu odlazi bez razloga, a iznos visi na Uplatama.
+
+    Jedan pritisak, bez pitanja: upiše se točno koliko mu nedostaje. Koliko
+    to jest računa skripta iz tablice, ne stranica - snimka koju stranica
+    čita je stara do dvadeset minuta, pa bi iznos iz nje mogao biti kriv."""
+    _, tecaj = nadji_tecaj(oznaka)
+    polaznik = nadji_polaznika(tecaj, broj)
+    if not token_valja():
+        abort(400)
+    if not ceka_zahtjev(tecaj["datoteka"]):
+        zatrazi("uplatio", tecaj["datoteka"],
+                email=polaznik["email"], ime=polaznik["ime"])
+    dalje = request.form.get("dalje")
+    return redirect(sigurno_dalje(dalje) if dalje
+                    else url_for("tecaj", oznaka=oznaka))
+
+
 @app.route("/tecaj/<oznaka>/polaznik/<int:broj>/nastavlja", methods=["POST"])
 @treba_prijava
 def nastavlja(oznaka, broj):

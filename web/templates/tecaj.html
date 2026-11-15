@@ -148,7 +148,8 @@
           'nastavlja_dalje': 'Nastavlja dalje',
           'posalji_na_print': 'Skripte u tiskaru',
           'izvjesce_fakultetu': 'Izvješće fakultetu',
-          'otkazi_polaznika': 'Otkazivanje'}
+          'otkazi_polaznika': 'Otkazivanje',
+          'uplatio': 'Upis uplate'}
          .get(ishod.posao, ishod.posao) }} ·
       {{ ishod.status }} · {{ (ishod.gotovo or ishod.trazeno)|vrijeme }}
     </div>
@@ -192,6 +193,15 @@
         {% if p.manjka > 0 and p.email %}
         <a class="tipka mala" href="{{ url_for('podsjetnik', oznaka=tecaj.oznaka,
            broj=loop.index0) }}">Podsjetnik</a>
+        {% endif %}
+        {# Bez uvjeta na adresu: gotovinu placa i onaj tko je u tablicu
+           upisan rukom, bez maila. #}
+        {% if p.manjka > 0 %}
+        <form method="post" action="{{ url_for('uplatio', oznaka=tecaj.oznaka,
+              broj=loop.index0) }}">
+          <input type="hidden" name="token" value="{{ token }}">
+          <button class="tipka mala" type="submit">Uplatio</button>
+        </form>
         {% endif %}
         {# Jednom covjeku, i ako je vec dobio - za slucaj da javi da mu mail
            nije stigao, ili da mu je ime bilo krivo pa ima novu potvrdnicu. #}

@@ -12,6 +12,8 @@ poslani_certifikati.json
 poslani_pozivi.json
 sent_reports.json
 otkazani.json
+# Rucno upisane uplate - u njima su imena, adrese i iznosi.
+rucne_uplate.json
 poslani_printovi.json
 greske_potvrdene.json
 web/stanje.json
