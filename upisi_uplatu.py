@@ -11,12 +11,11 @@ tako: iznos ne putuje s njom, pa se ne može dogoditi da stranica pokazuje
 staro stanje i upiše preveliku uplatu.
 
 Iznos se DODAJE na ono što u tablici već piše, isto kao kad se uplata knjiži
-iz izvoda - tko je platio akontaciju pa ostatak u gotovini, ima zbroj. Uz to
-se u bilješku (stupac M) upiše čime je plaćeno, koliko i kada, jer u izvodu
-toga nema pa se poslije ne bi imalo po čemu provjeriti.
+iz izvoda - tko je platio akontaciju pa ostatak u gotovini, ima zbroj. U
+tablicu ide samo iznos; stupac s bilješkom se ne dira, on je tvoj.
 
-Svaka takva uplata ide i u 'rucne_uplate.json'. To je jedini novac u sustavu
-koji nema potvrdu izvan tablice, pa neka bar ima svoj trag.
+Čime je plaćeno i kada zapisuje se u 'rucne_uplate.json'. To je jedini novac
+u sustavu koji nema potvrdu izvan tablice, pa neka bar ima svoj trag.
 
 Pokretanje:
     python3 upisi_uplatu.py --tablica "Modul 3 Zadar.xlsx" \\
@@ -44,12 +43,9 @@ from zoho_to_excel import find_totals_row, load_config, with_retry
 import prava
 
 COL_UPLATA = 12
-COL_BILJESKA = 13
 ZAPISNIK = Path(__file__).with_name("rucne_uplate.json")
 
-# Što piše u bilješci kad se ne kaže drugačije. Mora pisati nešto: u izvodu
-# ove uplate nema, pa bi inače za godinu dana stajao iznos bez ikakvog traga
-# odakle je.
+# Čime je plaćeno, kad se ne kaže drugačije. Ide u zapisnik, ne u tablicu.
 ZADANI_NACIN = "uplaćeno izvan banke"
 
 # Iznad ovoga je gotovo sigurno zalutala decimalna točka, a ne uplata.
@@ -101,7 +97,7 @@ def upisi(put: Path, config: dict, email: str, ime: str, iznos, nacin: str,
 
     prije = broj(ws.cell(row=red, column=COL_UPLATA).value)
 
-    if iznos is None:
+    if iznos is None:   # --podmiri: koliko mu nedostaje do cijene
         cijena = broj(iznosi_tecaja(config, course_info(ws, config)["course_code"])["cijena"])
         if not cijena:
             sys.exit("Cijena tečaja nije podešena (price_total u config.json), "
@@ -113,23 +109,19 @@ def upisi(put: Path, config: dict, email: str, ime: str, iznos, nacin: str,
             return 0
 
     poslije = round(prije + iznos, 2)
-    stara_biljeska = str(ws.cell(row=red, column=COL_BILJESKA).value or "").strip()
     danas = datetime.now()
-    nova = f"{nacin}: {iznos_rijecima(iznos)} ({danas:%d.%m.%Y.})"
-    biljeska = f"{stara_biljeska}; {nova}" if stara_biljeska else nova
 
     tecaj = f"{ws['C4'].value or ''} / {ws['C5'].value or ''}".strip(" /")
     print(f"{put.name} ({tecaj})")
     print(f"  redak {red}: {puno_ime}" + (f" <{adresa}>" if adresa else " (bez adrese)"))
     print(f"  uplaćeno: {iznos_rijecima(prije)} -> {iznos_rijecima(poslije)}")
-    print(f"  bilješka: {biljeska}")
+    print(f"  način:    {nacin} (zapisuje se u {ZAPISNIK.name}, ne u tablicu)")
 
     if not stvarno:
         print("\nPregled - ništa nije promijenjeno. Za upis dodaj --stvarno")
         return 0
 
     ws.cell(row=red, column=COL_UPLATA, value=poslije)
-    ws.cell(row=red, column=COL_BILJESKA, value=biljeska)
     wb.save(put)
 
     zabiljezi({

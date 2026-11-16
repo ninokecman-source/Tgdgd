@@ -710,6 +710,23 @@ def na_print(oznaka):
     return redirect(url_for("tecaj", oznaka=oznaka))
 
 
+@app.route("/tecaj/<oznaka>/centrala", methods=["POST"])
+@treba_prijava
+def tablica_centrali(oznaka):
+    """Popunjena tablica tečaja ide Emmett centrali.
+
+    Prije je išla sama, dan nakon tečaja. U njoj su imena, adrese, mailovi i
+    telefoni svih polaznika, a ide ljudima izvan kuće, pa odlazi kad ti to
+    kažeš. Nepotpunu tablicu skripta i dalje odbije poslati i javi što u njoj
+    nedostaje."""
+    _, tecaj = nadji_tecaj(oznaka)
+    if not token_valja():
+        abort(400)
+    if not ceka_zahtjev(tecaj["datoteka"]):
+        zatrazi("tablica_centrali", tecaj["datoteka"])
+    return redirect(url_for("tecaj", oznaka=oznaka))
+
+
 @app.route("/tecaj/<oznaka>/popis", methods=["POST"])
 @treba_prijava
 def popis_polaznika(oznaka):

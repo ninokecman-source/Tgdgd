@@ -17,8 +17,9 @@ SHELL=/bin/bash
 # Podsjetnici polaznicima
 45 8 * * * $HOME/Tgdgd/server/pokreni.sh send_reminders.py >> $HOME/Tgdgd/log.txt 2>&1
 
-# Tablica centrali, dan nakon tecaja
-30 9 * * * $HOME/Tgdgd/server/pokreni.sh posalji_tablicu.py >> $HOME/Tgdgd/log.txt 2>&1
+# Tablica centrali NEMA svoj cron. Salje se kad na stranici tecaja pritisnes
+# "Posalji centrali". U njoj su imena, adrese, mailovi i telefoni svih
+# polaznika, a ide ljudima izvan kuce - neka odlazi kad ti kazes.
 
 # Potvrdnice NEMAJU svoj cron. Nastaju kad na stranici tecaja pritisnes
 # "Posalji potvrdnice" - tko naruci slanje, time ih i naruci. Tako se

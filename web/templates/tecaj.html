@@ -68,6 +68,28 @@
   </div>
   {% endif %}
 
+  <h3>Tablica centrali</h3>
+  {% if radi %}
+  <p class="tiho">Čeka da posao završi.</p>
+  {% elif tecaj.stanje != 'prosao' %}
+  <p class="tiho">Šalje se nakon tečaja.</p>
+  {% else %}
+  <p class="tiho">Popunjena tablica ovog tečaja, u privitku maila Emmett
+    centrali. U njoj su imena, adrese i telefoni polaznika, pa odlazi kad ti
+    kažeš, ne sama od sebe. Nepotpunu tablicu neće poslati nego će ti javiti
+    što u njoj nedostaje.</p>
+  {% if tablica and tablica.poslano %}
+  <p class="tiho">Zadnji put poslana {{ tablica.poslano|datum }}{%
+    if tablica.primatelji %} na {{ tablica.primatelji|join(', ') }}{% endif %}.</p>
+  {% endif %}
+  <div class="tipke">
+    <form method="post" action="{{ url_for('tablica_centrali', oznaka=tecaj.oznaka) }}">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button class="tipka tiha" type="submit">Pošalji centrali</button>
+    </form>
+  </div>
+  {% endif %}
+
   <h3>Potvrdnice</h3>
 
   {% if radi %}
@@ -148,6 +170,7 @@
           'nastavlja_dalje': 'Nastavlja dalje',
           'posalji_na_print': 'Skripte u tiskaru',
           'izvjesce_fakultetu': 'Izvješće fakultetu',
+          'tablica_centrali': 'Tablica centrali',
           'otkazi_polaznika': 'Otkazivanje',
           'uplatio': 'Upis uplate'}
          .get(ishod.posao, ishod.posao) }} ·

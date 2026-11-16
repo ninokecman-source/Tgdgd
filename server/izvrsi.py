@@ -219,6 +219,11 @@ def _nastavlja(zahtjev, tablica, mapa):
             "--na", cilj, "--stvarno"]
 
 
+def _tablica_centrali(zahtjev, tablica, mapa):
+    """Popunjena tablica tečaja Emmett centrali."""
+    return ["posalji_tablicu.py", "--tecaj", tablica]
+
+
 def _izvjesce(zahtjev, tablica, mapa):
     return ["izvjesce_fakultetu.py", "--tecaj", tablica]
 
@@ -254,6 +259,7 @@ POSLOVI = {
     "posalji_poziv": _poziv,
     "popis_polaznika": _popis_polaznika,
     "izvjesce_fakultetu": _izvjesce,
+    "tablica_centrali": _tablica_centrali,
     "nastavlja_dalje": _nastavlja,
     "posalji_na_print": _na_print,
     "potvrdi_greske": _potvrdi_greske,

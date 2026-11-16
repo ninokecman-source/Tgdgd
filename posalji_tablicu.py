@@ -5,10 +5,16 @@ Prođe kroz sve tablice u output_dir, iz svake pročita datume tečaja, i za
 one koji su završili prije zadanog broja dana (po defaultu 1) pošalje mail
 s tablicom u privitku - na adrese iz `course_report_to`.
 
-Pokreće se iz crona jednom dnevno. Prije nego pustiš da stvarno šalje,
-pogledaj što bi poslao:
+NEMA svoj cron: šalje se kad na stranici tečaja pritisneš "Pošalji centrali".
+Tablica ide ljudima izvan kuće, s imenima, adresama i telefonima polaznika,
+pa neka odlazi kad ti kažeš, a ne po satu.
 
-    python3 posalji_tablicu.py --pregled
+    python3 posalji_tablicu.py --pregled          # što bi poslao
+    python3 posalji_tablicu.py --tecaj "Modul 3 Zadar.xlsx"
+
+S --tecaj je to izričit nalog, pa ne čeka zadani broj dana i ne preskače
+tablicu koja je već poslana - samo kaže da je ovo ponovno slanje. Jedino
+nepotpunu tablicu i dalje ne šalje: to je obrazac koji centrala arhivira.
 
 Tekst maila stoji u dokumentu 'izvjestaj centrali.docx' uz tablice (isto
 kao podsjetnici); ako ga nema, koristi se tekst iz configa odnosno ugrađeni.
@@ -164,8 +170,13 @@ def posalji(config: dict, primatelji: list, naslov: str, tijelo: str,
 
 
 def obradi_tablicu(xlsx_path: Path, config: dict, state: dict, danas: date,
-                    dry_run: bool) -> bool:
-    """Vrati True ako je tablica poslana (ili bi bila, u pregledu)."""
+                    dry_run: bool, rucno: bool = False) -> bool:
+    """Vrati True ako je tablica poslana (ili bi bila, u pregledu).
+
+    `rucno` je slanje zatraženo tipkom za točno taj tečaj. Tada otpadaju dva
+    uvjeta koja postoje samo zato da automatsko slanje ne krene prerano ni
+    dvaput: čekanje zadanog broja dana i preskakanje već poslane tablice.
+    Ostaje jedino da tečaj mora biti gotov."""
     wb = with_retry(lambda: load_workbook(xlsx_path), retry_on=(PermissionError, OSError))
     if "podaci" not in wb.sheetnames:
         return False
@@ -180,12 +191,18 @@ def obradi_tablicu(xlsx_path: Path, config: dict, state: dict, danas: date,
 
     dana_nakon = config.get("course_report_days_after", 1)
     proslo = (danas - kraj).days
+    vec_poslano = state.get(xlsx_path.name, {}).get("poslano")
 
-    if proslo < dana_nakon:
-        return False   # tečaj još traje ili je prerano
-
-    if state.get(xlsx_path.name, {}).get("poslano"):
-        return False   # već poslano centrali
+    if rucno:
+        if kraj > danas:
+            print(f"[!] {xlsx_path.name}: tečaj još nije završio "
+                  f"({info['dates']}) - tablica se šalje nakon njega.")
+            return False
+    else:
+        if proslo < dana_nakon:
+            return False   # tečaj još traje ili je prerano
+        if vec_poslano:
+            return False   # već poslano centrali
 
     polaznici = read_participants(ws, find_totals_row(ws))
     if not polaznici:
@@ -231,6 +248,11 @@ def obradi_tablicu(xlsx_path: Path, config: dict, state: dict, danas: date,
 
     print(f"\n{info['course_code']} / {info['location']} ({info['dates']}) - "
           f"završio prije {proslo} dana, {len(polaznici)} polaznika")
+    if vec_poslano:
+        # Bez [!]: tablica odlazi, ovo je samo podatak. Dok je pisalo [!],
+        # svako ponovno slanje danima je stajalo na Stanju među greškama.
+        print(f"  Napomena: centrali je već poslano {vec_poslano} - ovo je "
+              f"ponovno slanje, vjerojatno zbog ispravka u tablici.")
     print(f"  za: {', '.join(primatelji)}")
     print(f"  privitak: {xlsx_path.name}")
     print(f"  tekst: {izvor}")
@@ -260,6 +282,10 @@ def main():
         description="Pošalje popunjenu tablicu Emmett centrali nakon tečaja.")
     parser.add_argument("--pregled", action="store_true",
                         help="Samo prikaži što bi poslao, bez slanja")
+    parser.add_argument("--tecaj", metavar="DIO NAZIVA",
+                        help="Pošalji tablicu samo za taj tečaj, na tvoju "
+                             "naredbu - bez čekanja i bez obzira je li već "
+                             "poslana")
     parser.add_argument("--datum", metavar="GGGG-MM-DD",
                         help="Odradi pregled kao da je taj datum - da vidiš kako će "
                              "mail izgledati prije nego tečaj stvarno završi "
@@ -272,7 +298,9 @@ def main():
 
     config = load_config()
 
-    dry_run = args.pregled or not config.get("send_course_report")
+    # send_course_report je kočnica za prolaz kroz sve tablice. Kad tražiš
+    # jedan tečaj izrijekom, kočnica ne vrijedi - sam si to zatražio.
+    dry_run = args.pregled or not (config.get("send_course_report") or args.tecaj)
     if dry_run and not args.pregled:
         print("send_course_report je isključen u config.json - radim samo pregled.\n")
 
@@ -284,6 +312,13 @@ def main():
     if not datoteke:
         print(f"Nema nijedne .xlsx tablice u {output_dir}.")
         return
+
+    if args.tecaj:
+        trazeno = predlosci.bez_dijakritika(args.tecaj)
+        datoteke = [p for p in datoteke
+                    if trazeno in predlosci.bez_dijakritika(p.name)]
+        if not datoteke:
+            sys.exit(f"Nijedna tablica u nazivu nema {args.tecaj!r}.")
 
     state = load_state()
     if args.datum:
@@ -297,7 +332,8 @@ def main():
     poslano = 0
     for put in datoteke:
         try:
-            poslano += obradi_tablicu(put, config, state, danas, dry_run)
+            poslano += obradi_tablicu(put, config, state, danas, dry_run,
+                                      rucno=bool(args.tecaj))
         except predlosci.GreskaPredloska as e:
             print(f"[!] {put.name}: {e}")
 
