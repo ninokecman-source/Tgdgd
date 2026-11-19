@@ -95,19 +95,73 @@ def stavke_za(config: dict, kod: str) -> list:
     return [{"datoteka": kod}]
 
 
-def kolicina(zapis, polaznika: int, novih: int = 0) -> int:
+def kolicina(zapis, polaznika: int, novih: int = 0, prvi_put: int = 0) -> int:
     """'polaznici' -> koliko ih je, 'pola' -> pola toliko (zaokruženo gore),
-    'novi' -> koliko ih prvi put ulazi u program, broj -> taj broj."""
+    'novi' -> koliko ih prvi put ulazi u program, 'prvi_put' -> koliko ih
+    prvi put dolazi kod tebe, broj -> taj broj."""
     if zapis in (None, "", "polaznici"):
         return polaznika
     if zapis == "pola":
         return math.ceil(polaznika / 2)
     if zapis == "novi":
         return novih
+    if zapis == "prvi_put":
+        return prvi_put
     try:
         return max(0, int(zapis))
     except (TypeError, ValueError):
         raise ValueError(f"ne razumijem koliko: {zapis!r}")
+
+
+def broj_prvi_put(xlsx_path: Path, info: dict) -> int:
+    """Koliko polaznika ovog tečaja prije nije bilo ni na jednom tvojem.
+
+    Za disclaimer: tko je raniji modul odradio kod drugog instruktora, kod
+    tebe ga nema u nijednoj tablici, pa mu potpisani disclaimer tek treba.
+    Tko je kod tebe već bio, potpisao ga je tad.
+
+    Nije isto što i broj_novih: ono gleda je li netko nov u PROGRAMU, po
+    nizu modula, pa polaznika koji je Modul 1&2 odradio drugdje ne razlikuje
+    od onoga koji ga je odradio kod tebe. Ovdje je pitanje drugo - je li
+    bio KOD TEBE - pa se gledaju sve tvoje tablice, bez obzira na modul.
+
+    Gledaju se samo tečajevi koji su počeli prije ovoga. Inače bi polaznik
+    koji je već upisan na sljedeći modul ispao 'već viđen' na ovom, a
+    disclaimer bi izostao.
+
+    Uspoređuje se po adresi, ne po imenu: ista osoba zna biti upisana kao
+    'Mara Radic' i 'Mara Radić'. Polaznik bez adrese broji se kao nov - ne
+    može se provjeriti, a bolje je jedan papir viška nego da ga netko na
+    tečaju nema."""
+    pocetak, _ = parse_course_dates(info["dates"])
+
+    bili = set()
+    for put in tablice.nadji(xlsx_path.parent, javi=lambda _: None):
+        if put == xlsx_path:
+            continue
+        wb = with_retry(lambda: load_workbook(put), retry_on=(PermissionError, OSError))
+        if "podaci" not in wb.sheetnames:
+            continue
+        ws = wb["podaci"]
+        raniji, _ = parse_course_dates(str(ws["C6"].value or ""))
+        # Tečaj kojem se datum ne da pročitati preskačemo: ne zna se je li
+        # bio prije, a papir viška stoji manje od papira koji fali.
+        if pocetak is None or raniji is None or raniji >= pocetak:
+            continue
+        for row in range(FIRST_PARTICIPANT_ROW, find_totals_row(ws)):
+            adresa = str(ws.cell(row=row, column=8).value or "").strip().lower()
+            if adresa:
+                bili.add(adresa)
+
+    ws = load_workbook(xlsx_path)["podaci"]
+    koliko = 0
+    for row in range(FIRST_PARTICIPANT_ROW, find_totals_row(ws)):
+        if not (ws.cell(row=row, column=2).value or ws.cell(row=row, column=3).value):
+            continue
+        adresa = str(ws.cell(row=row, column=8).value or "").strip().lower()
+        if adresa not in bili:
+            koliko += 1
+    return koliko
 
 
 def broj_novih(config: dict, xlsx_path: Path, info: dict) -> int:
@@ -185,7 +239,7 @@ def mapa_certifikata(xlsx_path: Path, info: dict):
 
 
 def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
-                   polaznika: int, novih: int = 0) -> tuple:
+                   polaznika: int, novih: int = 0, prvi_put: int = 0) -> tuple:
     """([stavke], [što nedostaje]). Stavka je
     {naziv, datoteke, kolicina, papir, po_datoteci}."""
     mapa_print = Path(config["output_dir"]) / config.get("print_folder", ZADANA_MAPA)
@@ -200,11 +254,19 @@ def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
             mapa = mapa_certifikata(xlsx_path, info)
             pdfovi = sorted(mapa.glob("*.pdf")) if mapa and mapa.is_dir() else []
             if not pdfovi:
-                gdje = (f" (mapa {mapa})" if mapa is not None
-                        else " - ne mogu pročitati datum tečaja, pa ne znam "
-                             "ni kako se mapa zove")
-                fali.append(f"potvrdnice tog tečaja{gdje} - napravi ih pa "
-                            f"ponovi")
+                # Tri razloga, tri poruke. Dok je bila jedna, nenapravljene
+                # potvrdnice su se javljale kao nečitljiv datum tečaja - pa
+                # bi čovjek išao popravljati ćeliju koja je ispravna.
+                _, kraj_tecaja = parse_course_dates(info["dates"])
+                if kraj_tecaja is None:
+                    razlog = ("ne mogu pročitati datum tečaja, pa ne znam ni "
+                              "kako se mapa zove")
+                elif mapa is None:
+                    razlog = "mape s potvrdnicama još nema"
+                else:
+                    razlog = f"mapa {mapa} je prazna"
+                fali.append(f"potvrdnice tog tečaja - {razlog}; napravi ih "
+                            f"pa ponovi")
                 continue
             narudzba.append({
                 "naziv": "Potvrdnice",
@@ -221,7 +283,7 @@ def slozi_narudzbu(config: dict, xlsx_path: Path, info: dict,
         if put is None:
             fali.append(f"'{naziv}' u mapi {mapa_print}")
             continue
-        koliko = kolicina(zapis.get("koliko"), polaznika, novih)
+        koliko = kolicina(zapis.get("koliko"), polaznika, novih, prvi_put)
         if koliko < 1:
             # Npr. korice na modulu na kojem nitko nije nov - nema se što
             # tražiti, a "0 kompleta" u narudžbi samo zbunjuje tiskaru.
@@ -334,17 +396,20 @@ def main():
     polaznika = broj_polaznika(ws)
 
     novih = broj_novih(config, xlsx_path, info)
+    prvi_put = broj_prvi_put(xlsx_path, info)
 
     try:
         narudzba, fali = slozi_narudzbu(config, xlsx_path, info, polaznika,
-                                        novih or 0)
+                                        novih or 0, prvi_put)
     except ValueError as e:
         sys.exit(f"Postavka 'print_items' za {info['course_code']!r}: {e}")
 
     print(f"{info['course_code']} / {info['location']} ({info['dates']})")
     print(f"  polaznika: {polaznika}"
           + (f", od toga prvi put u programu: {novih}"
-             if novih is not None and novih < polaznika else ""))
+             if novih is not None and novih < polaznika else "")
+          + (f", prvi put kod tebe: {prvi_put}"
+             if prvi_put < polaznika else ""))
     print(f"  tiskara:   {kome}")
     for stavka in narudzba:
         koliko = (broj_rijecima(len(stavka["datoteke"]), "datoteka",

@@ -44,12 +44,19 @@ CONFIG = Path(__file__).resolve().parent / "config.json"
 # Što ide uz koji modul. Prepoznaje se po dijelu koda tečaja, malim slovima i
 # bez kvačica, jer tablice ispunjava čovjek pa se zapis razlikuje.
 #
-#   koliko: "polaznici" (koliko ih je), "pola" (pola toliko, gore), ili broj
+#   koliko: "polaznici" (koliko ih je), "pola" (pola toliko, gore), "novi"
+#           (koliko ih prvi put ulazi u program), "prvi_put" (koliko ih prvi
+#           put dolazi kod tebe), ili broj
 #   certifikati: sve gotove potvrdnice tog tečaja, svaka u jednom primjerku
 # Korice tečaja: dobiva ih samo onaj tko tek ulazi u program, pa je količina
 # "novi". Na Modulu 1&2 ranijih modula nema, pa su svi novi - isto pravilo
 # vrijedi za cijeli niz, bez posebnog slučaja. Ponavljanje nije u nizu i
 # korice ne dobiva: ti polaznici ih imaju od prije.
+# Disclaimer potpisuje svatko tko kod tebe još nije bio - i na Modulu 3 ili
+# 4, ako je ranije module odradio kod drugog instruktora. Zato ide uz svaki
+# tečaj, u količini "prvi_put": tko je kod tebe već bio, potpisao ga je tad.
+DISCLAIMER = {"datoteka": "Disclaimer", "koliko": "prvi_put"}
+
 KORICE = [
     {"datoteka": "CourseCover", "koliko": "novi", "papir": "deblji papir",
      # "papir" se ne ponavlja u napomeni - polje iznad već kaže koji je.
@@ -66,7 +73,6 @@ ZASTARJELE_NAPOMENE = {"na dvije stranice",
 
 PRAVILA = [
     ("modul 1&2", [
-        {"datoteka": "Disclaimer"},
         {"datoteka": "Zdravstveni obrazac", "koliko": "pola"},
     ]),
     ("ponavljanje", [
@@ -184,6 +190,14 @@ def popravi_nazive(stavke, mapa_print: Path, predlozene: list) -> tuple:
             zapis["papir"] = pravilo["papir"]
             promjene.append(f"{zapis.get('datoteka', '?')}: papir "
                             f"{pravilo['papir']!r}")
+        # Isto i za količinu. Prazno znači da nitko nije birao, pa vrijedi
+        # pravilo: disclaimer upisan prije nego je postojalo "prvi_put"
+        # inače bi se zauvijek printao za sve, i za one koji su ga već
+        # potpisali. Upisanu količinu ne dira - tu si birao ti.
+        if pravilo.get("koliko") and not zapis.get("koliko"):
+            zapis["koliko"] = pravilo["koliko"]
+            promjene.append(f"{zapis.get('datoteka', '?')}: koliko "
+                            f"{pravilo['koliko']!r}")
 
     ima = {oznaka_stavke(z) for z in nove}
     for zapis in predlozene:
@@ -210,6 +224,12 @@ def stavke_za_kod(kod: str, mapa_print: Path, config: dict) -> list:
     skripta = nadji_skriptu(mapa_print, kod)
     if skripta is not None:
         stavke.append({"datoteka": uredan_naziv(skripta)})
+
+    zapis = dict(DISCLAIMER)
+    put = nadji_datoteku(mapa_print, zapis["datoteka"])
+    if put is not None:
+        zapis["datoteka"] = uredan_naziv(put)
+    stavke.append(zapis)
 
     kljuc = kljuc_tecaja(kod)
     if kljuc in pozivi.redoslijed(config):
@@ -316,6 +336,7 @@ def main():
             else:
                 koliko = {"pola": "pola broja polaznika",
                           "novi": "koliko ih je prvi put u programu",
+                          "prvi_put": "koliko ih prvi put dolazi kod tebe",
                           None: "koliko i polaznika"}.get(s.get("koliko"),
                                                           s.get("koliko"))
                 dodatno = [s[k] for k in ("papir", "napomena") if s.get(k)]
