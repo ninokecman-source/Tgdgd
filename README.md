@@ -498,6 +498,20 @@ Redoslijed modula je u `config.json`:
 "module_order": ["Modul 1&2", "Modul 3", "Modul 4", "Modul 5", "Modul 6"]
 ```
 
+U tekstu poziva `{procedure}` je popis procedura tog modula - da polaznik
+vidi što na tečaju dobiva, a ne samo datum. Popis je prepisan s
+emmett-hr.com i ugrađen u `pozivi.py`; mijenja se u `config.json`, po
+modulu, a što ondje nije navedeno uzima se iz ugrađenog:
+
+```json
+"module_procedures": {
+  "Modul 3": ["Ponavljanje Modula 1 i 2", "Teres minor (ramena)"]
+}
+```
+
+Za modul koji popisa nema - ponavljanje, praktičarski dan - na mjestu
+`{procedure}` u poruci ne ostaje ništa, ni prazan redak.
+
 ### `postavi_print.py` - adresa tiskare i što ide na print
 
 Upisuje u `config.json` dva polja: `print_email` (kome ide narudžba) i

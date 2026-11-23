@@ -18,6 +18,7 @@ Pokretanje (primatelji i tekst u datotekama, kao i kod ostalih poruka):
 
 import argparse
 import json
+import re
 import sys
 from email.message import EmailMessage
 from pathlib import Path
@@ -141,6 +142,7 @@ def main():
         "link_termini": config.get("course_dates_url", ""),
         "prethodni_modul": pozivi.naziv_prethodnog(config, info["course_code"])
                            or "prethodni modul",
+        "procedure": pozivi.odlomak_procedura(config, info["course_code"]),
     }
 
     if not args.posalji:
@@ -150,7 +152,7 @@ def main():
         v = dict(osnova, **imena(prvi["ime"]))
         print("  --- poruka ---")
         print("  Naslov:", predlosci.popuni(naslov_pred, v, "zadani tekst"))
-        for redak in predlosci.popuni(tijelo_pred, v, "zadani tekst").splitlines():
+        for redak in tijelo_poruke(tijelo_pred, v).splitlines():
             print("  " + redak)
         print("\nPregled - ništa nije poslano. Za slanje dodaj --posalji")
         return
@@ -162,7 +164,7 @@ def main():
         try:
             posalji_jedan(config, o["email"],
                           predlosci.popuni(naslov_pred, v, "zadani tekst"),
-                          predlosci.popuni(tijelo_pred, v, "zadani tekst"))
+                          tijelo_poruke(tijelo_pred, v))
         except Exception as e:
             print(f"  [!] {o['ime']} <{o['email']}>: {e}")
             pali.append(f"{o['ime']} <{o['email']}>: {e}")
@@ -189,9 +191,19 @@ def main():
             f"{info['course_code']} / {info['location']} ({info['dates']})",
             uspjeli, pali,
             (predlosci.popuni(naslov_pred, prvi, "zadani tekst"),
-             predlosci.popuni(tijelo_pred, prvi, "zadani tekst")))
+             tijelo_poruke(tijelo_pred, prvi)))
     except Exception as e:
         print(f"[!] Pozivi su poslani, ali izvještaj tebi nije: {e}")
+
+
+def tijelo_poruke(predlozak: str, v: dict) -> str:
+    """Popunjeno tijelo poziva, bez praznine viška.
+
+    {procedure} za modul bez popisa ispadne prazan; ako je u predlošku
+    ostao u svom odlomku, na njegovu mjestu bi zjapio prazan redak. Poruka
+    ide čovjeku, pa neka izgleda kao da ju je čovjek i napisao."""
+    return re.sub(r"\n{3,}", "\n\n",
+                  predlosci.popuni(predlozak, v, "zadani tekst"))
 
 
 def imena(puno_ime: str) -> dict:

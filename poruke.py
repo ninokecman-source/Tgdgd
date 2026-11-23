@@ -42,8 +42,8 @@ POZIV_NASLOV = "Emmett tehnika - {course_code} u mjestu {location} ({dates})"
 POZIV_TIJELO = """Poštovani/a {first_name},
 
 javljamo se jer ste prošli {prethodni_modul} - otvorene su prijave za sljedeći korak: {course_code}, {dates} u mjestu {location}.
-
-Na tom modulu nadograđujete ono što već znate, s novim tehnikama i novim područjima tijela. Broj mjesta je ograničen, a prijave idu redom kojim stižu.
+{procedure}
+Broj mjesta je ograničen, a prijave idu redom kojim stižu.
 
 Prijavnicu i sve termine možete pronaći ovdje:
 {link_termini}

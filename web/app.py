@@ -782,6 +782,7 @@ def poziv(oznaka):
         "prethodni_modul": pozivi.naziv_prethodnog(config, tecaj["kod"]) or "prethodni modul",
         "instructor_name": tecaj.get("instruktor") or config.get("instructor_name", ""),
         "link_termini": config.get("course_dates_url", ""),
+        "procedure": pozivi.odlomak_procedura(config, tecaj["kod"]),
     }
 
     return render_template("poziv.html", podaci=podaci, tecaj=tecaj,

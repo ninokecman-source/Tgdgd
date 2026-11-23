@@ -49,7 +49,11 @@
     svakoga posebno, pri slanju. Isto vrijedi za <code>{last_name}</code>
     <code>{course_code}</code> <code>{location}</code> <code>{dates}</code>
     <code>{prethodni_modul}</code> <code>{instructor_name}</code>
-    <code>{link_termini}</code>.</p>
+    <code>{link_termini}</code> <code>{procedure}</code>.</p>
+  <p class="tiho"><code>{procedure}</code> je popis procedura tog modula —
+    upisuje se sam, a mijenja se u <code>config.json</code> pod
+    <code>module_procedures</code>. Za modul bez popisa (ponavljanje,
+    praktičarski dan) na njegovu mjestu ne ostaje ništa.</p>
 
   <details class="pregled" open>
     <summary>Ovako će izgledati prvom na popisu
@@ -85,7 +89,10 @@
   }
   function osvjezi() {
     izlazN.textContent = popuni(naslov.value);
-    izlazT.textContent = popuni(tijelo.value);
+    // Trostruki prijelom retka ostane ondje gdje je {procedure} ispao
+    // prazan - modul bez popisa procedura. Slanje ga sabija, pa neka ga i
+    // pregled, da pokazuje ono što će stvarno otići.
+    izlazT.textContent = popuni(tijelo.value).replace(/\n{3,}/g, "\n\n");
   }
   naslov.addEventListener('input', osvjezi);
   tijelo.addEventListener('input', osvjezi);

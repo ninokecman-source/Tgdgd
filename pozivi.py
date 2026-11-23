@@ -25,10 +25,114 @@ from predlosci import kljuc_tecaja
 
 ZADANI_REDOSLIJED = ["Modul 1&2", "Modul 3", "Modul 4", "Modul 5", "Modul 6"]
 
+# Što se radi na kojem modulu - za poziv na sljedeći tečaj, da čovjek vidi
+# što dobiva, a ne samo datum. Prepisano s emmett-hr.com, sa stranice
+# "Praktičarski EMMETT tečaj", uz ispravljene očite tipfelere (popis je tamo
+# pisan za stranicu, a ovo ide u mail polazniku).
+#
+# Mijenja se u config.json pod "module_procedures", po modulu; što ondje
+# nije navedeno, uzima se odavde. Kod modula koji ovdje nema - ponavljanja,
+# praktičarski dan - poziv jednostavno nema taj odlomak.
+ZADANE_PROCEDURE = {
+    "Modul 1&2": [
+        "O Rossu Emmettu",
+        "EMMETT principi",
+        "7 A-ova (podsvjesni trigeri liječenja)",
+        "QL / 12. rebro (rotacija tijela)",
+        "Piriformis / TFL (piriformis i gluteusi)",
+        "Iliacus / obliqusi (zdjelica i kuk)",
+        "Psoas / 12. rebro (psoas i hamstringsi)",
+        "Psoas s podignutim koljenom (psoas i lumbalna kralježnica)",
+        "Gastroc opuštanje potkoljenice (problemi s listovima i balans)",
+        "Gornji trapeziusi (ramena i vrat)",
+        "Levator scapulae 45 (ramena i vrat)",
+        "Rhomboid 45 (vrat)",
+        "Rhomboid 90 (ramena)",
+        "Rhomboid 30 (ruka i prsti)",
+        "SCM (vrat)",
+        "AC / biceps (ramena)",
+    ],
+    "Modul 3": [
+        "Ponavljanje Modula 1 i 2",
+        "Ingvinalni psoas (psoas i lumbalna kralježnica)",
+        "Teres minor (ramena)",
+        "Sacrum (sacrum)",
+        "Podlaktica (stisak šake, lakat i ramena)",
+        "Opuštanje koljena",
+        "ITB (noga, kuk i koljeno)",
+        "ITB / sartorius (koljeno)",
+        "Balans stopala (balans)",
+        "Dijafragma",
+        "Rescue (balans cijelog tijela)",
+    ],
+    "Modul 4": [
+        "Ponavljanje Modula 3",
+        "Abdominalno opuštanje",
+        "Pectoralis minor opuštanje (rame)",
+        "Skapula - rub (romboideusi)",
+        "Skapula - srednji i donji dio (skapula)",
+        "Latissimus dorsi (leđa i ramena)",
+        "Biceps, dvije glave (biceps i ramena)",
+        "Triceps (triceps)",
+        "Hamstringsi (hamstringsi i lumbalna kralježnica)",
+        "Opuštanje (soleus i Ahilova tetiva)",
+        "Opuštanje boli u koljenu (koljeno)",
+    ],
+    "Modul 5": [
+        "Ponavljanje Modula 4",
+        "Čeljust (čeljust, oči, uši)",
+        "Glava / čeljust",
+        "Prsni koš / rhomboid 45 (rotatorna manšeta i prsni koš)",
+        "Scalenus / pectoralis minor (rame i vrat)",
+        "Prsni koš / sinusi (kongestija sinusa)",
+        "Koljeno",
+        "Opuštanje gležnja (gležanj i stopalo)",
+        "Opuštanje quadricepsa (quadricepsi i koljeno)",
+        "Sacrum / TFL (gluteusi)",
+        "Piriformis (piriformis)",
+    ],
+    "Modul 6": [
+        "Ponavljanje Modula 5",
+        "Rhomboid 45 x ingvinalni psoas (abdominalna fascija)",
+        "Mjehur",
+        "Aduktor",
+        "Bol u stopalu (stopalo i gležanj)",
+        "Vrat (oči, čeljust, vrat, ramena i ruke)",
+        "Trbuh bicepsa (grč bicepsa)",
+        "Sakralni usjek (duboka bol oko zdjelice)",
+        "Limfna drenaža",
+    ],
+}
+
 
 def redoslijed(config: dict) -> list:
     return [kljuc_tecaja(k) for k in
             (config.get("module_order") or ZADANI_REDOSLIJED)]
+
+
+def procedure(config: dict, kod: str) -> list:
+    """Popis procedura tog modula. Prazan ako za njega nema zapisa.
+
+    Config ima prednost pred ugrađenim popisom, i to po modulu: tko u
+    config.json upiše samo Modul 4, za ostale i dalje vrijedi ugrađeno."""
+    kljuc = kljuc_tecaja(kod)
+    for popis in (config.get("module_procedures") or {}, ZADANE_PROCEDURE):
+        for zapis, stavke in popis.items():
+            if kljuc_tecaja(zapis) == kljuc and stavke:
+                return [str(s).strip() for s in stavke if str(s).strip()]
+    return []
+
+
+def odlomak_procedura(config: dict, kod: str) -> str:
+    """Odlomak za poziv, ili prazan tekst kad za modul nema popisa.
+
+    Vodeći prazan redak je namjeran: u predlošku {procedure} stoji u svom
+    retku, pa kad popisa nema, od njega ostane običan razmak između
+    odlomaka, a ne rupa."""
+    stavke = procedure(config, kod)
+    if not stavke:
+        return ""
+    return "\nNa ovom modulu radimo:\n\n" + "\n".join(f"- {s}" for s in stavke) + "\n"
 
 
 def prethodni_modul(config: dict, kod: str):
