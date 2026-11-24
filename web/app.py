@@ -441,13 +441,18 @@ def zadani_podsjetnik(tecaj: dict, polaznik: dict):
     return poruke.podsjetnik_uplata(mapa_tablica(), config, tecaj, polaznik)
 
 
-def zadani_poziv():
+def zadani_poziv(kod: str = ""):
     """Tekst poziva na tečaj. Oznake ostaju - poruka ide većem broju ljudi,
-    svakome sa svojim imenom."""
+    svakome sa svojim imenom.
+
+    Tekst pisan za taj modul ('poziv na tecaj modul 3.docx') ima prednost
+    pred općim: svaki modul nosi svoje gradivo, pa i poziv na njega govori
+    o njemu, a ne o tečaju općenito."""
     import poruke
     import predlosci
     naslov, tijelo, izvor = predlosci.dohvati(
-        mapa_tablica(), "poziv na tecaj", config=config,
+        mapa_tablica(), predlosci.nazivi_teksta("poziv na tecaj", kod),
+        config=config,
         kljuc_naslov="invite_subject", kljuc_tijela="invite_body",
         zadani_naslov=poruke.POZIV_NASLOV, zadano_tijelo=poruke.POZIV_TIJELO)
     return naslov, tijelo, izvor
@@ -767,7 +772,7 @@ def poziv(oznaka):
     naslov = tijelo = izvor = ""
     greska = ""
     try:
-        naslov, tijelo, izvor = zadani_poziv()
+        naslov, tijelo, izvor = zadani_poziv(tecaj["kod"])
     except Exception as e:
         greska = str(e)
 

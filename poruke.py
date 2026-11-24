@@ -8,7 +8,9 @@ stranici je točno onaj koji će otići. Ako ga izmijeniš, šalje se tvoja
 izmjena, nedirnuta.
 
 Kao i svugdje drugdje, tekst može stajati u dokumentu uz tablice
-('podsjetnik za uplatu.docx'). Ako dokumenta nema, koristi se ugrađeni.
+('podsjetnik za uplatu.docx'), a tekst pisan za jedan modul u dokumentu s
+njegovim nazivom ('podsjetnik za uplatu modul 3.docx') ima prednost. Ako
+nema ni jednog ni drugog, koristi se ugrađeni.
 """
 
 
@@ -100,7 +102,8 @@ def podsjetnik_uplata(mapa, config: dict, info: dict, polaznik: dict):
     ) if blok else ""
 
     naslov, tijelo, izvor = predlosci.dohvati(
-        mapa, ["podsjetnik za uplatu"], config=config,
+        mapa, predlosci.nazivi_teksta("podsjetnik za uplatu", info.get("kod", "")),
+        config=config,
         kljuc_naslov="payment_reminder_subject",
         kljuc_tijela="payment_reminder_body",
         zadani_naslov=ZADANI_NASLOV, zadano_tijelo=ZADANO_TIJELO)

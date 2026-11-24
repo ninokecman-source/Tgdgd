@@ -98,6 +98,17 @@ def nadji_dokument(mapa: Path, nazivi):
     return None
 
 
+def nazivi_teksta(osnova: str, kod: str) -> list:
+    """Nazivi dokumenata za taj tekst, od najužeg prema najširem:
+    ['poziv na tecaj modul 3', 'poziv na tecaj'].
+
+    Tako se tekst može napisati posebno za svaki modul, a dok za neki
+    modul dokumenta nema, vrijedi opći - pa ništa ne prestaje raditi dok
+    se pišu jedan po jedan."""
+    kod = " ".join(str(kod or "").split())
+    return [f"{osnova} {kod}", osnova] if kod else [osnova]
+
+
 def procitaj_tekst(put: Path) -> str:
     """Izvuče čisti tekst iz dokumenta. .docx i .odt su zip s XML-om, pa ne
     treba vanjska biblioteka; .txt i .md se čitaju kakvi jesu. Vrati prazan
