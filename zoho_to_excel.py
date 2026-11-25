@@ -75,6 +75,11 @@ def with_retry(func, attempts=3, delay=5, retry_on=(OSError, ssl.SSLError), back
 # Cron zna krenuti prije nego se Mac probudi i podigne mrežu; tada prvi
 # pokušaj padne na razrješavanju imena (gaierror). Zato se na IMAP čeka
 # strpljivije nego na ostalo: 10, 20, 40 pa 80 sekundi.
+# Koliko foldera zaredom smije ne otvoriti prije nego zaključimo da ne
+# valja veza, nego folder. Tri: jedan folder zna nestati jer si ga
+# preimenovao, ali tri zaredom nisu tri preimenovanja.
+NEOTVORENIH_ZAREDOM = 3
+
 IMAP_ATTEMPTS = 5
 IMAP_DELAY = 10
 IMAP_BACKOFF = 2
@@ -565,8 +570,11 @@ def process_folder(imap, raw_folder: str, folder_location: str, config: dict,
     iz teksta maila). Vraća broj dodanih prijava iz ovog foldera."""
     status, _ = imap.select(f'"{raw_folder}"')
     if status != "OK":
-        print(f"[!] Ne mogu otvoriti folder {raw_folder!r}, preskačem.")
-        return 0
+        # Naziv u čitljivom obliku: sirovi je u IMAP-ovom UTF-7, pa bi u
+        # poruci pisalo 'Zagreb/Modul 1&-2' i 'Upla&AQc-eno'.
+        print(f"[!] Ne mogu otvoriti folder "
+              f"{imap_utf7_decode(raw_folder)!r}, preskačem.")
+        return None
 
     status, uid_data = imap.uid("search", None, build_search_query(config))
     if status != "OK" or not uid_data or uid_data[0] is None:
@@ -679,8 +687,25 @@ def prodji():
     workbooks = {}  # (course_code, location) -> [path, wb, ws, totals_row]
     added = 0
 
+    # Kad Zoho klecne, SELECT padne na svakom folderu redom - a njih je
+    # dvadesetak. Prije se tako jedna loša veza javljala kao dvadeset
+    # grešaka, pa se iza tog zida nije vidjelo što je zapravo palo. Tri
+    # uzastopna promašaja znače da ne valja veza, a ne folder, pa prolaz
+    # staje: prijave nisu izgubljene, pročitat će se za pola sata.
+    zaredom = 0
     for raw_folder, folder_location in target_folders:
-        added += process_folder(imap, raw_folder, folder_location, config, processed, workbooks)
+        koliko = process_folder(imap, raw_folder, folder_location, config,
+                                processed, workbooks)
+        if koliko is None:
+            zaredom += 1
+            if zaredom >= NEOTVORENIH_ZAREDOM:
+                print(f"[!] Zoho ne otvara foldere ({zaredom} zaredom) - "
+                      f"prekidam prolaz. Nijedna prijava nije izgubljena, "
+                      f"pročitat će se pri sljedećem prolazu.")
+                break
+            continue
+        zaredom = 0
+        added += koliko
 
     neuspjeli = set()
     for path, wb, ws, _, potvrde, state_keys in workbooks.values():

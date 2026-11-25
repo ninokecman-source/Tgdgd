@@ -117,6 +117,42 @@ def _oznaka(registrant) -> str:
     return f"{registrant['first_name']} {registrant['last_name']}".strip()
 
 
+def _po_tecaju(kandidati: list, description: str):
+    """Isti čovjek upisan na više tečajeva - odluči po kodu tečaja iz opisa.
+
+    Polaznik koji sluša Modul 4 i Modul 5 u popisu je dvaput, kao dva
+    zapisa. Kad uplatu šalje on sam, i ime uplatitelja i opis pokazuju na
+    oba, pa pitanje nije TKO nego NA KOJI TEČAJ - a to u opisu obično i
+    piše ('Tečaj Emmett tehnike Modul 4').
+
+    Vrati zapis samo ako opis imenuje točno jedan od tih tečajeva; dva
+    Modula 4 u dva grada ostaju za ručnu provjeru, kao i dosad."""
+    if len({_oznaka(r) for r in kandidati}) != 1:
+        return None   # nisu ista osoba, pa kod tečaja ništa ne rješava
+    opis = normalize_name(description)
+    pogodci = [r for r in kandidati
+               if r.get("course_code")
+               and normalize_name(r["course_code"]) in opis]
+    return pogodci[0] if len(pogodci) == 1 else None
+
+
+def _neodluceno(zapisi: list, gdje: str) -> str:
+    """Zašto se nije moglo odlučiti. Razlikuje dva slučaja koja su se prije
+    oba javljala kao 'više polaznika' - pa je uz uplatu jednog čovjeka
+    pisalo da ih je više, i to s jednim imenom u zagradi."""
+    imena = sorted({_oznaka(r) for r in zapisi})
+    if len(imena) == 1:
+        # S mjestom, jer dva puta isti kod u dva grada su upravo slučaj u
+        # kojem kod tečaja iz opisa ništa ne razrješava.
+        tecajevi = ", ".join(sorted({
+            " ".join(filter(None, [r.get("course_code") or "?", r.get("location")]))
+            for r in zapisi}))
+        return (f"{imena[0]} je upisan na više tečajeva ({tecajevi}), a iz "
+                f"opisa se ne vidi na koji se uplata odnosi")
+    return (f"{gdje} odgovara većem broju polaznika ({', '.join(imena)}) i "
+            f"ne mogu odlučiti za koga je uplata")
+
+
 def match_payment(name: str, description: str, registrants: list):
     """Odluči na čije ime ide uplata. Vrati (registrant, upozorenje);
     registrant je None ako se ne može pouzdano odlučiti.
@@ -150,17 +186,24 @@ def match_payment(name: str, description: str, registrants: list):
             return kandidati[0], (f"opis spominje više polaznika, uzimam "
                                   f"{_oznaka(kandidati[0])} (uplatitelj je "
                                   f"{name.strip()})")
-        imena = ", ".join(sorted({_oznaka(r) for r in u_opisu}))
-        return None, (f"opis spominje više polaznika ({imena}) i ne mogu "
-                      f"odlučiti za koga je uplata - treba ručna provjera")
+        # Kandidati su prazni kad uplatitelj plaća sam za sebe: tada je on
+        # i u imenu i u opisu, pa ga oduzimanje ukloni. Tu se gleda cijeli
+        # popis iz opisa.
+        jedan = _po_tecaju(kandidati or u_opisu, description)
+        if jedan is not None:
+            return jedan, (f"{_oznaka(jedan)} je upisan na više tečajeva - "
+                           f"knjižim na {jedan['course_code']}, kako piše u opisu")
+        return None, _neodluceno(u_opisu, "opis")
 
     if len(u_imenu) == 1:
         return u_imenu[0], ""
 
     if len(u_imenu) > 1:
-        imena = ", ".join(sorted({_oznaka(r) for r in u_imenu}))
-        return None, (f"ime uplatitelja odgovara većem broju polaznika ({imena}) "
-                      f"- treba ručna provjera")
+        jedan = _po_tecaju(u_imenu, description)
+        if jedan is not None:
+            return jedan, (f"{_oznaka(jedan)} je upisan na više tečajeva - "
+                           f"knjižim na {jedan['course_code']}, kako piše u opisu")
+        return None, _neodluceno(u_imenu, "ime uplatitelja")
 
     return None, ""
 
