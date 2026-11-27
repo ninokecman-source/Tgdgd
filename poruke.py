@@ -69,9 +69,21 @@ def iznos(vrijednost) -> str:
 
 
 def varijable(info: dict, polaznik: dict, config: dict) -> dict:
-    """Sve što se smije pojaviti u tekstu poruke jednom polazniku."""
+    """Sve što se smije pojaviti u tekstu poruke jednom polazniku.
+
+    Iznosi akontacije idu kroz isti iznosi_tecaja() kojim ih računa i
+    automatski podsjetnik. Moraju, jer oba puta uvrštavaju isti dokument s
+    podacima za uplatu ('blok uplate akontacija.docx'): dok ih ovdje nije
+    bilo, tipka je na tečaju s akontacijom padala na {preostali_iznos} -
+    oznaku koju taj dokument smije koristiti, a nudio ju je samo onaj
+    drugi put."""
+    from send_reminders import iznosi_tecaja   # ovdje, da poruke.py ostane lagan
+
+    iznosi = iznosi_tecaja(config or {}, info.get("kod", ""))
     ime = (polaznik.get("ime") or "").split()
     return {
+        "akontacija": iznos(iznosi["akontacija"]),
+        "preostali_iznos": iznos(iznosi["preostali_iznos"]),
         "first_name": ime[0] if ime else "",
         "last_name": " ".join(ime[1:]),
         "ime": polaznik.get("ime", ""),
