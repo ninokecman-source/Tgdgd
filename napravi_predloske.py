@@ -74,6 +74,8 @@ def popis(config: dict) -> list:
             rule.get("predlozak") or f"podsjetnik {dana} {jedinica}",
             sastavi(rule.get("subject") or ZADANI_NASLOV, rule.get("body", "")),
         ))
+    stavke.append(("blok uplate akontacija prvo",
+                   config.get("reminder_deposit_first_block", "")))
     stavke.append(("blok uplate akontacija", config.get("reminder_deposit_block", "")))
     stavke.append(("blok uplate puni iznos", config.get("reminder_no_deposit_block", "")))
 

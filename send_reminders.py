@@ -52,6 +52,7 @@ STATE_PATH = Path(__file__).with_name("sent_reminders.json")
 COL_FIRST_NAME = 2
 COL_LAST_NAME = 3
 COL_EMAIL = 8
+COL_UPLATA = 12
 
 # Zaglavlje tablice: kod tečaja, mjesto, datumi, instruktor.
 # Dvorana (M5) se namjerno NE čita - naziv dvorane dolazi iz dokumenta o
@@ -184,14 +185,57 @@ def nazivi_podsjetnika(rule: dict) -> list:
 ZADANI_NASLOV = "Emmett tehnika - {course_code}, {location} ({dates})"
 
 
-def blok_uplate(mapa: Path, config: dict, course_code: str):
+def broj_iz(vrijednost) -> float:
+    """Iznos iz tablice u broj; prazno i ručno upisano '100 eur' daju 0
+    odnosno 100, isto kao drugdje u sustavu."""
+    if vrijednost is None or vrijednost == "":
+        return 0.0
+    if isinstance(vrijednost, (int, float)):
+        return float(vrijednost)
+    tekst = str(vrijednost).replace("€", "").replace("EUR", "").replace(" ", "")
+    try:
+        return float(tekst.replace(",", "."))
+    except ValueError:
+        return 0.0
+
+
+def vrsta_bloka(config: dict, course_code: str, uplaceno=None) -> str:
+    """Koji odlomak o uplati ide ovom polazniku: 'puni', 'akontacija' ili
+    'ostatak'.
+
+    Tečaj s akontacijom plaća se u dva koraka, pa i podsjetnik ima dva
+    koraka. Tko još nije uplatio ništa, treba podsjetnik za akontaciju;
+    tko ju je uplatio, treba podsjetnik za ostatak. Prije se gledao samo
+    tečaj, pa je i onaj tko nije uplatio ništa dobivao tekst koji počinje
+    s 'akontacija je zaprimljena'.
+
+    `uplaceno` None znači da se ne zna koliko je tko uplatio - tada ostaje
+    tekst o ostatku, kakav je i bio."""
+    if course_code not in config.get("deposit_course_codes", []):
+        return "puni"
+    akontacija = config.get("deposit_amount")
+    if uplaceno is None or akontacija is None:
+        return "ostatak"
+    try:
+        placeno = float(uplaceno)
+    except (TypeError, ValueError):
+        return "ostatak"
+    return "akontacija" if placeno < float(akontacija) else "ostatak"
+
+
+def blok_uplate(mapa: Path, config: dict, course_code: str, uplaceno=None):
     """(naslov, tijelo, izvor) za odlomak o uplati koji se uvrštava u
-    podsjetnik kao {blok_uplate}. Tečajevi s akontacijom dobivaju tekst o
-    ostatku kotizacije, ostali o punom iznosu."""
-    if course_code in config.get("deposit_course_codes", []):
-        nazivi, kljuc = ["blok uplate akontacija"], "reminder_deposit_block"
-    else:
+    podsjetnik kao {blok_uplate}."""
+    vrsta = vrsta_bloka(config, course_code, uplaceno)
+    if vrsta == "puni":
         nazivi, kljuc = ["blok uplate puni iznos"], "reminder_no_deposit_block"
+    elif vrsta == "akontacija":
+        # Ako dokumenta za prvi korak još nema, uzima se onaj za ostatak -
+        # dakle točno kako je bilo prije, dok ga ne napišeš.
+        nazivi = ["blok uplate akontacija prvo", "blok uplate akontacija"]
+        kljuc = "reminder_deposit_first_block"
+    else:
+        nazivi, kljuc = ["blok uplate akontacija"], "reminder_deposit_block"
     return predlosci.dohvati(mapa, nazivi, config=config, kljuc_tijela=kljuc)
 
 
@@ -218,6 +262,9 @@ def read_participants(ws, totals_row: int) -> list:
             "first_name": str(ws.cell(row=row, column=COL_FIRST_NAME).value or "").strip(),
             "last_name": str(ws.cell(row=row, column=COL_LAST_NAME).value or "").strip(),
             "email": email,
+            # Koliko je uplatio odlučuje koji odlomak o uplati dobiva -
+            # onaj za akontaciju ili onaj za ostatak.
+            "uplaceno": ws.cell(row=row, column=COL_UPLATA).value,
         })
     return participants
 
@@ -246,10 +293,28 @@ def save_state(state: dict) -> None:
         json.dump(state, f, ensure_ascii=False, indent=2, sort_keys=True)
 
 
-def render(template: str, participant: dict, info: dict, izvor: str = "") -> str:
+def varijable_za(participant: dict, info: dict) -> dict:
+    """Oznake za jednog polaznika: podaci o tečaju plus njegovo ime i iznosi.
+
+    Iznosi su ovdje jer isti dokument s podacima za uplatu ulazi i u
+    podsjetnik na tipku, gdje {uplaceno} i {manjka} znače ono što taj
+    čovjek duguje. Da ih ovdje nema, ista bi oznaka u istom dokumentu
+    značila dvoje, ovisno o tome tko ga otvori."""
     varijable = dict(info,
                      first_name=participant["first_name"],
                      last_name=participant["last_name"])
+    for kljuc in ("uplaceno", "manjka"):
+        if participant.get(kljuc) is not None:
+            varijable[kljuc] = participant[kljuc]
+    return varijable
+
+
+def render(template: str, participant: dict, info: dict, izvor: str = "") -> str:
+    varijable = varijable_za(participant, info)
+    # Odlomak o uplati nije isti za sve na tečaju: ovisi je li taj polaznik
+    # uplatio akontaciju.
+    if participant.get("blok_uplate") is not None:
+        varijable["blok_uplate"] = participant["blok_uplate"]
     return predlosci.popuni(template, varijable, izvor)
 
 
@@ -297,15 +362,35 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
     # Dio o uplati se razlikuje: kod tečaja s akontacijom preostaje razlika,
     # kod ostalih se plaća puni iznos. Tekst stoji u svom dokumentu
     # ('blok uplate akontacija' / 'blok uplate puni iznos'), kao i sve ostalo.
-    _, blok, _ = blok_uplate(mapa, config, info["course_code"])
-    # Blok uvijek zavrsava praznim retkom, pa se ne slijepi s tekstom
-    # koji u podsjetniku dolazi iza njega.
-    info["blok_uplate"] = ((predlosci.popuni(blok, info, "blok uplate").rstrip("\n")
-                            + "\n\n") if blok else "")
+    # Dokument se čita jednom po vrsti, ali se popunjava za svakog polaznika
+    # posebno - u njemu smiju stajati i njegovi iznosi.
+    sirovi_blok = {}
+
+    def slozen_blok(p):
+        vrsta = vrsta_bloka(config, info["course_code"], p.get("uplaceno"))
+        if vrsta not in sirovi_blok:
+            _, blok, _ = blok_uplate(mapa, config, info["course_code"],
+                                     p.get("uplaceno"))
+            sirovi_blok[vrsta] = blok or ""
+        if not sirovi_blok[vrsta]:
+            return ""
+        # Blok uvijek zavrsava praznim retkom, pa se ne slijepi s tekstom
+        # koji u podsjetniku dolazi iza njega.
+        return (predlosci.popuni(sirovi_blok[vrsta], varijable_za(p, info),
+                                 "blok uplate").rstrip("\n") + "\n\n")
+
+    info["blok_uplate"] = ""   # svaki polaznik dobiva svoj; ovo je zaleđe
 
     participants = read_participants(ws, find_totals_row(ws))
     if not participants:
         return 0
+
+    cijena = broj_iz(info.get("cijena"))
+    for p in participants:
+        placeno = broj_iz(p.get("uplaceno"))
+        p["uplaceno"] = f"{placeno:g}"
+        p["manjka"] = f"{cijena - placeno:g}" if cijena else ""
+        p["blok_uplate"] = slozen_blok(p)
 
     # Upute za lokaciju stoje u zasebnom dokumentu uz tablice, imenovanom po
     # gradu ('lokacija split.docx'). Tekst iz njega se ugrađuje u poruku kao

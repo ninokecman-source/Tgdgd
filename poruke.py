@@ -108,7 +108,8 @@ def podsjetnik_uplata(mapa, config: dict, info: dict, polaznik: dict):
     from send_reminders import blok_uplate   # ovdje, da poruke.py ostane lagan
 
     podaci = varijable(info, polaznik, config)
-    _, blok, izvor_bloka = blok_uplate(mapa, config, info.get("kod", ""))
+    _, blok, izvor_bloka = blok_uplate(mapa, config, info.get("kod", ""),
+                                       polaznik.get("uplaceno"))
     podaci["blok_uplate"] = (
         predlosci.popuni(blok, podaci, izvor_bloka).rstrip("\n") + "\n"
     ) if blok else ""
