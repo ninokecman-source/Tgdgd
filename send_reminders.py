@@ -199,18 +199,24 @@ def broj_iz(vrijednost) -> float:
         return 0.0
 
 
-def vrsta_bloka(config: dict, course_code: str, uplaceno=None) -> str:
+def vrsta_bloka(config: dict, course_code: str, uplaceno=None,
+                akontacija_zakasnila: bool = False) -> str:
     """Koji odlomak o uplati ide ovom polazniku: 'puni', 'akontacija' ili
     'ostatak'.
 
     Tečaj s akontacijom plaća se u dva koraka, pa i podsjetnik ima dva
-    koraka. Tko još nije uplatio ništa, treba podsjetnik za akontaciju;
-    tko ju je uplatio, treba podsjetnik za ostatak. Prije se gledao samo
-    tečaj, pa je i onaj tko nije uplatio ništa dobivao tekst koji počinje
-    s 'akontacija je zaprimljena'.
+    koraka: tko akontaciju još nije uplatio treba podsjetnik za nju, tko
+    ju je uplatio treba podsjetnik za ostatak. Prije se gledao samo tečaj,
+    pa je i onaj tko nije uplatio ništa dobivao tekst koji počinje s
+    'akontacija je zaprimljena'.
 
-    `uplaceno` None znači da se ne zna koliko je tko uplatio - tada ostaje
-    tekst o ostatku, kakav je i bio."""
+    Kad rok za akontaciju prođe, akontacije više nema - tko do tada nije
+    uplatio, plaća puni iznos odjednom. Inače bi mu se slao rok koji je
+    prošao i nudila podjela koja više ne vrijedi.
+
+    Tko je akontaciju uplatio na vrijeme ostaje na ostatku, bez obzira na
+    taj rok. `uplaceno` None znači da se ne zna koliko je tko uplatio -
+    tada ostaje tekst o ostatku, kakav je i bio."""
     if course_code not in config.get("deposit_course_codes", []):
         return "puni"
     akontacija = config.get("deposit_amount")
@@ -220,13 +226,16 @@ def vrsta_bloka(config: dict, course_code: str, uplaceno=None) -> str:
         placeno = float(uplaceno)
     except (TypeError, ValueError):
         return "ostatak"
-    return "akontacija" if placeno < float(akontacija) else "ostatak"
+    if placeno >= float(akontacija):
+        return "ostatak"
+    return "puni" if akontacija_zakasnila else "akontacija"
 
 
-def blok_uplate(mapa: Path, config: dict, course_code: str, uplaceno=None):
+def blok_uplate(mapa: Path, config: dict, course_code: str, uplaceno=None,
+                akontacija_zakasnila: bool = False):
     """(naslov, tijelo, izvor) za odlomak o uplati koji se uvrštava u
     podsjetnik kao {blok_uplate}."""
-    vrsta = vrsta_bloka(config, course_code, uplaceno)
+    vrsta = vrsta_bloka(config, course_code, uplaceno, akontacija_zakasnila)
     if vrsta == "puni":
         nazivi, kljuc = ["blok uplate puni iznos"], "reminder_no_deposit_block"
     elif vrsta == "akontacija":
@@ -359,6 +368,7 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
     # traži mjesec dana prije, a ne tjedan kao ostatak kotizacije.
     rok_a = start - timedelta(days=config.get("deposit_due_days_before", 30))
     info["rok_akontacije"] = rok_a.strftime("%d.%m.%Y.")
+    akontacija_zakasnila = rok_a < today
     info.update(iznosi_tecaja(config, info["course_code"]))
 
     mapa = xlsx_path.parent
@@ -371,10 +381,11 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
     sirovi_blok = {}
 
     def slozen_blok(p):
-        vrsta = vrsta_bloka(config, info["course_code"], p.get("uplaceno"))
+        vrsta = vrsta_bloka(config, info["course_code"], p.get("uplaceno"),
+                            akontacija_zakasnila)
         if vrsta not in sirovi_blok:
             _, blok, _ = blok_uplate(mapa, config, info["course_code"],
-                                     p.get("uplaceno"))
+                                     p.get("uplaceno"), akontacija_zakasnila)
             sirovi_blok[vrsta] = blok or ""
         if not sirovi_blok[vrsta]:
             return ""

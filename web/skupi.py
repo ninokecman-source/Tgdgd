@@ -145,6 +145,10 @@ def citaj_tecaj(put: Path, config: dict, danas: date) -> dict:
         "rok_uplate": rok.strftime("%d.%m.%Y.") if rok else "",
         "rok_akontacije": (rok_akontacije.strftime("%d.%m.%Y.")
                            if rok_akontacije else ""),
+        # Kad taj rok prođe, akontacije više nema - tko do tada nije
+        # uplatio, plaća puni iznos. Računa se ovdje, jer web čita samo
+        # ovu snimku i datume nema odakle usporediti.
+        "akontacija_zakasnila": bool(rok_akontacije and rok_akontacije < danas),
         # isti datum, ali u obliku koji se da usporediti - stranica Uplate po
         # njemu zna kome je rok već prošao
         "rok": rok.isoformat() if rok else None,

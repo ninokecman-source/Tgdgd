@@ -110,7 +110,8 @@ def podsjetnik_uplata(mapa, config: dict, info: dict, polaznik: dict):
 
     podaci = varijable(info, polaznik, config)
     _, blok, izvor_bloka = blok_uplate(mapa, config, info.get("kod", ""),
-                                       polaznik.get("uplaceno"))
+                                       polaznik.get("uplaceno"),
+                                       info.get("akontacija_zakasnila", False))
     podaci["blok_uplate"] = (
         predlosci.popuni(blok, podaci, izvor_bloka).rstrip("\n") + "\n"
     ) if blok else ""
