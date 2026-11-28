@@ -96,6 +96,7 @@ def varijable(info: dict, polaznik: dict, config: dict) -> dict:
         "manjka": iznos(polaznik.get("manjka", 0)),
         "cijena": iznos(info.get("cijena", "")),
         "rok_uplate": info.get("rok_uplate", ""),
+        "rok_akontacije": info.get("rok_akontacije", ""),
         "prvi_dan": info.get("prvi_dan", ""),
     }
 

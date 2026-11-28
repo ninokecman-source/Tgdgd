@@ -129,6 +129,10 @@ def citaj_tecaj(put: Path, config: dict, danas: date) -> dict:
     # čita samo ovu snimku, pa sve što mu treba mora biti u njoj
     rok = (pocetak - timedelta(days=config.get("payment_due_days_before", 7))
            if pocetak else None)
+    # Akontacijom se rezervira mjesto, pa joj je rok raniji - mjesec dana
+    # prije tečaja, a ne tjedan kao za ostatak kotizacije.
+    rok_akontacije = (pocetak - timedelta(days=config.get("deposit_due_days_before", 30))
+                      if pocetak else None)
 
     return {
         "oznaka": oznaka(put.stem),
@@ -139,6 +143,8 @@ def citaj_tecaj(put: Path, config: dict, danas: date) -> dict:
         "instruktor": info["instructor_name"],
         "prvi_dan": datum_rijecima(pocetak) if pocetak else "",
         "rok_uplate": rok.strftime("%d.%m.%Y.") if rok else "",
+        "rok_akontacije": (rok_akontacije.strftime("%d.%m.%Y.")
+                           if rok_akontacije else ""),
         # isti datum, ali u obliku koji se da usporediti - stranica Uplate po
         # njemu zna kome je rok već prošao
         "rok": rok.isoformat() if rok else None,

@@ -355,6 +355,10 @@ def process_course(xlsx_path: Path, config: dict, state: dict, today: date,
     # Ostatak kotizacije se plaća tjedan dana prije početka
     rok = start - timedelta(days=config.get("payment_due_days_before", 7))
     info["rok_uplate"] = rok.strftime("%d.%m.%Y.")
+    # Akontacija ima svoj, raniji rok: njome se rezervira mjesto, pa se
+    # traži mjesec dana prije, a ne tjedan kao ostatak kotizacije.
+    rok_a = start - timedelta(days=config.get("deposit_due_days_before", 30))
+    info["rok_akontacije"] = rok_a.strftime("%d.%m.%Y.")
     info.update(iznosi_tecaja(config, info["course_code"]))
 
     mapa = xlsx_path.parent
